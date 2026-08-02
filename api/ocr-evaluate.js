@@ -206,7 +206,8 @@ Your task is to:
 
 ⚠️ STRICT CONSTRAINTS FOR MARK ALLOCATION (BOARD STANDARD):
 - You MUST evaluate strictly and objectively. Avoid leniency.
-- MCQ questions: MCQ validation is strictly BINARY. You MUST compare the student's written option letter (A, B, C, D) directly against the correct option letter in the marking scheme. If the student's written option letter does not match the marking scheme key exactly (for example, if they wrote option 'A' or option 'C' when the marking scheme key is 'C' or 'A'), you MUST award 0/1 marks immediately. Do NOT offer leniency, do not guess, do not read the accompanying text to excuse a wrong option letter. Do not award points for MCQ questions where the letter is wrong.
+- MCQ questions: MCQ validation is strictly BINARY. For each 1-mark question, you MUST perform a letter-by-letter check. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they do not match exactly (e.g. student wrote 'a' but key is 'C', or student wrote 'C' but key is 'D'), you MUST write "Incorrect" or "Wrong" in the feedback and award exactly 0/1 marks. You are strictly forbidden from awarding 1 mark if the option letters mismatch, regardless of any accompanying correct text.
+- CASE STUDIES & MULTI-PART QUESTIONS (e.g. Q20, Q40, Q41): You MUST audit each sub-question (.1, .2, .3) individually. Write a breakdown in the feedback for each sub-question score (e.g. "20.1: 1/1, 20.2: 0/1, 20.3: 0/2"). If a sub-question is skipped or unattempted, you MUST deduct its exact weight (e.g. deduct 2 marks if a 2-mark sub-part is skipped). Never give full marks if a sub-part is missing or incorrect.
 - 🔴 CRITICAL RULE: ZERO MARKS FOR OFF-TOPIC / OUT-OF-SCOPE TRUTHS. If a student's answer contains factually true statements that do NOT directly address the specific question prompt (for example: writing about 'Lender of Last Resort' or 'Issuing of Notes' when asked about 'Banker to the Government' functions, or listing monetary tools without explicitly naming the situation as 'Inflation' when asked), you MUST award 0 MARKS for that question. Do NOT award partial credit (like 2/3 or 1.5/3), and do NOT apply brevity caps. It is a strict 0/3.
 - SCIENTIFIC / CONCEPTUAL INACCURACY: If the student's answer contains scientifically, ecologically, or economically incorrect reasoning (for example: claiming crops dry up because of fertilizers in Q10 instead of explaining soil degradation and water contamination), you MUST deduct at least 1.5 marks.
 - MULTI-PART IDENTIFICATION GAP: In any multi-part or identification question, if the student fails to explicitly identify the core concept/situation (for example: failing to explicitly write the word 'Inflation' in any question), you MUST deduct at least 1.5 marks.
@@ -631,13 +632,7 @@ Return the response as a strict JSON object.`;
                     feedbackText.includes("0/1") ||
                     feedbackText.includes("0 out of 1");
 
-                const isMCQ = Number(resObj.maxMarks) === 1 && (
-                    (resObj.questionNumber || "").toLowerCase().includes("mcq") ||
-                    (resObj.questionText || "").toLowerCase().includes("mcq") ||
-                    /^[qQ][1-8]\b/.test((resObj.questionNumber || "").trim()) ||
-                    (resObj.questionNumber || "").toLowerCase().includes("q7") ||
-                    (resObj.questionNumber || "").toLowerCase().includes("mcq 7")
-                );
+                const isMCQ = Number(resObj.maxMarks) === 1;
 
                 if (isMCQ && isIncorrectText) {
                     console.log(`🔧 Programmatic Override: Overriding MCQ score of ${resObj.questionNumber} to 0 due to 'Incorrect' text in feedback.`);
