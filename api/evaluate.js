@@ -49,8 +49,8 @@ export default async function handler(req, res) {
   const isBatch = Array.isArray(body.questions);
 
   // ===== Model =====
-  // Using v1beta endpoint for gemini-2.5-flash as provided in user availability list
-  const MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+  // Using v1beta endpoint for gemini-3.5-flash-lite as provided in user availability list
+  const MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 
   let prompt = "";
 
