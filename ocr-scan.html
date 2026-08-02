@@ -416,9 +416,9 @@
                                 📁 Choose Files
                             </button>
                         </div>
-                        <div class="dropzone-subtext">Supports PNG, JPG, JPEG</div>
+                        <div class="dropzone-subtext">Supports PNG, JPG, JPEG, PDF</div>
                     </div>
-                    <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                    <input type="file" id="fileInput" multiple accept="image/*,application/pdf" style="display: none;">
                     <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
                     
                     <div class="file-list" id="fileList"></div>
@@ -704,13 +704,13 @@
 
         async function handleFiles(files) {
             for (let file of files) {
-                if (!file.type.startsWith('image/')) {
-                    alert('Only image files are allowed.');
+                if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+                    alert('Only image and PDF files are allowed.');
                     continue;
                 }
-                // S4: enforce image-count cap.
+                // S4: enforce file-count cap.
                 if (uploadedFiles.length >= MAX_IMAGES) {
-                    alert(`You can upload a maximum of ${MAX_IMAGES} images. Remove some before adding more.`);
+                    alert(`You can upload a maximum of ${MAX_IMAGES} files. Remove some before adding more.`);
                     break;
                 }
                 try {
@@ -725,9 +725,9 @@
             const totalMB = currentPayloadMB();
             if (totalMB > MAX_TOTAL_MB) {
                 alert(
-                    `⚠️ Your uploaded images total about ${totalMB.toFixed(1)} MB.\n\n` +
+                    `⚠️ Your uploaded files total about ${totalMB.toFixed(1)} MB.\n\n` +
                     `Large uploads may fail or be very slow on a weak internet connection. ` +
-                    `Consider removing extra or duplicate pages, or retaking blurry photos, before submitting.`
+                    `Consider removing extra or duplicate pages, or reducing PDF file size, before submitting.`
                 );
             }
 
@@ -754,7 +754,7 @@
                 const heavy = totalMB > MAX_TOTAL_MB;
                 const info = document.createElement('div');
                 info.style.cssText = `font-size:0.8rem;margin-top:0.5rem;color:${heavy ? '#c53030' : '#718096'};`;
-                info.textContent = `${uploadedFiles.length} image(s) · ~${totalMB.toFixed(1)} MB total` +
+                info.textContent = `${uploadedFiles.length} file(s) · ~${totalMB.toFixed(1)} MB total` +
                     (heavy ? ' ⚠️ large — may be slow on weak internet' : '');
                 fileList.appendChild(info);
             }
@@ -855,7 +855,7 @@
             if (uploadedFiles.length === 0 || !selectedSession) return;
 
             loadingOverlay.classList.add('show');
-            loadingStatus.textContent = "Uploading images & transcribing answers...";
+            loadingStatus.textContent = "Uploading files & transcribing answers...";
             uploadProgressWrap.style.display = 'block';
             uploadProgressBar.style.width = '0%';
             uploadProgressText.textContent = '0%';
@@ -864,7 +864,7 @@
                 console.log("📝 SUBMITTING OCR EVALUATION TO BACKEND:");
                 console.log("- Build:", OCR_BUILD_TAG);
                 console.log("- Selected Session:", selectedSession?.name);
-                console.log("- Images:", uploadedFiles.length, "· ~" + currentPayloadMB().toFixed(2) + " MB payload");
+                console.log("- Files:", uploadedFiles.length, "· ~" + currentPayloadMB().toFixed(2) + " MB payload");
                 console.log("- Override Instructions:", selectedSession?.otherInstructions || "(None)");
 
                 // Call session-evaluate backend endpoint (S1 retry + S2 progress).
@@ -908,11 +908,11 @@
 
             } catch (error) {
                 console.error("Evaluation failed:", error);
-                // S3: images are still cached — the student can just hit submit again
-                // without re-selecting their photos.
+                // S3: files are still cached — the student can just hit submit again
+                // without re-selecting their files.
                 alert(
                     "Failed to evaluate: " + error.message +
-                    "\n\nYour uploaded images have been saved. You can press Submit again to retry " +
+                    "\n\nYour uploaded files have been saved. You can press Submit again to retry " +
                     "without re-uploading."
                 );
             } finally {
