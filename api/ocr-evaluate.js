@@ -152,7 +152,7 @@ export default async function handler(req, res) {
     }
 
     // ===== Model =====
-    const MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent";
+    const MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 
     // ===== Build Prompt Based on Mode =====
     let textPrompt = "";
@@ -416,7 +416,7 @@ Return STRICT JSON only (no markdown, no code blocks):
         };
     }
 
-    async function callGeminiModel(reqBody, modelName = "gemini-3.1-flash-lite", preferredKeyIndex = 0) {
+    async function callGeminiModel(reqBody, modelName = "gemini-3.5-flash-lite", preferredKeyIndex = 0) {
         const currentModelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
         let lastError = null;
         for (let attempt = 0; attempt < apiKeys.length; attempt++) {
@@ -455,7 +455,7 @@ Return STRICT JSON only (no markdown, no code blocks):
 
     async function evaluateSinglePassFallback() {
         console.log("📤 Calling fallback single-pass Gemini Vision directly...");
-        const geminiJson = await callGeminiModel(requestBody, "gemini-3.1-flash-lite", 0);
+        const geminiJson = await callGeminiModel(requestBody, "gemini-3.5-flash-lite", 0);
         const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         const clean = text.replace(/```json|```/g, "").trim();
         console.log("🧼 CLEAN JSON received from fallback Gemini Vision");
@@ -496,7 +496,7 @@ Format your output in clean Markdown, organizing by question numbers or sections
         }
 
         // Call Gemini for Transcription using Key Index 0
-        const geminiJson = await callGeminiModel(transcribeRequestBody, "gemini-3.1-flash-lite", 0);
+        const geminiJson = await callGeminiModel(transcribeRequestBody, "gemini-3.5-flash-lite", 0);
         return geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
