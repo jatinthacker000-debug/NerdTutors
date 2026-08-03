@@ -250,10 +250,10 @@ Return STRICT JSON only (no markdown, no code blocks):
     {
       "questionNumber": "Q1 or Section Name",
       "questionText": "Brief description of the question",
-      "score": <number>,
       "maxMarks": <number>,
       "studentAnswerText": "Summary/transcription of what the student wrote for this question",
-      "feedback": "Comprehensive and detailed explanation of why marks were given or lost.",
+      "feedback": "Comprehensive and detailed explanation of why marks were given or lost. Write this feedback and evaluate the student's work BEFORE outputting the score field.",
+      "score": <number>,
       "improvements": ["List as many suggestions as needed", "..."],
       "incorrectPhrases": [
         {
