@@ -184,6 +184,15 @@ export default async function handler(req, res) {
 "${otherInstructions}"
 `;
         }
+
+        // Dynamically inject evolved directives if passed from Firebase
+        let evolvedDirectivesPrompt = "";
+        if (body.evolvedDirectives && Array.isArray(body.evolvedDirectives) && body.evolvedDirectives.length > 0) {
+            evolvedDirectivesPrompt = `
+🧠 EVOLVED TEACHER DIRECTIVES (HIGH-PRIORITY VERIFICATION FEEDBACK):
+${body.evolvedDirectives.map((d, i) => `${i + 1}. ${d}`).join('\n')}
+`;
+        }
         textPrompt = `You are an expert teacher / exam moderator evaluating a student's answer sheet.
 You are provided with:
 1. The list of Exam Questions:

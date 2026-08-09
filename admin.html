@@ -74,6 +74,7 @@
                 <button class="tab-btn active" data-tab="create-session">➕ Create Test Session</button>
                 <button class="tab-btn" data-tab="view-results">📋 View Results</button>
                 <button class="tab-btn" data-tab="evaluate-answers">📝 Manual PDF Evaluation</button>
+                <button class="tab-btn" data-tab="ai-trainer">🧠 AI Trainer & Verified Loop</button>
             </div>
 
             <!-- Create Test Session Tab -->
@@ -304,6 +305,75 @@
                         <div id="evalReportBreakdown" style="display: flex; flex-direction: column; gap: 1rem;">
                             <!-- Individual questions populated dynamically -->
                         </div>
+                    </div>
+                </div>
+            <!-- AI Trainer & Verified Loop Tab -->
+            <div class="tab-panel" id="ai-trainerTab">
+                <div class="content-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 style="margin: 0; color: #1e3c72;">🧠 AI Verification & Evolving Prompt Directives</h2>
+                        <span style="background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; padding: 0.3rem 0.8rem; border-radius: 20px; font-weight: 600; font-size: 0.85rem;">
+                            🔄 Feedback Loop Active
+                        </span>
+                    </div>
+                    <p style="color: #666; margin-bottom: 1.5rem;">Review AI evaluations, enter teacher corrections, and feed them into the <strong>Evolving Directive Engine</strong>. The AI automatically evolves its grading rules in Firebase based on your corrections.</p>
+
+                    <!-- Active Directives Grid -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem; margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a;">📜 Active Evolved Prompt Directives (Auto-Injected to AI)</h3>
+                            <button id="btnAddNewDirective" type="button" style="background: #3b82f6; color: white; border: none; padding: 0.4rem 0.9rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
+                                ➕ Add Manual Directive
+                            </button>
+                        </div>
+                        <div id="directivesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <div style="padding: 1rem; background: white; border-radius: 8px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <strong style="color: #1e293b;">DIRECTIVE #1 (Case Studies Auditing)</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: #475569; font-size: 0.9rem;">Audit Q20/Q40/Q41 sub-parts individually (.1, .2, .3). If prompt text is copied or sub-parts skipped, deduct full sub-part weight immediately.</p>
+                            </div>
+                            <div style="padding: 1rem; background: white; border-radius: 8px; border-left: 4px solid #10b981; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <strong style="color: #1e293b;">DIRECTIVE #2 (Mandatory Concrete Examples)</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: #475569; font-size: 0.9rem;">Deduct 1.5 to 2.0 marks on descriptive questions (Q13, Q14, Q39) if concrete movement or trade item names are omitted.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Teacher Correction Panel -->
+                    <div style="background: white; border-radius: 10px; border: 1px solid #cbd5e1; padding: 1.5rem;">
+                        <h3 style="margin-top: 0; color: #0f172a;">✍️ Submit Teacher Verification & Evolve Rules</h3>
+                        <form id="verifyCorrectionForm">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div class="form-group">
+                                    <label for="verifyStudentName">Student Name</label>
+                                    <input type="text" id="verifyStudentName" placeholder="e.g. Kasundara Parv" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="verifySubject">Subject / Test Title</label>
+                                    <input type="text" id="verifySubject" placeholder="e.g. Social Science Term Exam" required>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div class="form-group">
+                                    <label for="verifyAiScore">AI Score Awarded</label>
+                                    <input type="number" id="verifyAiScore" placeholder="e.g. 56" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="verifyTeacherScore">Teacher Verified Score</label>
+                                    <input type="number" id="verifyTeacherScore" placeholder="e.g. 44" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="verifyMaxMarks">Max Marks</label>
+                                    <input type="number" id="verifyMaxMarks" value="76" required>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1.25rem;">
+                                <label for="verifyFeedbackCorrection">Detailed Correction Note / AI Mistake Reason *</label>
+                                <textarea id="verifyFeedbackCorrection" required style="min-height: 100px;" placeholder="Explain why the AI over-scored or under-scored (e.g. 'AI gave full 4/4 on Q20 despite student skipping sub-parts 20.2 and 20.3. Needs strict sub-part auditing.')."></textarea>
+                            </div>
+                            <button type="submit" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                                🚀 Feed Correction to AI Engine (Evolve Prompt Rules)
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

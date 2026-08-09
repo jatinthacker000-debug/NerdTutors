@@ -278,6 +278,53 @@ function setupEventListeners() {
         }
     });
 
+    // AI Trainer Verification Form
+    const verifyCorrectionForm = document.getElementById('verifyCorrectionForm');
+    verifyCorrectionForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const studentName = document.getElementById('verifyStudentName').value;
+        const subject = document.getElementById('verifySubject').value;
+        const aiScore = Number(document.getElementById('verifyAiScore').value);
+        const teacherScore = Number(document.getElementById('verifyTeacherScore').value);
+        const feedbackCorrection = document.getElementById('verifyFeedbackCorrection').value;
+
+        try {
+            // Save correction document to Firebase Firestore
+            await addDoc(collection(db, 'eval_verifications'), {
+                studentName,
+                subject,
+                aiScore,
+                teacherScore,
+                feedbackCorrection,
+                timestamp: serverTimestamp()
+            });
+
+            // Create evolved directive text
+            const newDirectiveText = `DIRECTIVE #${Date.now().toString().slice(-4)}: ${feedbackCorrection}`;
+            await addDoc(collection(db, 'eval_directives'), {
+                directive: newDirectiveText,
+                subject,
+                active: true,
+                createdAt: serverTimestamp()
+            });
+
+            showToast('✅ Teacher correction saved! New prompt directive evolved.', 'success');
+            verifyCorrectionForm.reset();
+
+            // Append live directive to list
+            const directivesList = document.getElementById('directivesList');
+            if (directivesList) {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding: 1rem; background: white; border-radius: 8px; border-left: 4px solid #8b5cf6; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
+                div.innerHTML = `<strong style="color: #1e293b;">EVOLVED DIRECTIVE</strong><p style="margin: 0.25rem 0 0 0; color: #475569; font-size: 0.9rem;">${feedbackCorrection}</p>`;
+                directivesList.appendChild(div);
+            }
+        } catch (err) {
+            console.error("Verification submit error:", err);
+            showToast('Failed to save correction: ' + err.message, 'error');
+        }
+    });
+
     // Close modal
     elements.btnCloseModal?.addEventListener('click', closeEditModal);
     elements.editModal?.addEventListener('click', (e) => {
