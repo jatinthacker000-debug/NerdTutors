@@ -325,6 +325,28 @@ function setupEventListeners() {
         }
     });
 
+    // Load Kasundara Preset Button
+    document.getElementById('btnLoadKasundaraPreset')?.addEventListener('click', () => {
+        document.getElementById('verifyStudentName').value = "Kasundara Parv";
+        document.getElementById('verifySubject').value = "Class 10th Social Science";
+        document.getElementById('verifyAiScore').value = 56;
+        document.getElementById('verifyTeacherScore').value = 44;
+        document.getElementById('verifyMaxMarks').value = 76;
+        document.getElementById('verifyFeedbackCorrection').value = "AI over-scored Kasundara by +12 marks. AI gave full 4/4 on Q20 local government case study despite student copying prompt text in 20.1 and skipping sub-parts 20.2 & 20.3. Needs strict itemized sub-part auditing (.1, .2, .3). Also gave 5/5 on Q19 19th Century Liberalism despite student incorrectly attributing labour wages to economic liberalism.";
+        showToast('📋 Kasundara Parv preset loaded into form! Click submit to evolve rules.', 'info');
+    });
+
+    // Load Student 56 Preset Button
+    document.getElementById('btnLoadStudent56Preset')?.addEventListener('click', () => {
+        document.getElementById('verifyStudentName').value = "Anonymous Student 56";
+        document.getElementById('verifySubject').value = "Class 10th Social Science";
+        document.getElementById('verifyAiScore').value = 65.5;
+        document.getElementById('verifyTeacherScore').value = 56;
+        document.getElementById('verifyMaxMarks').value = 76;
+        document.getElementById('verifyFeedbackCorrection').value = "AI over-scored Anonymous Student 56 by +9.5 marks. AI gave full 2/2 on Q13 Silk Route without enforcing 2 concrete trade examples (Chinese pottery/precious metals). AI gave full 5/5 on Q39 Satyagraha without requiring explicit movement names (Champaran, Kheda).";
+        showToast('📋 Anonymous Student 56 preset loaded into form! Click submit to evolve rules.', 'info');
+    });
+
     // Close modal
     elements.btnCloseModal?.addEventListener('click', closeEditModal);
     elements.editModal?.addEventListener('click', (e) => {
