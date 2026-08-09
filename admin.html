@@ -302,83 +302,112 @@
 
                     <div>
                         <h4 style="color: #2d3748; margin-bottom: 1rem; border-bottom: 1px solid #edf2f7; padding-bottom: 0.5rem; font-weight: 600;">🔍 Detailed Breakdown</h4>
-                        <div id="evalReportBreakdown" style="display: flex; flex-direction: column; gap: 1rem;">
-                            <!-- Individual questions populated dynamically -->
                         </div>
                     </div>
                 </div>
+            </div>
+
             <!-- AI Trainer & Verified Loop Tab -->
             <div class="tab-panel" id="ai-trainerTab">
-                <div class="content-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h2 style="margin: 0; color: #1e3c72;">🧠 AI Verification & Evolving Prompt Directives</h2>
-                        <span style="background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; padding: 0.3rem 0.8rem; border-radius: 20px; font-weight: 600; font-size: 0.85rem;">
-                            🔄 Feedback Loop Active
+                <div class="content-box" style="background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 1rem;">
+                        <div>
+                            <h2 style="margin: 0; color: #0f172a; font-size: 1.5rem;">🧠 AI Self-Learning & Verification Portal</h2>
+                            <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.9rem;">Input AI evaluation vs. Client benchmark evaluation. The AI will draw conclusions, evolve critical prompts, and save them directly to Firebase!</p>
+                        </div>
+                        <span style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 0.4rem 0.9rem; border-radius: 20px; font-weight: 700; font-size: 0.85rem;">
+                            🟢 Firebase Dynamic Engine
                         </span>
                     </div>
-                    <p style="color: #666; margin-bottom: 1.5rem;">Review AI evaluations, enter teacher corrections, and feed them into the <strong>Evolving Directive Engine</strong>. The AI automatically evolves its grading rules in Firebase based on your corrections.</p>
 
-                    <!-- Active Directives Grid -->
-                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem; margin-bottom: 2rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a;">📜 Active Evolved Prompt Directives (Auto-Injected to AI)</h3>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <button id="btnLoadKasundaraPreset" type="button" style="background: #e2e8f0; color: #1e293b; border: 1px solid #cbd5e1; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
-                                    📋 Load Kasundara Preset
-                                </button>
-                                <button id="btnLoadStudent56Preset" type="button" style="background: #e2e8f0; color: #1e293b; border: 1px solid #cbd5e1; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
-                                    📋 Load Student 56 Preset
-                                </button>
-                            </div>
+                    <!-- Step 1: Preset Loaders -->
+                    <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <strong style="color: #334155; font-size: 0.95rem;">⚡ Quick Preset Loader:</strong>
+                            <span style="color: #64748b; font-size: 0.85rem; margin-left: 0.5rem;">Click to auto-fill dual dataset for instant AI conclusion training</span>
                         </div>
-                        <div id="directivesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                            <div style="padding: 1rem; background: white; border-radius: 8px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                <strong style="color: #1e293b;">DIRECTIVE #1 (Case Studies Auditing)</strong>
-                                <p style="margin: 0.25rem 0 0 0; color: #475569; font-size: 0.9rem;">Audit Q20/Q40/Q41 sub-parts individually (.1, .2, .3). If prompt text is copied or sub-parts skipped, deduct full sub-part weight immediately.</p>
-                            </div>
-                            <div style="padding: 1rem; background: white; border-radius: 8px; border-left: 4px solid #10b981; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                <strong style="color: #1e293b;">DIRECTIVE #2 (Mandatory Concrete Examples)</strong>
-                                <p style="margin: 0.25rem 0 0 0; color: #475569; font-size: 0.9rem;">Deduct 1.5 to 2.0 marks on descriptive questions (Q13, Q14, Q39) if concrete movement or trade item names are omitted.</p>
-                            </div>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button id="btnLoadKasundaraPreset" type="button" style="background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
+                                📋 Load Kasundara Parv Data
+                            </button>
+                            <button id="btnLoadStudent56Preset" type="button" style="background: #10b981; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
+                                📋 Load Student 56 Data
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Teacher Correction Panel -->
-                    <div style="background: white; border-radius: 10px; border: 1px solid #cbd5e1; padding: 1.5rem;">
-                        <h3 style="margin-top: 0; color: #0f172a;">✍️ Submit Teacher Verification & Evolve Rules</h3>
-                        <form id="verifyCorrectionForm">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                                <div class="form-group">
-                                    <label for="verifyStudentName">Student Name</label>
-                                    <input type="text" id="verifyStudentName" placeholder="e.g. Kasundara Parv" required>
+                    <!-- Step 2: Form Input -->
+                    <form id="verifyCorrectionForm" style="background: #ffffff; border: 1fr; display: flex; flex-direction: column; gap: 1.25rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label for="verifyStudentName" style="font-weight: 600; color: #1e293b;">Student Name *</label>
+                                <input type="text" id="verifyStudentName" placeholder="e.g. Kasundara Parv" required style="width: 100%; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                            </div>
+                            <div class="form-group">
+                                <label for="verifySubject" style="font-weight: 600; color: #1e293b;">Subject / Class *</label>
+                                <input type="text" id="verifySubject" placeholder="e.g. Class 10th Social Science" required style="width: 100%; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                            </div>
+                            <div class="form-group">
+                                <label for="verifyMaxMarks" style="font-weight: 600; color: #1e293b;">Max Test Marks *</label>
+                                <input type="number" id="verifyMaxMarks" value="76" required style="width: 100%; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+                            </div>
+                        </div>
+
+                        <!-- Side by Side Evaluation Inputs -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <!-- Left: Production AI evaluation -->
+                            <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 1rem;">
+                                <h4 style="margin: 0 0 0.5rem 0; color: #991b1b; font-size: 1rem;">🤖 1. Production AI Evaluation (Current Run)</h4>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label for="verifyAiScore" style="font-size: 0.85rem; color: #7f1d1d;">AI Total Score Awarded</label>
+                                    <input type="number" step="0.5" id="verifyAiScore" placeholder="e.g. 56" required style="width: 100%; padding: 0.5rem; border: 1px solid #f87171; border-radius: 6px;">
                                 </div>
                                 <div class="form-group">
-                                    <label for="verifySubject">Subject / Test Title</label>
-                                    <input type="text" id="verifySubject" placeholder="e.g. Social Science Term Exam" required>
+                                    <label for="verifyAiBreakdown" style="font-size: 0.85rem; color: #7f1d1d;">AI Evaluation Data / Notes</label>
+                                    <textarea id="verifyAiBreakdown" style="width: 100%; min-height: 90px; padding: 0.5rem; border: 1px solid #f87171; border-radius: 6px; font-size: 0.85rem;" placeholder="Paste current AI evaluation points (e.g. Gave 4/4 on Q20, 5/5 on Q19)..."></textarea>
                                 </div>
                             </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                                <div class="form-group">
-                                    <label for="verifyAiScore">AI Score Awarded</label>
-                                    <input type="number" id="verifyAiScore" placeholder="e.g. 56" required>
+
+                            <!-- Right: Client Ground Truth evaluation -->
+                            <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 1rem;">
+                                <h4 style="margin: 0 0 0.5rem 0; color: #166534; font-size: 1rem;">👑 2. Client Benchmark Evaluation (Ground Truth)</h4>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label for="verifyTeacherScore" style="font-size: 0.85rem; color: #14532d;">Client PDF Total Score</label>
+                                    <input type="number" step="0.5" id="verifyTeacherScore" placeholder="e.g. 44" required style="width: 100%; padding: 0.5rem; border: 1px solid #4ade80; border-radius: 6px;">
                                 </div>
                                 <div class="form-group">
-                                    <label for="verifyTeacherScore">Teacher Verified Score</label>
-                                    <input type="number" id="verifyTeacherScore" placeholder="e.g. 44" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="verifyMaxMarks">Max Marks</label>
-                                    <input type="number" id="verifyMaxMarks" value="76" required>
+                                    <label for="verifyTeacherBreakdown" style="font-size: 0.85rem; color: #14532d;">Client PDF Evaluation Data / Notes</label>
+                                    <textarea id="verifyTeacherBreakdown" style="width: 100%; min-height: 90px; padding: 0.5rem; border: 1px solid #4ade80; border-radius: 6px; font-size: 0.85rem;" placeholder="Paste Client ground truth points (e.g. 0/4 on Q20 for copied text & missing sub-parts)..."></textarea>
                                 </div>
                             </div>
-                            <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label for="verifyFeedbackCorrection">Detailed Correction Note / AI Mistake Reason *</label>
-                                <textarea id="verifyFeedbackCorrection" required style="min-height: 100px;" placeholder="Explain why the AI over-scored or under-scored (e.g. 'AI gave full 4/4 on Q20 despite student skipping sub-parts 20.2 and 20.3. Needs strict sub-part auditing.')."></textarea>
+                        </div>
+
+                        <!-- Combined Correction Notes -->
+                        <div class="form-group">
+                            <label for="verifyFeedbackCorrection" style="font-weight: 600; color: #1e293b;">📌 AI Discrepancy Note & Required Prompt Fix *</label>
+                            <textarea id="verifyFeedbackCorrection" required style="width: 100%; min-height: 80px; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;" placeholder="Summary of why the AI failed and what critical instruction must be saved to Firebase..."></textarea>
+                        </div>
+
+                        <button type="submit" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; border: none; padding: 0.85rem 1.75rem; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.15); align-self: flex-start;">
+                            🚀 Analyze Discrepancy & Evolve Prompt Rule in Firebase
+                        </button>
+                    </form>
+
+                    <!-- Evolved Critical Directives Display -->
+                    <div style="margin-top: 2.5rem; border-top: 2px solid #f1f5f9; padding-top: 1.5rem;">
+                        <h3 style="margin-top: 0; color: #0f172a; font-size: 1.2rem;">🔥 Critical Prompt Directives Saved in Firebase</h3>
+                        <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">These rules are stored in Firebase and automatically loaded into Gemini's system prompt during every single evaluation to prevent repeating past mistakes!</p>
+
+                        <div id="directivesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <div style="padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <strong style="color: #6b21a8;">CRITICAL DIRECTIVE #1 (Case Study Auditing)</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: #581c87; font-size: 0.9rem;">Audit Q20/Q40/Q41 sub-parts individually (.1, .2, .3). If prompt text is copied or sub-parts skipped, deduct full sub-part weight immediately (0/4 score).</p>
                             </div>
-                            <button type="submit" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;">
-                                🚀 Feed Correction to AI Engine (Evolve Prompt Rules)
-                            </button>
-                        </form>
+                            <div style="padding: 1rem; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <strong style="color: #1e40af;">CRITICAL DIRECTIVE #2 (Mandatory Concrete Examples)</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: #1e3a8a; font-size: 0.9rem;">Deduct 1.5 to 2.0 marks on descriptive questions (Q13, Q14, Q39) if concrete movement or trade item names are omitted.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

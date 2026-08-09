@@ -284,44 +284,56 @@ function setupEventListeners() {
         e.preventDefault();
         const studentName = document.getElementById('verifyStudentName').value;
         const subject = document.getElementById('verifySubject').value;
+        const maxMarks = Number(document.getElementById('verifyMaxMarks').value);
         const aiScore = Number(document.getElementById('verifyAiScore').value);
+        const aiBreakdown = document.getElementById('verifyAiBreakdown').value;
         const teacherScore = Number(document.getElementById('verifyTeacherScore').value);
+        const teacherBreakdown = document.getElementById('verifyTeacherBreakdown').value;
         const feedbackCorrection = document.getElementById('verifyFeedbackCorrection').value;
 
         try {
-            // Save correction document to Firebase Firestore
-            await addDoc(collection(db, 'eval_verifications'), {
+            // 1. Save full dual dataset comparison to Firebase Firestore collection 'eval_dual_datasets'
+            await addDoc(collection(db, 'eval_dual_datasets'), {
                 studentName,
                 subject,
-                aiScore,
-                teacherScore,
-                feedbackCorrection,
+                maxMarks,
+                productionAi: {
+                    score: aiScore,
+                    breakdown: aiBreakdown
+                },
+                clientBenchmarkPdf: {
+                    score: teacherScore,
+                    breakdown: teacherBreakdown
+                },
+                discrepancyDelta: aiScore - teacherScore,
+                conclusionPromptDirective: feedbackCorrection,
                 timestamp: serverTimestamp()
             });
 
-            // Create evolved directive text
-            const newDirectiveText = `DIRECTIVE #${Date.now().toString().slice(-4)}: ${feedbackCorrection}`;
+            // 2. Save active critical prompt directive to Firebase collection 'eval_directives'
+            const newDirectiveText = `CRITICAL DIRECTIVE #${Date.now().toString().slice(-4)}: ${feedbackCorrection}`;
             await addDoc(collection(db, 'eval_directives'), {
                 directive: newDirectiveText,
                 subject,
+                studentName,
                 active: true,
                 createdAt: serverTimestamp()
             });
 
-            showToast('✅ Teacher correction saved! New prompt directive evolved.', 'success');
+            showToast('✅ Dual Evaluation Saved to Firebase! Critical Directive Evolved.', 'success');
             verifyCorrectionForm.reset();
 
-            // Append live directive to list
+            // 3. Render updated active directive on screen
             const directivesList = document.getElementById('directivesList');
             if (directivesList) {
                 const div = document.createElement('div');
-                div.style.cssText = 'padding: 1rem; background: white; border-radius: 8px; border-left: 4px solid #8b5cf6; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
-                div.innerHTML = `<strong style="color: #1e293b;">EVOLVED DIRECTIVE</strong><p style="margin: 0.25rem 0 0 0; color: #475569; font-size: 0.9rem;">${feedbackCorrection}</p>`;
-                directivesList.appendChild(div);
+                div.style.cssText = 'padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
+                div.innerHTML = `<strong style="color: #6b21a8;">CRITICAL DIRECTIVE (EVOLVED)</strong><p style="margin: 0.25rem 0 0 0; color: #581c87; font-size: 0.9rem;">${feedbackCorrection}</p>`;
+                directivesList.prepend(div);
             }
         } catch (err) {
             console.error("Verification submit error:", err);
-            showToast('Failed to save correction: ' + err.message, 'error');
+            showToast('Failed to save correction to Firebase: ' + err.message, 'error');
         }
     });
 
@@ -329,22 +341,32 @@ function setupEventListeners() {
     document.getElementById('btnLoadKasundaraPreset')?.addEventListener('click', () => {
         document.getElementById('verifyStudentName').value = "Kasundara Parv";
         document.getElementById('verifySubject').value = "Class 10th Social Science";
-        document.getElementById('verifyAiScore').value = 56;
-        document.getElementById('verifyTeacherScore').value = 44;
         document.getElementById('verifyMaxMarks').value = 76;
-        document.getElementById('verifyFeedbackCorrection').value = "AI over-scored Kasundara by +12 marks. AI gave full 4/4 on Q20 local government case study despite student copying prompt text in 20.1 and skipping sub-parts 20.2 & 20.3. Needs strict itemized sub-part auditing (.1, .2, .3). Also gave 5/5 on Q19 19th Century Liberalism despite student incorrectly attributing labour wages to economic liberalism.";
-        showToast('📋 Kasundara Parv preset loaded into form! Click submit to evolve rules.', 'info');
+
+        document.getElementById('verifyAiScore').value = 56;
+        document.getElementById('verifyAiBreakdown').value = "Production AI gave 56/76 (74%). Gave full 4/4 on Q20 (case study), 5/5 on Q19 (liberalism), 2/2 on Q14 (forest conservation), and 2/2 on Q15 (power sharing). Misread Q22 MCQ option letter.";
+
+        document.getElementById('verifyTeacherScore').value = 44;
+        document.getElementById('verifyTeacherBreakdown').value = "Client Benchmark PDF gave 44/76 (57.9%). Gave 0/4 on Q20 (copied text & skipped 20.2/20.3), 2/5 on Q19 (misattributed labour wages to economic liberalism), 1/2 on Q14 (missing afforestation explanation), and 1/2 on Q15 (too brief).";
+
+        document.getElementById('verifyFeedbackCorrection').value = "CRITICAL PROMPT DIRECTIVE: Audit case study Q20/Q40/Q41 sub-parts individually (.1, .2, .3). If prompt text is copied or sub-parts skipped, score = 0/4. Deduct 3 marks on Q19 for economic liberalism misattributions.";
+        showToast('📋 Kasundara Parv dual dataset loaded into form! Click submit to save to Firebase.', 'info');
     });
 
     // Load Student 56 Preset Button
     document.getElementById('btnLoadStudent56Preset')?.addEventListener('click', () => {
         document.getElementById('verifyStudentName').value = "Anonymous Student 56";
         document.getElementById('verifySubject').value = "Class 10th Social Science";
-        document.getElementById('verifyAiScore').value = 65.5;
-        document.getElementById('verifyTeacherScore').value = 56;
         document.getElementById('verifyMaxMarks').value = 76;
-        document.getElementById('verifyFeedbackCorrection').value = "AI over-scored Anonymous Student 56 by +9.5 marks. AI gave full 2/2 on Q13 Silk Route without enforcing 2 concrete trade examples (Chinese pottery/precious metals). AI gave full 5/5 on Q39 Satyagraha without requiring explicit movement names (Champaran, Kheda).";
-        showToast('📋 Anonymous Student 56 preset loaded into form! Click submit to evolve rules.', 'info');
+
+        document.getElementById('verifyAiScore').value = 65.5;
+        document.getElementById('verifyAiBreakdown').value = "Production AI gave 65.5/76 (86%). Gave 2/2 on Q13 (Silk Route), 5/5 on Q39 (Satyagraha), and 2/2 on Q21 (map work). Misread Q4 MCQ letter.";
+
+        document.getElementById('verifyTeacherScore').value = 56;
+        document.getElementById('verifyTeacherBreakdown').value = "Client Benchmark PDF gave 56/76 (73.7%). Gave 1/2 on Q13 (missing 2 concrete trade examples), 3/5 on Q39 (missing movement names Champaran/Kheda), and 1/2 on Q21 (incorrect city name Kottaie).";
+
+        document.getElementById('verifyFeedbackCorrection').value = "CRITICAL PROMPT DIRECTIVE: Deduct 1.0 mark on Q13 for missing 2 concrete trade examples. Deduct 2.0 marks on Q39 if Satyagraha movement names (Champaran/Kheda) are missing.";
+        showToast('📋 Anonymous Student 56 dual dataset loaded into form! Click submit to save to Firebase.', 'info');
     });
 
     // Close modal
