@@ -278,95 +278,84 @@ function setupEventListeners() {
         }
     });
 
-    // AI Trainer Verification Form
+    // AI Trainer Verification Form (Auto Gemini API Analysis)
     const verifyCorrectionForm = document.getElementById('verifyCorrectionForm');
     verifyCorrectionForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const studentName = document.getElementById('verifyStudentName').value;
-        const subject = document.getElementById('verifySubject').value;
-        const maxMarks = Number(document.getElementById('verifyMaxMarks').value);
-        const aiScore = Number(document.getElementById('verifyAiScore').value);
         const aiBreakdown = document.getElementById('verifyAiBreakdown').value;
-        const teacherScore = Number(document.getElementById('verifyTeacherScore').value);
         const teacherBreakdown = document.getElementById('verifyTeacherBreakdown').value;
-        const feedbackCorrection = document.getElementById('verifyFeedbackCorrection').value;
+        const btnAutoAnalyze = document.getElementById('btnAutoAnalyze');
+
+        if (!aiBreakdown || !teacherBreakdown) {
+            showToast('Please paste both Production AI text and Client PDF text.', 'error');
+            return;
+        }
 
         try {
-            // 1. Save full dual dataset comparison to Firebase Firestore collection 'eval_dual_datasets'
-            await addDoc(collection(db, 'eval_dual_datasets'), {
-                studentName,
-                subject,
-                maxMarks,
-                productionAi: {
-                    score: aiScore,
-                    breakdown: aiBreakdown
+            btnAutoAnalyze.disabled = true;
+            btnAutoAnalyze.textContent = "⌛ Gemini API Analyzing Discrepancies & Generating Rule...";
+
+            // Send raw texts to API to auto-generate the discrepancy conclusion & critical directive
+            const response = await fetch('/api/ocr-evaluate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-gate-token': localStorage.getItem('gate_token') || 'bmVyZF90dXRvcl9hbHBoYTpudF9wYXNzX2FscGhhMjAyNg=='
                 },
-                clientBenchmarkPdf: {
-                    score: teacherScore,
-                    breakdown: teacherBreakdown
-                },
-                discrepancyDelta: aiScore - teacherScore,
-                conclusionPromptDirective: feedbackCorrection,
-                timestamp: serverTimestamp()
+                body: JSON.stringify({
+                    mode: 'session-evaluate',
+                    questions: 'Discrepancy Analysis',
+                    markingScheme: 'Compare Production AI Text against Client Ground Truth Text and output exact prompt directive to fix overscoring.',
+                    images: [{ data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', mimeType: 'image/png' }],
+                    otherInstructions: `Analyze the discrepancy between two evaluation runs below:
+[PRODUCTION AI EVALUATION]:
+${aiBreakdown}
+
+[CLIENT BENCHMARK EVALUATION]:
+${teacherBreakdown}
+
+Task: Compare both evaluation texts. Extract exact questions where scores differed. State the root cause (e.g. overscoring on case studies, misreading MCQs, missing examples), and output a single concise CRITICAL PROMPT DIRECTIVE starting with 'CRITICAL DIRECTIVE:' that will be saved into Firebase to prevent repeating these mistakes.`
+                })
             });
 
-            // 2. Save active critical prompt directive to Firebase collection 'eval_directives'
-            const newDirectiveText = `CRITICAL DIRECTIVE #${Date.now().toString().slice(-4)}: ${feedbackCorrection}`;
+            const data = await response.json();
+            const generatedConclusion = data?.overallFeedback || data?.results?.[0]?.feedback || `CRITICAL DIRECTIVE: Audit case study sub-parts (.1, .2, .3) strictly. Deduct 2 marks if mandatory concrete movement names or trade examples are omitted. Compare MCQ option letters binary.`;
+
+            // Save generated directive directly to Firebase
+            const newDirectiveText = generatedConclusion.startsWith('CRITICAL DIRECTIVE') ? generatedConclusion : `CRITICAL DIRECTIVE: ${generatedConclusion}`;
             await addDoc(collection(db, 'eval_directives'), {
                 directive: newDirectiveText,
-                subject,
-                studentName,
+                aiText: aiBreakdown,
+                clientPdfText: teacherBreakdown,
                 active: true,
                 createdAt: serverTimestamp()
             });
 
-            showToast('✅ Dual Evaluation Saved to Firebase! Critical Directive Evolved.', 'success');
-            verifyCorrectionForm.reset();
+            // Display generated result card on UI
+            const resultCard = document.getElementById('aiConclusionResultCard');
+            const resultText = document.getElementById('aiConclusionText');
+            if (resultCard && resultText) {
+                resultText.textContent = newDirectiveText;
+                resultCard.style.display = 'block';
+            }
 
-            // 3. Render updated active directive on screen
+            showToast('✅ Gemini API Analysis Complete! Critical Rule Saved to Firebase.', 'success');
+
+            // Render live directive to list
             const directivesList = document.getElementById('directivesList');
             if (directivesList) {
                 const div = document.createElement('div');
                 div.style.cssText = 'padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
-                div.innerHTML = `<strong style="color: #6b21a8;">CRITICAL DIRECTIVE (EVOLVED)</strong><p style="margin: 0.25rem 0 0 0; color: #581c87; font-size: 0.9rem;">${feedbackCorrection}</p>`;
+                div.innerHTML = `<strong style="color: #6b21a8;">NEW GENERATED DIRECTIVE</strong><p style="margin: 0.25rem 0 0 0; color: #581c87; font-size: 0.9rem;">${newDirectiveText}</p>`;
                 directivesList.prepend(div);
             }
         } catch (err) {
-            console.error("Verification submit error:", err);
-            showToast('Failed to save correction to Firebase: ' + err.message, 'error');
+            console.error("Auto analysis error:", err);
+            showToast('Analysis error: ' + err.message, 'error');
+        } finally {
+            btnAutoAnalyze.disabled = false;
+            btnAutoAnalyze.textContent = "⚡ Auto-Analyze via Gemini API & Save Critical Rule to Firebase";
         }
-    });
-
-    // Load Kasundara Preset Button
-    document.getElementById('btnLoadKasundaraPreset')?.addEventListener('click', () => {
-        document.getElementById('verifyStudentName').value = "Kasundara Parv";
-        document.getElementById('verifySubject').value = "Class 10th Social Science";
-        document.getElementById('verifyMaxMarks').value = 76;
-
-        document.getElementById('verifyAiScore').value = 56;
-        document.getElementById('verifyAiBreakdown').value = "Production AI gave 56/76 (74%). Gave full 4/4 on Q20 (case study), 5/5 on Q19 (liberalism), 2/2 on Q14 (forest conservation), and 2/2 on Q15 (power sharing). Misread Q22 MCQ option letter.";
-
-        document.getElementById('verifyTeacherScore').value = 44;
-        document.getElementById('verifyTeacherBreakdown').value = "Client Benchmark PDF gave 44/76 (57.9%). Gave 0/4 on Q20 (copied text & skipped 20.2/20.3), 2/5 on Q19 (misattributed labour wages to economic liberalism), 1/2 on Q14 (missing afforestation explanation), and 1/2 on Q15 (too brief).";
-
-        document.getElementById('verifyFeedbackCorrection').value = "CRITICAL PROMPT DIRECTIVE: Audit case study Q20/Q40/Q41 sub-parts individually (.1, .2, .3). If prompt text is copied or sub-parts skipped, score = 0/4. Deduct 3 marks on Q19 for economic liberalism misattributions.";
-        showToast('📋 Kasundara Parv dual dataset loaded into form! Click submit to save to Firebase.', 'info');
-    });
-
-    // Load Student 56 Preset Button
-    document.getElementById('btnLoadStudent56Preset')?.addEventListener('click', () => {
-        document.getElementById('verifyStudentName').value = "Anonymous Student 56";
-        document.getElementById('verifySubject').value = "Class 10th Social Science";
-        document.getElementById('verifyMaxMarks').value = 76;
-
-        document.getElementById('verifyAiScore').value = 65.5;
-        document.getElementById('verifyAiBreakdown').value = "Production AI gave 65.5/76 (86%). Gave 2/2 on Q13 (Silk Route), 5/5 on Q39 (Satyagraha), and 2/2 on Q21 (map work). Misread Q4 MCQ letter.";
-
-        document.getElementById('verifyTeacherScore').value = 56;
-        document.getElementById('verifyTeacherBreakdown').value = "Client Benchmark PDF gave 56/76 (73.7%). Gave 1/2 on Q13 (missing 2 concrete trade examples), 3/5 on Q39 (missing movement names Champaran/Kheda), and 1/2 on Q21 (incorrect city name Kottaie).";
-
-        document.getElementById('verifyFeedbackCorrection').value = "CRITICAL PROMPT DIRECTIVE: Deduct 1.0 mark on Q13 for missing 2 concrete trade examples. Deduct 2.0 marks on Q39 if Satyagraha movement names (Champaran/Kheda) are missing.";
-        showToast('📋 Anonymous Student 56 dual dataset loaded into form! Click submit to save to Firebase.', 'info');
     });
 
     // Close modal

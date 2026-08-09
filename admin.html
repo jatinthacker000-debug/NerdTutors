@@ -312,101 +312,51 @@
                 <div class="content-box" style="background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 2rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 1rem;">
                         <div>
-                            <h2 style="margin: 0; color: #0f172a; font-size: 1.5rem;">🧠 AI Self-Learning & Verification Portal</h2>
-                            <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.9rem;">Input AI evaluation vs. Client benchmark evaluation. The AI will draw conclusions, evolve critical prompts, and save them directly to Firebase!</p>
-                        </div>
-                        <span style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 0.4rem 0.9rem; border-radius: 20px; font-weight: 700; font-size: 0.85rem;">
-                            🟢 Firebase Dynamic Engine
-                        </span>
-                    </div>
-
-                    <!-- Step 1: Preset Loaders -->
-                    <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                        <div>
-                            <strong style="color: #334155; font-size: 0.95rem;">⚡ Quick Preset Loader:</strong>
-                            <span style="color: #64748b; font-size: 0.85rem; margin-left: 0.5rem;">Click to auto-fill dual dataset for instant AI conclusion training</span>
-                        </div>
-                        <div style="display: flex; gap: 0.75rem;">
-                            <button id="btnLoadKasundaraPreset" type="button" style="background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
-                                📋 Load Kasundara Parv Data
-                            </button>
-                            <button id="btnLoadStudent56Preset" type="button" style="background: #10b981; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
-                                📋 Load Student 56 Data
-                            </button>
+                            <h2 style="margin: 0; color: #0f172a; font-size: 1.5rem;">🧠 AI Discrepancy Analyzer & Rule Generator</h2>
+                            <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.9rem;">Paste the two raw texts below. Click the button, and Gemini API will automatically compare them, extract the exact mistakes, generate the conclusion, and save it to Firebase!</p>
                         </div>
                     </div>
 
-                    <!-- Step 2: Form Input -->
-                    <form id="verifyCorrectionForm" style="background: #ffffff; border: 1fr; display: flex; flex-direction: column; gap: 1.25rem;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
-                            <div class="form-group">
-                                <label for="verifyStudentName" style="font-weight: 600; color: #1e293b;">Student Name *</label>
-                                <input type="text" id="verifyStudentName" placeholder="e.g. Kasundara Parv" required style="width: 100%; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                            </div>
-                            <div class="form-group">
-                                <label for="verifySubject" style="font-weight: 600; color: #1e293b;">Subject / Class *</label>
-                                <input type="text" id="verifySubject" placeholder="e.g. Class 10th Social Science" required style="width: 100%; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                            </div>
-                            <div class="form-group">
-                                <label for="verifyMaxMarks" style="font-weight: 600; color: #1e293b;">Max Test Marks *</label>
-                                <input type="number" id="verifyMaxMarks" value="76" required style="width: 100%; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px;">
-                            </div>
-                        </div>
-
-                        <!-- Side by Side Evaluation Inputs -->
+                    <form id="verifyCorrectionForm" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <!-- Side-by-side Simple Boxes -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                            <!-- Left: Production AI evaluation -->
-                            <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 1rem;">
-                                <h4 style="margin: 0 0 0.5rem 0; color: #991b1b; font-size: 1rem;">🤖 1. Production AI Evaluation (Current Run)</h4>
-                                <div class="form-group" style="margin-bottom: 0.75rem;">
-                                    <label for="verifyAiScore" style="font-size: 0.85rem; color: #7f1d1d;">AI Total Score Awarded</label>
-                                    <input type="number" step="0.5" id="verifyAiScore" placeholder="e.g. 56" required style="width: 100%; padding: 0.5rem; border: 1px solid #f87171; border-radius: 6px;">
-                                </div>
-                                <div class="form-group">
-                                    <label for="verifyAiBreakdown" style="font-size: 0.85rem; color: #7f1d1d;">AI Evaluation Data / Notes</label>
-                                    <textarea id="verifyAiBreakdown" style="width: 100%; min-height: 90px; padding: 0.5rem; border: 1px solid #f87171; border-radius: 6px; font-size: 0.85rem;" placeholder="Paste current AI evaluation points (e.g. Gave 4/4 on Q20, 5/5 on Q19)..."></textarea>
-                                </div>
+                            <!-- Box 1: Production AI Data -->
+                            <div style="background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 8px; padding: 1.25rem;">
+                                <label for="verifyAiBreakdown" style="font-weight: 700; color: #991b1b; display: block; margin-bottom: 0.5rem; font-size: 1.05rem;">
+                                    🤖 1. Paste Production AI Evaluation Text Here
+                                </label>
+                                <textarea id="verifyAiBreakdown" required style="width: 100%; min-height: 220px; padding: 0.75rem; border: 1px solid #f87171; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" placeholder="Paste current AI output here (e.g. Q1 Score 1/1, Q2 Score 0/1, Q20 Score 4/4...)"></textarea>
                             </div>
 
-                            <!-- Right: Client Ground Truth evaluation -->
-                            <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 1rem;">
-                                <h4 style="margin: 0 0 0.5rem 0; color: #166534; font-size: 1rem;">👑 2. Client Benchmark Evaluation (Ground Truth)</h4>
-                                <div class="form-group" style="margin-bottom: 0.75rem;">
-                                    <label for="verifyTeacherScore" style="font-size: 0.85rem; color: #14532d;">Client PDF Total Score</label>
-                                    <input type="number" step="0.5" id="verifyTeacherScore" placeholder="e.g. 44" required style="width: 100%; padding: 0.5rem; border: 1px solid #4ade80; border-radius: 6px;">
-                                </div>
-                                <div class="form-group">
-                                    <label for="verifyTeacherBreakdown" style="font-size: 0.85rem; color: #14532d;">Client PDF Evaluation Data / Notes</label>
-                                    <textarea id="verifyTeacherBreakdown" style="width: 100%; min-height: 90px; padding: 0.5rem; border: 1px solid #4ade80; border-radius: 6px; font-size: 0.85rem;" placeholder="Paste Client ground truth points (e.g. 0/4 on Q20 for copied text & missing sub-parts)..."></textarea>
-                                </div>
+                            <!-- Box 2: Client Benchmark PDF Data -->
+                            <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 1.25rem;">
+                                <label for="verifyTeacherBreakdown" style="font-weight: 700; color: #166534; display: block; margin-bottom: 0.5rem; font-size: 1.05rem;">
+                                    👑 2. Paste Client Benchmark PDF Text Here
+                                </label>
+                                <textarea id="verifyTeacherBreakdown" required style="width: 100%; min-height: 220px; padding: 0.75rem; border: 1px solid #4ade80; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" placeholder="Paste Client PDF text here (e.g. Q1 Correct, Q20 0/4 Copied prompt text...)"></textarea>
                             </div>
                         </div>
 
-                        <!-- Combined Correction Notes -->
-                        <div class="form-group">
-                            <label for="verifyFeedbackCorrection" style="font-weight: 600; color: #1e293b;">📌 AI Discrepancy Note & Required Prompt Fix *</label>
-                            <textarea id="verifyFeedbackCorrection" required style="width: 100%; min-height: 80px; padding: 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;" placeholder="Summary of why the AI failed and what critical instruction must be saved to Firebase..."></textarea>
-                        </div>
-
-                        <button type="submit" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; border: none; padding: 0.85rem 1.75rem; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.15); align-self: flex-start;">
-                            🚀 Analyze Discrepancy & Evolve Prompt Rule in Firebase
+                        <!-- Auto Generate Button -->
+                        <button type="submit" id="btnAutoAnalyze" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 1rem 2rem; border-radius: 8px; font-size: 1.1rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(30,60,114,0.3); align-self: center;">
+                            ⚡ Auto-Analyze via Gemini API & Save Critical Rule to Firebase
                         </button>
                     </form>
+
+                    <!-- Result Box generated by Gemini API -->
+                    <div id="aiConclusionResultCard" style="display: none; margin-top: 2rem; background: #faf5ff; border: 2px solid #d8b4fe; border-radius: 10px; padding: 1.5rem;">
+                        <h3 style="margin-top: 0; color: #6b21a8; font-size: 1.2rem;">✨ Gemini API Analysis Result & Generated Critical Directive</h3>
+                        <div id="aiConclusionText" style="white-space: pre-wrap; font-family: monospace; font-size: 0.95rem; color: #4c1d95; background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e9d5ff; margin-bottom: 1rem;"></div>
+                        <span style="color: #059669; font-weight: 700; font-size: 0.9rem;">✅ Saved to Firebase Collection 'eval_directives' & Active in System!</span>
+                    </div>
 
                     <!-- Evolved Critical Directives Display -->
                     <div style="margin-top: 2.5rem; border-top: 2px solid #f1f5f9; padding-top: 1.5rem;">
                         <h3 style="margin-top: 0; color: #0f172a; font-size: 1.2rem;">🔥 Critical Prompt Directives Saved in Firebase</h3>
-                        <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">These rules are stored in Firebase and automatically loaded into Gemini's system prompt during every single evaluation to prevent repeating past mistakes!</p>
+                        <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">These rules are automatically loaded into Gemini's system prompt during every single evaluation to prevent repeating past mistakes!</p>
 
                         <div id="directivesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                            <div style="padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                <strong style="color: #6b21a8;">CRITICAL DIRECTIVE #1 (Case Study Auditing)</strong>
-                                <p style="margin: 0.25rem 0 0 0; color: #581c87; font-size: 0.9rem;">Audit Q20/Q40/Q41 sub-parts individually (.1, .2, .3). If prompt text is copied or sub-parts skipped, deduct full sub-part weight immediately (0/4 score).</p>
-                            </div>
-                            <div style="padding: 1rem; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                <strong style="color: #1e40af;">CRITICAL DIRECTIVE #2 (Mandatory Concrete Examples)</strong>
-                                <p style="margin: 0.25rem 0 0 0; color: #1e3a8a; font-size: 0.9rem;">Deduct 1.5 to 2.0 marks on descriptive questions (Q13, Q14, Q39) if concrete movement or trade item names are omitted.</p>
-                            </div>
+                            <!-- Directives rendered dynamically -->
                         </div>
                     </div>
                 </div>
