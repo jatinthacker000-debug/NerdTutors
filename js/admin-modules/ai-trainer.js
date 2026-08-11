@@ -101,8 +101,14 @@ export async function loadActiveDirectives() {
 
     try {
         const { getDocs, query, orderBy } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-        const q = query(collection(db, 'eval_directives'), orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
+        let querySnapshot;
+        try {
+            const q = query(collection(db, 'eval_directives'), orderBy('createdAt', 'desc'));
+            querySnapshot = await getDocs(q);
+        } catch (qErr) {
+            // Fallback to simple collection query if orderBy requires index or rules check
+            querySnapshot = await getDocs(collection(db, 'eval_directives'));
+        }
 
         if (querySnapshot.empty) {
             directivesList.innerHTML = '<p style="color: #666; font-style: italic; font-size: 0.9rem;">No custom AI rules active yet. Use the analyzer above to create one!</p>';
@@ -138,7 +144,8 @@ export async function loadActiveDirectives() {
 
         directivesList.innerHTML = html;
     } catch (err) {
-        console.error("Error loading directives:", err);
+        console.warn("Firebase directives permission warning:", err.message);
+        directivesList.innerHTML = '<p style="color: #718096; font-style: italic; font-size: 0.9rem;">🔒 Sign in with Google / Admin account or press <code>Ctrl+Alt+B</code> to load active rules from Firebase.</p>';
     }
 }
 
