@@ -59,15 +59,21 @@ Task: Compare both evaluation texts. Extract exact questions where scores differ
             const data = await response.json();
             const generatedConclusion = data?.overallFeedback || data?.results?.[0]?.feedback || `CRITICAL DIRECTIVE: Audit case study sub-parts (.1, .2, .3) strictly. Deduct 2 marks if mandatory concrete movement names or trade examples are omitted. Compare MCQ option letters binary.`;
 
-            // Save generated directive directly to Firebase
+            // Save generated directive directly to Firebase (with permission fallback)
             const newDirectiveText = generatedConclusion.startsWith('CRITICAL DIRECTIVE') ? generatedConclusion : `CRITICAL DIRECTIVE: ${generatedConclusion}`;
-            await addDoc(collection(db, 'eval_directives'), {
-                directive: newDirectiveText,
-                aiText: aiBreakdown,
-                clientPdfText: teacherBreakdown,
-                active: true,
-                createdAt: serverTimestamp()
-            });
+            try {
+                await addDoc(collection(db, 'eval_directives'), {
+                    directive: newDirectiveText,
+                    aiText: aiBreakdown,
+                    clientPdfText: teacherBreakdown,
+                    active: true,
+                    createdAt: serverTimestamp()
+                });
+                showToast('✅ Gemini API Analysis Complete! Critical Rule Saved to Firebase.', 'success');
+            } catch (fbErr) {
+                console.warn("Firebase save permission warning:", fbErr.message);
+                showToast('✅ Gemini API Analysis Complete! (Note: Sign in as Admin to persist rule to Firebase database).', 'info');
+            }
 
             // Display generated result card on UI
             const resultCard = document.getElementById('aiConclusionResultCard');
@@ -76,8 +82,6 @@ Task: Compare both evaluation texts. Extract exact questions where scores differ
                 resultText.textContent = newDirectiveText;
                 resultCard.style.display = 'block';
             }
-
-            showToast('✅ Gemini API Analysis Complete! Critical Rule Saved to Firebase.', 'success');
 
             // Reload live rules list
             loadActiveDirectives();

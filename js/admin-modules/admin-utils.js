@@ -32,11 +32,14 @@ export function switchTab(tabName) {
 
 // Show Toast
 export function showToast(message, type = 'success') {
-    elements.toast.textContent = message;
-    elements.toast.className = `toast ${type} show`;
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+
+    toast.textContent = message;
+    toast.className = `toast ${type} show`;
 
     setTimeout(() => {
-        elements.toast.classList.remove('show');
+        toast.classList.remove('show');
     }, 3000);
 }
 
