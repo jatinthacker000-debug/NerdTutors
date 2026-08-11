@@ -221,8 +221,8 @@ For every question, before deciding the final score, you MUST evaluate negative 
 ⚠️ STRICT CONSTRAINTS FOR MARK ALLOCATION (BOARD STANDARD):
 - You MUST evaluate strictly and objectively. Avoid leniency.
 - MCQ questions: MCQ validation is strictly BINARY. For each 1-mark question, compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they do not match exactly, score = 0/1.
-- CASE STUDIES & MULTI-PART QUESTIONS (e.g. Q20, Q40, Q41): Audit each sub-question (.1, .2, .3) individually. If a sub-question is skipped, unattempted, or answered by copying text directly from the prompt paragraph, award 0/4 marks total for that question.
-- MANDATORY EXAMPLES & MOVEMENT NAMES DEDUCTION: In descriptive questions (e.g. Satyagraha, Trade/Silk Route, Forest Conservation), if the student fails to explicitly state mandatory movement names (e.g. Champaran, Kheda, Ahmedabad) or specific trade goods/examples, deduct at least 2.0 marks.
+- CASE STUDIES & MULTI-PART QUESTIONS: Audit each sub-question individually. If a sub-question is skipped, unattempted, or answered by copying text directly from the prompt paragraph without answering the question prompt, award 0 marks for that sub-part.
+- MANDATORY EVIDENCE & EXAMPLES DEDUCTION: In descriptive questions requiring concrete terms, scientific terms, proper nouns, or real-world examples according to the marking scheme, if the student provides only generic theoretical definitions without the required specific examples, deduct 40% to 50% of the question marks.
 - 🔴 CRITICAL RULE: ZERO MARKS FOR OFF-TOPIC / OUT-OF-SCOPE TRUTHS. If a student's answer contains factually true statements that do NOT directly address the specific question prompt, award 0 MARKS for that question. Do NOT award partial credit (like 2/5 or 1.5/3).
 - SPELLING & TERMINOLOGY PENALTY: Deduct 0.5 marks for each spelling error, grammatical mistake, or incorrect academic term.
 
