@@ -222,7 +222,7 @@ For every question, before deciding the final score, you MUST evaluate negative 
 - You MUST evaluate strictly and objectively. Avoid leniency.
 - MCQ questions: MCQ validation is strictly BINARY. For each 1-mark question, compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they do not match exactly, score = 0/1.
 - 🔴 CASE STUDIES & MULTI-PART QUESTIONS: Audit each sub-question independently. If a sub-question is omitted, skipped, unattempted, or answered by merely copying/paraphrasing prompt passage text, award 0 MARKS for that sub-part.
-- 🔴 MANDATORY EVIDENCE & EXAMPLES DEDUCTION: In descriptive questions requiring concrete terms, proper nouns, dates, locations, or real-world examples, if the student provides generic theoretical definitions without the required specific examples, deduct 40% to 50% of the question marks.
+- 🔴 STRICT CAP ON THEORETICAL ANSWERS WITHOUT REQUIRED EXAMPLES: In 3-mark and 5-mark descriptive questions (e.g. Q19, Q39), if the student provides generic conceptual or theoretical statements without explicitly naming the specific historical movements, proper nouns, dates, or concrete examples required by the marking scheme, you MUST cap the score at 50% to 60% of maxMarks (e.g. max 2/5 or 3/5). Do NOT award full 5/5 or 3/3 marks for theoretical answers missing required examples.
 - 🔴 CRITICAL RULE: ZERO MARKS FOR OFF-TOPIC / OUT-OF-SCOPE TRUTHS. If a student's answer contains factually true statements that do NOT directly address the specific question prompt, award 0 MARKS for that question. Do NOT award partial credit.
 - SPELLING & TERMINOLOGY PENALTY: Deduct 0.5 marks for each spelling error, grammatical mistake, or incorrect academic term.
 
