@@ -149,7 +149,25 @@ export async function loadActiveDirectives() {
         directivesList.innerHTML = html;
     } catch (err) {
         console.warn("Firebase directives permission warning:", err.message);
-        directivesList.innerHTML = '<p style="color: #718096; font-style: italic; font-size: 0.9rem;">🔒 Sign in with Google / Admin account or press <code>Ctrl+Alt+B</code> to load active rules from Firebase.</p>';
+        
+        // Local state fallback so rules are still readable/editable offline or unauthenticated
+        const localRules = JSON.parse(localStorage.getItem('local_eval_directives') || '[]');
+        if (localRules.length > 0) {
+            let html = '';
+            localRules.forEach((ruleText, idx) => {
+                html += `
+                    <div id="rule-card-local-${idx}" style="padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 0.75rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <strong style="color: #6b21a8; font-size: 0.85rem; text-transform: uppercase;">ACTIVE PROMPT RULE (LOCAL SESSIONS)</strong>
+                        </div>
+                        <div style="color: #581c87; font-size: 0.9rem; line-height: 1.4;">${ruleText}</div>
+                    </div>
+                `;
+            });
+            directivesList.innerHTML = html;
+        } else {
+            directivesList.innerHTML = '<p style="color: #718096; font-style: italic; font-size: 0.9rem;">🔒 Sign in with Google / Admin account or press <code>Ctrl+Alt+B</code> (Dev Mode) to sync rules with Firebase.</p>';
+        }
     }
 }
 
