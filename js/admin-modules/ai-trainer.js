@@ -79,14 +79,8 @@ Task: Compare both evaluation texts. Extract exact questions where scores differ
 
             showToast('✅ Gemini API Analysis Complete! Critical Rule Saved to Firebase.', 'success');
 
-            // Render live directive to list
-            const directivesList = document.getElementById('directivesList');
-            if (directivesList) {
-                const div = document.createElement('div');
-                div.style.cssText = 'padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
-                div.innerHTML = `<strong style="color: #6b21a8;">NEW GENERATED DIRECTIVE</strong><p style="margin: 0.25rem 0 0 0; color: #581c87; font-size: 0.9rem;">${newDirectiveText}</p>`;
-                directivesList.prepend(div);
-            }
+            // Reload live rules list
+            loadActiveDirectives();
         } catch (err) {
             console.error("Auto analysis error:", err);
             showToast('Analysis error: ' + err.message, 'error');
@@ -95,4 +89,99 @@ Task: Compare both evaluation texts. Extract exact questions where scores differ
             btnAutoAnalyze.textContent = "⚡ Auto-Analyze via Gemini API & Save Critical Rule to Firebase";
         }
     });
+
+    // Initial load of rules from Firebase
+    loadActiveDirectives();
 }
+
+// Fetch, render, edit, and delete rules in Firebase
+export async function loadActiveDirectives() {
+    const directivesList = document.getElementById('directivesList');
+    if (!directivesList) return;
+
+    try {
+        const { getDocs, query, orderBy } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+        const q = query(collection(db, 'eval_directives'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            directivesList.innerHTML = '<p style="color: #666; font-style: italic; font-size: 0.9rem;">No custom AI rules active yet. Use the analyzer above to create one!</p>';
+            return;
+        }
+
+        let html = '';
+        querySnapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const id = docSnap.id;
+
+            html += `
+                <div id="rule-card-${id}" style="padding: 1rem; background: #faf5ff; border-radius: 8px; border-left: 4px solid #a855f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="color: #6b21a8; font-size: 0.85rem; text-transform: uppercase;">ACTIVE PROMPT RULE</strong>
+                        <div>
+                            <button onclick="window.editFirebaseRule('${id}')" style="background: #3b82f6; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-right: 0.25rem;">✏️ Edit Rule</button>
+                            <button onclick="window.deleteFirebaseRule('${id}')" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">🗑️ Delete</button>
+                        </div>
+                    </div>
+                    <div id="rule-text-${id}" style="color: #581c87; font-size: 0.9rem; line-height: 1.4;">${data.directive || 'No directive content'}</div>
+
+                    <div id="rule-edit-container-${id}" style="display: none; margin-top: 0.5rem;">
+                        <textarea id="rule-edit-input-${id}" style="width: 100%; height: 70px; padding: 0.5rem; border-radius: 6px; border: 1px solid #c084fc; font-family: inherit; font-size: 0.9rem;">${data.directive || ''}</textarea>
+                        <div style="margin-top: 0.35rem; display: flex; gap: 0.5rem;">
+                            <button onclick="window.saveFirebaseRule('${id}')" style="background: #16a34a; color: white; border: none; padding: 0.35rem 0.75rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">💾 Save Edits</button>
+                            <button onclick="window.cancelEditRule('${id}')" style="background: #6b7280; color: white; border: none; padding: 0.35rem 0.75rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        directivesList.innerHTML = html;
+    } catch (err) {
+        console.error("Error loading directives:", err);
+    }
+}
+
+// Attach live window hooks for rule editing/deleting
+window.editFirebaseRule = function(id) {
+    document.getElementById(`rule-text-${id}`).style.display = 'none';
+    document.getElementById(`rule-edit-container-${id}`).style.display = 'block';
+};
+
+window.cancelEditRule = function(id) {
+    document.getElementById(`rule-text-${id}`).style.display = 'block';
+    document.getElementById(`rule-edit-container-${id}`).style.display = 'none';
+};
+
+window.saveFirebaseRule = async function(id) {
+    const newText = document.getElementById(`rule-edit-input-${id}`).value;
+    if (!newText.trim()) {
+        showToast('Rule text cannot be empty', 'error');
+        return;
+    }
+
+    try {
+        const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+        await updateDoc(doc(db, 'eval_directives', id), {
+            directive: newText,
+            updatedAt: serverTimestamp()
+        });
+        showToast('✅ Prompt Rule updated in Firebase!', 'success');
+        loadActiveDirectives();
+    } catch (err) {
+        showToast('Failed to save rule: ' + err.message, 'error');
+    }
+};
+
+window.deleteFirebaseRule = async function(id) {
+    if (confirm("Are you sure you want to delete this active prompt rule from Firebase?")) {
+        try {
+            const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+            await deleteDoc(doc(db, 'eval_directives', id));
+            showToast('🗑️ Prompt rule deleted from Firebase', 'info');
+            loadActiveDirectives();
+        } catch (err) {
+            showToast('Failed to delete rule: ' + err.message, 'error');
+        }
+    }
+};
