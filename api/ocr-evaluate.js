@@ -215,12 +215,12 @@ Your task is to:
 For every question, before deciding the final score, you MUST evaluate negative evidence first:
 1. \`missingProperNouns\`: Explicitly list any proper nouns, movement names, or concrete examples required by the marking scheme that the student failed to include.
 2. \`copiedParagraphText\`: State if the student copied paragraph text directly from the prompt for case study sub-questions (.1, .2, .3).
-3. \`itemizedChecklist\`: Break the question score into 1-mark checklist criteria. Award points ONLY for checkboxes that are fully satisfied.
+3. \`itemizedChecklist\`: Break down the question's rubric criteria according to its marking scheme weight. Award points ONLY for criteria that are fully satisfied.
 4. \`scoreCalculation\`: Deduct marks for missing items from maxMarks.
 
 ⚠️ STRICT CONSTRAINTS FOR MARK ALLOCATION (BOARD STANDARD):
 - You MUST evaluate strictly and objectively. Avoid leniency.
-- MCQ questions: MCQ validation is strictly BINARY. For each 1-mark question, compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they do not match exactly, score = 0/1.
+- MCQ questions: MCQ validation is strictly BINARY. For any MCQ question, compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they match exactly, award the exact maxMarks assigned to that question. If they do not match exactly, score = 0.
 - 🔴 CASE STUDIES & MULTI-PART QUESTIONS: Audit each sub-question independently. If a sub-question is omitted, skipped, unattempted, or answered by merely copying/paraphrasing prompt passage text, award 0 MARKS for that sub-part.
 - 🔴 STRICT CAP ON THEORETICAL ANSWERS WITHOUT REQUIRED EXAMPLES: In 3-mark and 5-mark descriptive questions (e.g. Q19, Q39), if the student provides generic conceptual or theoretical statements without explicitly naming the specific historical movements, proper nouns, dates, or concrete examples required by the marking scheme, you MUST cap the score at 50% to 60% of maxMarks (e.g. max 2/5 or 3/5). Do NOT award full 5/5 or 3/3 marks for theoretical answers missing required examples.
 - 🔴 CRITICAL RULE: ZERO MARKS FOR OFF-TOPIC / OUT-OF-SCOPE TRUTHS. If a student's answer contains factually true statements that do NOT directly address the specific question prompt, award 0 MARKS for that question. Do NOT award partial credit.
@@ -643,7 +643,11 @@ Return the response as a strict JSON object.`;
                     feedbackText.includes("0/1") ||
                     feedbackText.includes("0 out of 1");
 
-                const isMCQ = Number(resObj.maxMarks) === 1;
+                const isMCQ = Number(resObj.maxMarks) <= 1 && (
+                    resObj.questionNumber?.toLowerCase().includes("q") ||
+                    resObj.questionNumber?.toLowerCase().includes("mcq") ||
+                    !isNaN(Number(resObj.questionNumber))
+                );
 
                 if (isMCQ && isIncorrectText) {
                     console.log(`🔧 Programmatic Override: Overriding MCQ score of ${resObj.questionNumber} to 0 due to 'Incorrect' text in feedback.`);
@@ -679,12 +683,20 @@ Return the response as a strict JSON object.`;
                 resObj.score = s;
             });
 
-            // Recalculate totalScore to ensure mathematical accuracy
-            const calculatedTotal = result.results.reduce((sum, r) => sum + (Number(r.score) || 0), 0);
-            if (result.totalScore !== calculatedTotal) {
-                console.log(`🔧 Programmatic Override: Recalculated totalScore from ${result.totalScore} to ${calculatedTotal}.`);
-                result.totalScore = calculatedTotal;
+            // Recalculate paper maxMarks from individual question items to prevent paper/header mismatch
+            const calculatedPaperMax = result.results.reduce((sum, r) => sum + (Number(r.maxMarks) || 0), 0);
+            if (calculatedPaperMax > 0) {
+                result.maxMarks = calculatedPaperMax;
             }
+
+            // Recalculate totalScore to ensure mathematical accuracy and clamp to maxMarks
+            let calculatedTotal = result.results.reduce((sum, r) => sum + (Number(r.score) || 0), 0);
+            if (calculatedTotal > result.maxMarks) {
+                console.log(`🔧 Programmatic Override: Clamping totalScore ${calculatedTotal} to maxMarks ${result.maxMarks}.`);
+                calculatedTotal = result.maxMarks;
+            }
+
+            result.totalScore = calculatedTotal;
         }
 
         // Add metadata about the model used
