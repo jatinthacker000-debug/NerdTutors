@@ -29,7 +29,8 @@ import {
     loadResultsForSession,
     loadTestSessionsForDropdown,
     loadTestSessionsForManagement,
-    populateMockData
+    populateMockData,
+    setupPdfExtractionHub
 } from './js/admin-modules/session-manager.js';
 
 // Initialize
@@ -40,6 +41,7 @@ function init() {
     setupNewFeatures();
     setupMcqFields(); // NEW: Setup MCQ toggle
     setupAiTrainer(); // AI Trainer: Auto-Discrepancy Analyzer
+    setupPdfExtractionHub(); // Direct PDF Ingestion & Diagnostic Self-Test Hub
     loadDraft();
 }
 

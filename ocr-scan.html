@@ -396,11 +396,33 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="studentTestSession">Select Test Session *</label>
-                    <select id="studentTestSession" required>
-                        <option value="">-- Select Class & Subject first --</option>
+                <!-- Examination Hierarchy: Year & Examination Paper Selection -->
+                <div class="grid-2" style="margin-top: 0.25rem;">
+                    <div class="form-group">
+                        <label for="studentExamYear">📅 Examination Year</label>
+                        <select id="studentExamYear">
+                            <option value="">All Examination Years</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="studentTestSession">📝 Select Examination / Test Paper *</label>
+                        <select id="studentTestSession" required>
+                            <option value="">-- Select Class & Subject first --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Exam Set Selection (strictly locked until Examination is selected) -->
+                <div class="form-group" style="margin-top: 0.25rem;">
+                    <label for="studentExamSet" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>🔖 Examination Set *</span>
+                        <span id="setRequirementNote" style="font-size: 0.78rem; font-weight: normal; color: #64748b;">(Requires selecting Examination first)</span>
+                    </label>
+                    <select id="studentExamSet" disabled style="background: #f8fafc; cursor: not-allowed; color: #94a3b8; transition: all 0.2s;">
+                        <option value="">-- Select Examination first --</option>
                     </select>
+                    <div id="sessionSelectionBadge" style="display: none; margin-top: 0.65rem; padding: 0.65rem 0.95rem; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 8px; font-size: 0.86rem; color: #1e40af;"></div>
                 </div>
 
                 <div class="form-group">
@@ -488,7 +510,10 @@
         const studentNameInput = document.getElementById('studentName');
         const studentClass = document.getElementById('studentClass');
         const studentSubject = document.getElementById('studentSubject');
+        const studentExamYear = document.getElementById('studentExamYear');
+        const studentExamSet = document.getElementById('studentExamSet');
         const studentTestSession = document.getElementById('studentTestSession');
+        const sessionSelectionBadge = document.getElementById('sessionSelectionBadge');
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
         const cameraInput = document.getElementById('cameraInput');
@@ -507,12 +532,52 @@
         const printActions = document.getElementById('printActions');
         const btnReevaluate = document.getElementById('btnReevaluate');
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function extractYear(session) {
+            if (!session) return '';
+            if (session.examYear && session.examYear !== 'other' && session.examYear !== 'Standard') return String(session.examYear);
+            const m = (session.name || '').match(/\b(202\d)\b/);
+            return m ? m[1] : '';
+        }
+
+        function extractSet(session) {
+            if (!session) return 'Standard / All';
+            if (session.examSet) return session.examSet;
+            const m = (session.name || '').match(/\b(Set\s*\d+|Set\s*[A-Z])\b/i);
+            return m ? m[1] : 'Standard / All';
+        }
+
+        function extractExamBaseName(session) {
+            if (!session) return '';
+            let base = session.examGroup || session.name || 'Untitled Exam';
+            base = base.replace(/\s*\[?\b(Set\s*\d+|Set\s*[A-Z])\]?/i, '').trim();
+            base = base.replace(/[-:]\s*$/, '').trim();
+            return base || session.name || 'Untitled Exam';
+        }
+
         // Form persistence functions (Cache memory)
         function saveDraft() {
             localStorage.setItem('ocr_scan_studentName', studentNameInput.value);
             localStorage.setItem('ocr_scan_studentClass', studentClass.value);
             localStorage.setItem('ocr_scan_studentSubject', studentSubject.value);
-            localStorage.setItem('ocr_scan_testSessionId', studentTestSession.value);
+            if (studentExamYear) localStorage.setItem('ocr_scan_examYear', studentExamYear.value);
+            if (studentTestSession) localStorage.setItem('ocr_scan_examKey', studentTestSession.value);
+            if (selectedSession) {
+                localStorage.setItem('ocr_scan_testSessionId', selectedSession.id);
+                localStorage.setItem('ocr_scan_examSet', extractSet(selectedSession));
+            } else {
+                localStorage.removeItem('ocr_scan_testSessionId');
+                localStorage.removeItem('ocr_scan_examSet');
+            }
         }
 
         // S3: Resume-friendly image cache. Persist the picked photos so a failed /
@@ -576,34 +641,234 @@
                 querySnapshot.forEach(docSnap => {
                     allSessions.push({ id: docSnap.id, ...docSnap.data() });
                 });
-                updateSessionDropdown();
+                populateYearDropdown();
+                populateExaminationDropdown();
                 
                 // Restore saved session ID if it matches class and subject
                 const savedSessionId = localStorage.getItem('ocr_scan_testSessionId');
-                if (savedSessionId && Array.from(studentTestSession.options).some(opt => opt.value === savedSessionId)) {
-                    studentTestSession.value = savedSessionId;
-                    selectedSession = allSessions.find(s => s.id === savedSessionId) || null;
-                    validateForm();
+                if (savedSessionId) {
+                    const found = allSessions.find(s => s.id === savedSessionId);
+                    if (found && found.class === studentClass.value && found.subject === studentSubject.value) {
+                        const y = extractYear(found);
+                        if (y && studentExamYear) {
+                            studentExamYear.value = y;
+                            populateExaminationDropdown();
+                        }
+                        const baseName = extractExamBaseName(found);
+                        const groupKey = `${baseName}:::${y || 'standard'}`;
+                        if (studentTestSession && Array.from(studentTestSession.options).some(opt => opt.value === groupKey)) {
+                            studentTestSession.value = groupKey;
+                            updateExamSetDropdown(found.id);
+                        }
+                    }
                 }
             } catch (error) {
                 console.error("Error loading test sessions:", error);
             }
         }
 
-        function updateSessionDropdown() {
+        function populateYearDropdown() {
             const cls = studentClass.value;
             const sub = studentSubject.value;
+            const relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive');
 
-            // Only show active sessions (or sessions where status is not explicitly inactive)
-            const filtered = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive');
-            
-            let html = '<option value="">-- Select Test Session --</option>';
-            filtered.forEach(s => {
-                html += `<option value="${s.id}">${s.name} (${s.maxMarks} Marks)</option>`;
+            // Unique years
+            const yearsSet = new Set();
+            relevant.forEach(s => {
+                const y = extractYear(s);
+                if (y) yearsSet.add(y);
+            });
+            const sortedYears = Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
+            let yHtml = '<option value="">All Examination Years</option>';
+            sortedYears.forEach(y => {
+                yHtml += `<option value="${y}">${y}</option>`;
+            });
+            if (studentExamYear) {
+                const prev = studentExamYear.value;
+                studentExamYear.innerHTML = yHtml;
+                if (sortedYears.includes(prev)) studentExamYear.value = prev;
+            }
+        }
+
+        function populateExaminationDropdown() {
+            const cls = studentClass.value;
+            const sub = studentSubject.value;
+            const chosenYear = studentExamYear?.value || '';
+
+            let relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive');
+            if (chosenYear) {
+                relevant = relevant.filter(s => extractYear(s) === chosenYear);
+            }
+
+            // Group relevant sessions by Exam Base Name + Year
+            const examMap = new Map();
+            relevant.forEach(s => {
+                const baseName = extractExamBaseName(s);
+                const year = extractYear(s);
+                const groupKey = `${baseName}:::${year || 'standard'}`;
+                if (!examMap.has(groupKey)) {
+                    examMap.set(groupKey, {
+                        baseName,
+                        year,
+                        sessions: []
+                    });
+                }
+                examMap.get(groupKey).sessions.push(s);
             });
 
+            let html = '<option value="">-- Select Examination / Test Paper --</option>';
+            examMap.forEach((entry, key) => {
+                const yLabel = entry.year && entry.year !== 'Standard' ? ` (${entry.year})` : '';
+                const count = entry.sessions.length;
+                const setHint = count > 1 ? ` — [${count} Sets Available]` : (entry.sessions[0].maxMarks ? ` — ${entry.sessions[0].maxMarks} Marks` : '');
+                html += `<option value="${key}">${escapeHtml(entry.baseName)}${yLabel}${setHint}</option>`;
+            });
+
+            const prevExamVal = studentTestSession.value;
             studentTestSession.innerHTML = html;
+
+            // Preserve selection if still valid; if user picked a year and only 1 exam matches, auto-select it
+            if (examMap.has(prevExamVal)) {
+                studentTestSession.value = prevExamVal;
+            } else if (examMap.size === 1 && chosenYear) {
+                const onlyKey = examMap.keys().next().value;
+                studentTestSession.value = onlyKey;
+            } else {
+                studentTestSession.value = "";
+            }
+
+            updateExamSetDropdown();
+        }
+
+        function updateExamSetDropdown(targetSessionIdToSelect = null) {
+            const examKey = studentTestSession.value;
+            const setReqNote = document.getElementById('setRequirementNote');
+
+            // Bug fix guard: If no examination is selected, lock & disable Exam Set completely!
+            if (!examKey) {
+                studentExamSet.disabled = true;
+                studentExamSet.innerHTML = '<option value="">-- Select Examination first --</option>';
+                studentExamSet.style.background = '#f8fafc';
+                studentExamSet.style.cursor = 'not-allowed';
+                studentExamSet.style.color = '#94a3b8';
+                studentExamSet.style.borderColor = '#cbd5e1';
+                if (setReqNote) {
+                    setReqNote.textContent = '(Requires selecting Examination first)';
+                    setReqNote.style.color = '#64748b';
+                }
+                selectedSession = null;
+                updateSelectedSessionUI();
+                validateForm();
+                return;
+            }
+
+            // Find all sessions for this examination key
+            const cls = studentClass.value;
+            const sub = studentSubject.value;
+            const relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive');
+            const examSessions = relevant.filter(s => {
+                const baseName = extractExamBaseName(s);
+                const year = extractYear(s);
+                const key = `${baseName}:::${year || 'standard'}`;
+                return key === examKey;
+            });
+
+            if (examSessions.length === 0) {
+                studentExamSet.disabled = true;
+                studentExamSet.innerHTML = '<option value="">-- No papers found --</option>';
+                selectedSession = null;
+                updateSelectedSessionUI();
+                validateForm();
+                return;
+            }
+
+            // Enable Exam Set styling
+            studentExamSet.disabled = false;
+            studentExamSet.style.background = '#ffffff';
+            studentExamSet.style.cursor = 'pointer';
+            studentExamSet.style.color = '#1e293b';
+            studentExamSet.style.borderColor = '#3b82f6';
+
+            // Auto-sync year dropdown if it was unselected
+            const examYear = extractYear(examSessions[0]);
+            if (examYear && studentExamYear && !studentExamYear.value) {
+                studentExamYear.value = examYear;
+            }
+
+            const hasMultipleSets = examSessions.length > 1;
+
+            if (hasMultipleSets) {
+                if (setReqNote) {
+                    setReqNote.textContent = '⚡ Select question paper set';
+                    setReqNote.style.color = '#2563eb';
+                }
+
+                let sHtml = '<option value="">-- Select Exam Set * --</option>';
+                examSessions.forEach(s => {
+                    const setName = extractSet(s);
+                    sHtml += `<option value="${s.id}">${escapeHtml(setName)} — ${s.maxMarks} Marks</option>`;
+                });
+                studentExamSet.innerHTML = sHtml;
+
+                if (targetSessionIdToSelect && examSessions.some(s => s.id === targetSessionIdToSelect)) {
+                    studentExamSet.value = targetSessionIdToSelect;
+                    selectedSession = examSessions.find(s => s.id === targetSessionIdToSelect) || null;
+                } else {
+                    studentExamSet.value = "";
+                    selectedSession = null;
+                }
+            } else {
+                // Single set / default session: auto-select and activate
+                const singleSession = examSessions[0];
+                const setName = extractSet(singleSession);
+                if (setReqNote) {
+                    setReqNote.textContent = '✓ Default Set Active';
+                    setReqNote.style.color = '#16a34a';
+                }
+                studentExamSet.innerHTML = `<option value="${singleSession.id}">${escapeHtml(setName)} — ${singleSession.maxMarks} Marks (Single Set)</option>`;
+                studentExamSet.value = singleSession.id;
+                selectedSession = singleSession;
+            }
+
+            updateSelectedSessionUI();
             validateForm();
+            saveDraft();
+        }
+
+        function updateSelectedSessionUI() {
+            if (selectedSession) {
+                const year = extractYear(selectedSession) || 'Standard';
+                const set = extractSet(selectedSession) || 'Standard';
+                if (sessionSelectionBadge) {
+                    sessionSelectionBadge.style.display = 'block';
+                    sessionSelectionBadge.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <div>
+                                <span style="font-weight: 800; color: #1e3a8a; font-size: 0.95rem;">${escapeHtml(selectedSession.name)}</span>
+                                <div style="font-size: 0.78rem; color: #3b82f6; margin-top: 0.15rem;">
+                                    Class: <strong>${selectedSession.class}</strong> · Subject: <strong>${selectedSession.subject}</strong>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+                                <span style="background: #dbeafe; color: #1d4ed8; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.8rem; border: 1px solid #bfdbfe;">
+                                    📅 ${year}
+                                </span>
+                                <span style="background: #ede9fe; color: #6d28d9; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.8rem; border: 1px solid #ddd6fe;">
+                                    🔖 ${set}
+                                </span>
+                                <span style="background: #fef3c7; color: #92400e; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.8rem; border: 1px solid #fde68a;">
+                                    💯 ${selectedSession.maxMarks} Marks
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                if (sessionSelectionBadge) {
+                    sessionSelectionBadge.style.display = 'none';
+                    sessionSelectionBadge.innerHTML = '';
+                }
+            }
         }
 
         // Event listeners
@@ -615,17 +880,35 @@
             } else if (e.target.value === 'Class 12th') {
                 studentSubject.value = 'Economics';
             }
-            updateSessionDropdown();
+            populateYearDropdown();
+            populateExaminationDropdown();
             saveDraft();
         });
         
         studentSubject.addEventListener('change', () => {
-            updateSessionDropdown();
+            populateYearDropdown();
+            populateExaminationDropdown();
             saveDraft();
         });
 
-        studentTestSession.addEventListener('change', (e) => {
-            selectedSession = allSessions.find(s => s.id === e.target.value) || null;
+        studentExamYear?.addEventListener('change', () => {
+            populateExaminationDropdown();
+            saveDraft();
+        });
+
+        studentTestSession.addEventListener('change', () => {
+            updateExamSetDropdown();
+            saveDraft();
+        });
+
+        studentExamSet?.addEventListener('change', () => {
+            const chosenId = studentExamSet.value;
+            if (chosenId) {
+                selectedSession = allSessions.find(s => s.id === chosenId) || null;
+            } else {
+                selectedSession = null;
+            }
+            updateSelectedSessionUI();
             validateForm();
             saveDraft();
         });
@@ -773,7 +1056,7 @@
 
         function validateForm() {
             const hasName = studentNameInput.value.trim().length > 0;
-            const hasSession = studentTestSession.value !== "";
+            const hasSession = selectedSession !== null;
             const hasFiles = uploadedFiles.length > 0;
             btnSubmitGrading.disabled = !(hasName && hasSession && hasFiles);
         }
@@ -889,6 +1172,8 @@
                     subject: studentSubject.value,
                     sessionId: selectedSession.id,
                     sessionName: selectedSession.name,
+                    examYear: extractYear(selectedSession) || 'Standard',
+                    examSet: extractSet(selectedSession) || 'Standard / All',
                     score: report.totalScore,
                     maxMarks: report.maxMarks,
                     overallFeedback: report.overallFeedback,
@@ -1041,7 +1326,7 @@
                     <p style="margin: 5px 0 0 0; color: #2a5298; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 2px; font-weight: 600;">📝 Student Error Correction Report</p>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; padding: 1.25rem; border-radius: 12px; margin-bottom: 2rem; font-size: 0.95rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.85rem; background: #f8fafc; border: 1px solid #e2e8f0; padding: 1.15rem 1.25rem; border-radius: 12px; margin-bottom: 2rem; font-size: 0.95rem;">
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Student Name</span>
                         <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${name}</span>
@@ -1051,12 +1336,12 @@
                         <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${new Date().toLocaleDateString()}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Class</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${cls}</span>
+                        <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Class & Subject</span>
+                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${cls} · ${sub}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Subject</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${sub}</span>
+                        <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Exam Year & Set</span>
+                        <span style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">📅 ${extractYear(selectedSession) || 'Standard'} · 🔖 ${extractSet(selectedSession) || 'Set 1'}</span>
                     </div>
                 </div>
 
@@ -1236,6 +1521,9 @@
             reportCardContainer.style.display = 'none';
             printActions.style.display = 'none';
             inputCard.style.display = 'block';
+            selectedSession = null;
+            if (studentTestSession) studentTestSession.value = '';
+            updateExamSetDropdown();
             validateForm();
         });
 

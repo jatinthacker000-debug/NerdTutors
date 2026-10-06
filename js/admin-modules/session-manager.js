@@ -20,6 +20,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 import { showToast, escapeHtml } from './admin-utils.js';
+import { smartExtractPdf, runExtractionDiagnosticTest, initPdfJs } from './pdf-extractor.js';
 
 export async function createTestSession() {
     const btn = document.getElementById('btnCreateSession');
@@ -28,6 +29,14 @@ export async function createTestSession() {
     const sessionClass = document.getElementById('sessionClass').value;
     const sessionSubject = document.getElementById('sessionSubject').value;
     const sessionName = document.getElementById('sessionName').value;
+    const sessionYear = document.getElementById('sessionYear')?.value || '2023';
+    const sessionSetSelect = document.getElementById('sessionSet');
+    const sessionCustomSet = document.getElementById('sessionCustomSet');
+    let examSet = 'Standard / All';
+    if (sessionSetSelect) {
+        examSet = sessionSetSelect.value === 'custom' ? (sessionCustomSet?.value.trim() || 'Custom Set') : sessionSetSelect.value;
+    }
+
     const sessionMaxMarks = document.getElementById('sessionMaxMarks').value;
     const sessionQuestions = document.getElementById('sessionQuestions').value;
     const sessionMarkingScheme = document.getElementById('sessionMarkingScheme').value;
@@ -38,6 +47,9 @@ export async function createTestSession() {
             class: sessionClass,
             subject: sessionSubject,
             name: sessionName,
+            examGroup: sessionName,
+            examYear: sessionYear,
+            examSet: examSet,
             maxMarks: parseInt(sessionMaxMarks) || 100,
             questions: sessionQuestions,
             markingScheme: sessionMarkingScheme,
@@ -46,8 +58,16 @@ export async function createTestSession() {
             createdAt: serverTimestamp()
         });
 
-        showToast('Test Session published successfully!', 'success');
+        showToast(`Test Session (${examSet}) published successfully!`, 'success');
         document.getElementById('createSessionForm').reset();
+        if (sessionCustomSet) sessionCustomSet.style.display = 'none';
+        
+        // Reset PDF dropzone banners
+        const qStatus = document.getElementById('questionPdfStatus');
+        const sStatus = document.getElementById('schemePdfStatus');
+        if (qStatus) qStatus.style.display = 'none';
+        if (sStatus) sStatus.style.display = 'none';
+
         loadTestSessionsForDropdown();
         loadTestSessionsForManagement();
     } catch (error) {
@@ -73,7 +93,9 @@ export async function loadTestSessionsForDropdown() {
             const data = docSnap.data();
             const id = docSnap.id;
             allTestSessions.push({ id, ...data });
-            optionsHtml += `<option value="${id}">${data.name} (${data.class} - ${data.subject})</option>`;
+            const yearTag = data.examYear && data.examYear !== 'Standard' ? ` (${data.examYear})` : '';
+            const setTag = data.examSet && data.examSet !== 'Standard / All' ? ` [${data.examSet}]` : '';
+            optionsHtml += `<option value="${id}">${data.name}${yearTag}${setTag} (${data.class} - ${data.subject})</option>`;
         });
 
         selectEl.innerHTML = optionsHtml;
@@ -892,9 +914,16 @@ export async function loadTestSessionsForManagement() {
             const status = data.status || 'active';
             const isActive = status === 'active';
             
+            const examYear = data.examYear || (data.name ? data.name.match(/\b(202\d)\b/)?.[1] : '') || 'Standard';
             html += `
                 <tr style="border-bottom: 1px solid #edf2f7;">
                     <td style="padding: 0.75rem; font-weight: 600; color: #2d3748;">${escapeHtml(data.name)}</td>
+                    <td style="padding: 0.75rem;">
+                        <span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.55rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(examYear)}</span>
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        <span class="badge-set">${escapeHtml(data.examSet || 'Standard')}</span>
+                    </td>
                     <td style="padding: 0.75rem; color: #4a5568;">${escapeHtml(data.class)}</td>
                     <td style="padding: 0.75rem; color: #4a5568;">${escapeHtml(data.subject)}</td>
                     <td style="padding: 0.75rem; color: #4a5568;">${data.maxMarks}</td>
@@ -1099,6 +1128,25 @@ async function editSession(id) {
         // Populate modal inputs
         document.getElementById('editSessionId').value = id;
         document.getElementById('editSessionName').value = data.name || '';
+        if (document.getElementById('editSessionYear')) {
+            document.getElementById('editSessionYear').value = data.examYear || (data.name ? data.name.match(/\b(202\d)\b/)?.[1] : '') || '2023';
+        }
+        
+        // Handle Exam Set in Edit Modal
+        const editSetSelect = document.getElementById('editSessionSet');
+        const editCustomInput = document.getElementById('editSessionCustomSet');
+        const currentSet = data.examSet || 'Standard / All';
+        if (editSetSelect && editCustomInput) {
+            if (['Standard / All', 'Set 1', 'Set 2', 'Set 3', 'Set 4'].includes(currentSet)) {
+                editSetSelect.value = currentSet;
+                editCustomInput.style.display = 'none';
+            } else {
+                editSetSelect.value = 'custom';
+                editCustomInput.value = currentSet;
+                editCustomInput.style.display = 'block';
+            }
+        }
+
         document.getElementById('editSessionClass').value = data.class || 'Class 12th';
         document.getElementById('editSessionSubject').value = data.subject || 'Economics';
         document.getElementById('editSessionMaxMarks').value = data.maxMarks || 100;
@@ -1137,9 +1185,20 @@ document.getElementById('editSessionForm')?.addEventListener('submit', async (e)
     const markingScheme = document.getElementById('editSessionMarkingScheme').value;
     const otherInstructions = document.getElementById('editSessionOtherInstructions').value;
 
+    const editSetSelect = document.getElementById('editSessionSet');
+    const editCustomInput = document.getElementById('editSessionCustomSet');
+    let examSet = 'Standard / All';
+    if (editSetSelect) {
+        examSet = editSetSelect.value === 'custom' ? (editCustomInput?.value.trim() || 'Custom Set') : editSetSelect.value;
+    }
+
+    const editYear = document.getElementById('editSessionYear')?.value || '2023';
     try {
         await updateDoc(doc(db, 'testSessions', id), {
             name,
+            examGroup: name,
+            examYear: editYear,
+            examSet,
             class: cls,
             subject,
             maxMarks,
@@ -1164,3 +1223,416 @@ window.deleteResult = deleteResult;
 window.editStudentScore = editStudentScore;
 window.editQuestionScore = editQuestionScore;
 window.editSession = editSession;
+
+/**
+ * Setup PDF Extraction Hub & Diagnostic Self-Test Listeners
+ */
+export function setupPdfExtractionHub() {
+    initPdfJs();
+
+    // 1. Exam Set Custom Selector Toggles
+    const sessionSet = document.getElementById('sessionSet');
+    const sessionCustomSet = document.getElementById('sessionCustomSet');
+    sessionSet?.addEventListener('change', (e) => {
+        if (sessionCustomSet) {
+            sessionCustomSet.style.display = e.target.value === 'custom' ? 'block' : 'none';
+            if (e.target.value === 'custom') sessionCustomSet.focus();
+        }
+    });
+
+    const editSessionSet = document.getElementById('editSessionSet');
+    const editSessionCustomSet = document.getElementById('editSessionCustomSet');
+    editSessionSet?.addEventListener('change', (e) => {
+        if (editSessionCustomSet) {
+            editSessionCustomSet.style.display = e.target.value === 'custom' ? 'block' : 'none';
+            if (e.target.value === 'custom') editSessionCustomSet.focus();
+        }
+    });
+
+    // Helper for Extraction Pipeline
+    let currentQuestionFile = null;
+    let currentSchemeFile = null;
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 KB';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function setPdfFileState(type, file) {
+        const isQuestions = type === 'questions';
+        const emptyState = document.getElementById(isQuestions ? 'questionPdfEmptyState' : 'schemePdfEmptyState');
+        const loadedCard = document.getElementById(isQuestions ? 'questionPdfLoadedCard' : 'schemePdfLoadedCard');
+        const fileNameEl = document.getElementById(isQuestions ? 'questionPdfFileName' : 'schemePdfFileName');
+        const fileSizeEl = document.getElementById(isQuestions ? 'questionPdfFileSize' : 'schemePdfFileSize');
+
+        if (file) {
+            if (emptyState) emptyState.style.display = 'none';
+            if (loadedCard) loadedCard.style.display = 'block';
+            if (fileNameEl) {
+                fileNameEl.textContent = file.name;
+                fileNameEl.title = file.name;
+            }
+            if (fileSizeEl) {
+                fileSizeEl.textContent = `${formatBytes(file.size)} · Ready`;
+            }
+        } else {
+            if (emptyState) emptyState.style.display = 'block';
+            if (loadedCard) loadedCard.style.display = 'none';
+            if (fileNameEl) fileNameEl.textContent = '';
+            if (fileSizeEl) fileSizeEl.textContent = '';
+        }
+    }
+
+    function removePdf(type) {
+        const isQuestions = type === 'questions';
+        const input = document.getElementById(isQuestions ? 'questionPdfInput' : 'schemePdfInput');
+        const statusWrap = document.getElementById(isQuestions ? 'questionPdfStatus' : 'schemePdfStatus');
+        const statusText = document.getElementById(isQuestions ? 'questionPdfStatusText' : 'schemePdfStatusText');
+        const qualityBadge = document.getElementById(isQuestions ? 'questionPdfQualityBadge' : 'schemePdfQualityBadge');
+
+        if (isQuestions) {
+            currentQuestionFile = null;
+        } else {
+            currentSchemeFile = null;
+        }
+
+        if (input) input.value = '';
+        setPdfFileState(type, null);
+
+        if (statusWrap) statusWrap.style.display = 'none';
+        if (statusText) statusText.textContent = '';
+        if (qualityBadge) qualityBadge.innerHTML = '';
+
+        showToast(`${isQuestions ? 'Question Paper' : 'Marking Scheme'} PDF removed.`, 'info');
+    }
+
+    async function handlePdfExtraction(file, type, forceAi = false) {
+        const isQuestions = type === 'questions';
+        const targetArea = document.getElementById(isQuestions ? 'sessionQuestions' : 'sessionMarkingScheme');
+        const statusWrap = document.getElementById(isQuestions ? 'questionPdfStatus' : 'schemePdfStatus');
+        const statusText = document.getElementById(isQuestions ? 'questionPdfStatusText' : 'schemePdfStatusText');
+        const qualityBadge = document.getElementById(isQuestions ? 'questionPdfQualityBadge' : 'schemePdfQualityBadge');
+        const promptText = document.getElementById(isQuestions ? 'questionPdfPromptText' : 'schemePdfPromptText');
+
+        if (!file) return;
+
+        setPdfFileState(type, file);
+        if (promptText) promptText.textContent = `📄 ${file.name} (${formatBytes(file.size)})`;
+        if (statusWrap) statusWrap.style.display = 'block';
+        if (statusText) statusText.innerHTML = `<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;margin:0 6px 0 0;vertical-align:middle;"></span> Processing ${file.name}...`;
+        if (qualityBadge) qualityBadge.innerHTML = '';
+
+        const examName = document.getElementById('sessionName')?.value || '';
+        const setSelect = document.getElementById('sessionSet');
+        const customSetInput = document.getElementById('sessionCustomSet');
+        const examSet = setSelect?.value === 'custom' ? (customSetInput?.value || 'Custom') : (setSelect?.value || 'Standard');
+        const subject = document.getElementById('sessionSubject')?.value || '';
+
+        try {
+            const result = await smartExtractPdf(file, type, { examName, examSet, subject }, (progress) => {
+                if (statusText) {
+                    statusText.innerHTML = `<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;margin:0 6px 0 0;vertical-align:middle;"></span> ${progress.message}`;
+                }
+            }, forceAi);
+
+            if (result.extractedText) {
+                if (targetArea) {
+                    targetArea.value = result.extractedText;
+                    // Flash effect to draw teacher's eye to extracted text
+                    targetArea.style.borderColor = '#22c55e';
+                    setTimeout(() => { targetArea.style.borderColor = ''; }, 1500);
+                }
+
+                const count = result.questionCount || 0;
+                const chars = result.characterCount || result.extractedText.length;
+                const engineName = result.engine === 'gemini-vision-ocr' ? 'Gemini AI Vision' : 'Fast Digital (PDF.js)';
+
+                if (statusText) {
+                    statusText.textContent = `✅ Extracted successfully via ${engineName}`;
+                }
+
+                if (qualityBadge) {
+                    const qualityClass = result.quality === 'High' ? 'high' : (result.quality === 'Scanned' ? 'scanned' : 'medium');
+                    qualityBadge.innerHTML = `
+                        <span class="quality-pill ${qualityClass}">
+                            🟢 ${count > 0 ? `${count} Questions Detected` : 'Text Verified'} · ${chars} Chars · ${engineName}
+                        </span>
+                    `;
+                }
+
+                showToast(`PDF ${isQuestions ? 'Question Paper' : 'Marking Scheme'} extracted successfully!`, 'success');
+            }
+        } catch (err) {
+            console.error('PDF Extraction error:', err);
+            if (statusText) {
+                statusText.textContent = `❌ Extraction Error: ${err.message}`;
+            }
+            if (qualityBadge) {
+                qualityBadge.innerHTML = `
+                    <span class="quality-pill error">
+                        🔴 Failed: ${escapeHtml(err.message)}
+                    </span>
+                `;
+            }
+            showToast('PDF extraction failed: ' + err.message, 'error');
+        }
+    }
+
+    // Question Paper PDF Dropzone Wiring
+    const questionDropzone = document.getElementById('questionPdfDropzone');
+    const questionInput = document.getElementById('questionPdfInput');
+    
+    questionDropzone?.addEventListener('click', (e) => {
+        if (e.target.closest('#btnExtractQuestionsFast') || 
+            e.target.closest('#btnExtractQuestionsAi') || 
+            e.target.closest('#btnClearQuestionsText') || 
+            e.target.closest('#btnRemoveQuestionPdf') || 
+            e.target.closest('#btnChangeQuestionPdf')) {
+            return;
+        }
+        questionInput?.click();
+    });
+
+    questionInput?.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            currentQuestionFile = file;
+            setPdfFileState('questions', file);
+            handlePdfExtraction(file, 'questions', false);
+        }
+    });
+
+    questionDropzone?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        questionDropzone.classList.add('dragover');
+    });
+
+    questionDropzone?.addEventListener('dragleave', () => {
+        questionDropzone.classList.remove('dragover');
+    });
+
+    questionDropzone?.addEventListener('drop', (e) => {
+        e.preventDefault();
+        questionDropzone.classList.remove('dragover');
+        const file = e.dataTransfer?.files?.[0];
+        if (file && (file.type === 'application/pdf' || file.name.endsWith('.pdf'))) {
+            currentQuestionFile = file;
+            setPdfFileState('questions', file);
+            handlePdfExtraction(file, 'questions', false);
+        } else {
+            showToast('Please upload a valid PDF file.', 'error');
+        }
+    });
+
+    document.getElementById('btnChangeQuestionPdf')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        questionInput?.click();
+    });
+
+    document.getElementById('btnRemoveQuestionPdf')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removePdf('questions');
+    });
+
+    document.getElementById('btnExtractQuestionsFast')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentQuestionFile) {
+            handlePdfExtraction(currentQuestionFile, 'questions', false);
+        } else {
+            questionInput?.click();
+        }
+    });
+
+    document.getElementById('btnExtractQuestionsAi')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentQuestionFile) {
+            handlePdfExtraction(currentQuestionFile, 'questions', true);
+        } else {
+            questionInput?.click();
+        }
+    });
+
+    document.getElementById('btnClearQuestionsText')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = document.getElementById('sessionQuestions');
+        if (!target || !target.value.trim()) {
+            showToast('Question text is already empty.', 'info');
+            return;
+        }
+        if (confirm('Clear all text in the Questions field?')) {
+            target.value = '';
+            showToast('Questions field cleared.', 'info');
+        }
+    });
+
+    // Marking Scheme PDF Dropzone Wiring
+    const schemeDropzone = document.getElementById('schemePdfDropzone');
+    const schemeInput = document.getElementById('schemePdfInput');
+
+    schemeDropzone?.addEventListener('click', (e) => {
+        if (e.target.closest('#btnExtractSchemeFast') || 
+            e.target.closest('#btnExtractSchemeAi') || 
+            e.target.closest('#btnClearSchemeText') || 
+            e.target.closest('#btnRemoveSchemePdf') || 
+            e.target.closest('#btnChangeSchemePdf')) {
+            return;
+        }
+        schemeInput?.click();
+    });
+
+    schemeInput?.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            currentSchemeFile = file;
+            setPdfFileState('markingScheme', file);
+            handlePdfExtraction(file, 'markingScheme', false);
+        }
+    });
+
+    schemeDropzone?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        schemeDropzone.classList.add('dragover');
+    });
+
+    schemeDropzone?.addEventListener('dragleave', () => {
+        schemeDropzone.classList.remove('dragover');
+    });
+
+    schemeDropzone?.addEventListener('drop', (e) => {
+        e.preventDefault();
+        schemeDropzone.classList.remove('dragover');
+        const file = e.dataTransfer?.files?.[0];
+        if (file && (file.type === 'application/pdf' || file.name.endsWith('.pdf'))) {
+            currentSchemeFile = file;
+            setPdfFileState('markingScheme', file);
+            handlePdfExtraction(file, 'markingScheme', false);
+        } else {
+            showToast('Please upload a valid PDF file.', 'error');
+        }
+    });
+
+    document.getElementById('btnChangeSchemePdf')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        schemeInput?.click();
+    });
+
+    document.getElementById('btnRemoveSchemePdf')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removePdf('markingScheme');
+    });
+
+    document.getElementById('btnExtractSchemeFast')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentSchemeFile) {
+            handlePdfExtraction(currentSchemeFile, 'markingScheme', false);
+        } else {
+            schemeInput?.click();
+        }
+    });
+
+    document.getElementById('btnExtractSchemeAi')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentSchemeFile) {
+            handlePdfExtraction(currentSchemeFile, 'markingScheme', true);
+        } else {
+            schemeInput?.click();
+        }
+    });
+
+    document.getElementById('btnClearSchemeText')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = document.getElementById('sessionMarkingScheme');
+        if (!target || !target.value.trim()) {
+            showToast('Marking scheme text is already empty.', 'info');
+            return;
+        }
+        if (confirm('Clear all text in the Marking Scheme field?')) {
+            target.value = '';
+            showToast('Marking scheme field cleared.', 'info');
+        }
+    });
+
+    // Diagnostic Self-Test Modal Wiring
+    const diagModal = document.getElementById('diagnosticModal');
+    const btnRunDiagnostics = document.getElementById('btnRunDiagnostics');
+    const btnCloseDiagnosticModal = document.getElementById('btnCloseDiagnosticModal');
+    const btnDismissDiagnostics = document.getElementById('btnDismissDiagnostics');
+    const btnRerunDiagnostics = document.getElementById('btnRerunDiagnostics');
+    const runningState = document.getElementById('diagnosticRunningState');
+    const resultsList = document.getElementById('diagnosticResultsList');
+    const summaryCard = document.getElementById('diagnosticSummaryCard');
+
+    function closeDiagnosticModal() {
+        if (diagModal) diagModal.style.display = 'none';
+    }
+
+    async function executeDiagnostics() {
+        if (runningState) runningState.style.display = 'block';
+        if (resultsList) resultsList.style.display = 'none';
+        if (summaryCard) summaryCard.style.display = 'none';
+
+        const report = await runExtractionDiagnosticTest();
+
+        if (runningState) runningState.style.display = 'none';
+        if (resultsList) {
+            resultsList.style.display = 'block';
+            let html = '';
+            report.tests.forEach(t => {
+                const badgeClass = t.status === 'PASSED' ? 'passed' : (t.status === 'WARNING' ? 'warning' : 'failed');
+                html += `
+                    <div class="diag-test-item">
+                        <div>
+                            <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">${escapeHtml(t.name)}</div>
+                            <div style="color: #64748b; font-size: 0.83rem; margin-top: 0.2rem;">${escapeHtml(t.detail)}</div>
+                        </div>
+                        <span class="diag-status-badge ${badgeClass}">${t.status}</span>
+                    </div>
+                `;
+            });
+            resultsList.innerHTML = html;
+        }
+
+        if (summaryCard) {
+            summaryCard.style.display = 'block';
+            if (report.allPassed) {
+                summaryCard.style.background = '#dcfce7';
+                summaryCard.style.color = '#166534';
+                summaryCard.style.border = '1px solid #bbf7d0';
+                summaryCard.innerHTML = `🟢 All diagnostic checks passed (${report.timestamp}). PDF Extraction Engine is fully operational!`;
+            } else {
+                summaryCard.style.background = '#fef3c7';
+                summaryCard.style.color = '#92400e';
+                summaryCard.style.border = '1px solid #fde68a';
+                summaryCard.innerHTML = `⚠️ Diagnostic completed with warnings/notices (${report.timestamp}). Review individual checks above.`;
+            }
+        }
+    }
+
+    btnRunDiagnostics?.addEventListener('click', () => {
+        if (diagModal) {
+            diagModal.style.display = 'flex';
+            executeDiagnostics();
+        }
+    });
+
+    btnRerunDiagnostics?.addEventListener('click', executeDiagnostics);
+    btnCloseDiagnosticModal?.addEventListener('click', closeDiagnosticModal);
+    btnDismissDiagnostics?.addEventListener('click', closeDiagnosticModal);
+
+    // Dismiss when clicking outside on the backdrop
+    diagModal?.addEventListener('click', (e) => {
+        if (e.target === diagModal) {
+            closeDiagnosticModal();
+        }
+    });
+
+    // Dismiss when pressing Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && diagModal && diagModal.style.display === 'flex') {
+            closeDiagnosticModal();
+        }
+    });
+}

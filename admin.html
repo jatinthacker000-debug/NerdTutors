@@ -20,6 +20,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
+    <!-- PDF.js Library for Direct Client-Side PDF Text Extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
     <link rel="stylesheet" href="admin.css">
 </head>
 
@@ -99,10 +102,35 @@
                                 </div>
                             </div>
 
-                            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <div class="form-row session-meta-grid">
                                 <div class="form-group">
-                                    <label for="sessionName">Test Title / Name *</label>
-                                    <input type="text" id="sessionName" required placeholder="e.g., Economics Term Exam 1">
+                                    <label for="sessionName">Test Title / Exam Name *</label>
+                                    <input type="text" id="sessionName" required placeholder="e.g., CBSE Board Examination">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sessionYear">Examination Year *</label>
+                                    <select id="sessionYear" required>
+                                        <option value="2026">2026</option>
+                                        <option value="2025">2025</option>
+                                        <option value="2024">2024</option>
+                                        <option value="2023" selected>2023</option>
+                                        <option value="2022">2022</option>
+                                        <option value="2021">2021</option>
+                                        <option value="2020">2020</option>
+                                        <option value="Standard">Standard / N/A</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="sessionSet">Exam Set *</label>
+                                    <select id="sessionSet" required>
+                                        <option value="Standard / All">Standard / No Set</option>
+                                        <option value="Set 1">Set 1</option>
+                                        <option value="Set 2">Set 2</option>
+                                        <option value="Set 3">Set 3</option>
+                                        <option value="Set 4">Set 4</option>
+                                        <option value="custom">Custom Set...</option>
+                                    </select>
+                                    <input type="text" id="sessionCustomSet" placeholder="e.g. Set 58/1/1" style="display: none; margin-top: 0.5rem; padding: 0.4rem; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.85rem;">
                                 </div>
                                 <div class="form-group">
                                     <label for="sessionMaxMarks">Maximum Marks *</label>
@@ -110,10 +138,133 @@
                                 </div>
                             </div>
 
+                            <!-- Direct PDF Ingestion Hub with Dual-Engine Extraction -->
+                            <div class="pdf-extract-hub" style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 12px; padding: 1.25rem 1.5rem; margin-top: 1rem; margin-bottom: 1.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+                                    <div>
+                                        <h4 style="margin: 0; color: #1e293b; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
+                                            📄⚡ Direct PDF Ingestion Hub
+                                        </h4>
+                                        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.85rem;">
+                                            Upload Question Paper & Marking Scheme PDFs. Text is extracted, parsed for question numbers, and populated automatically below.
+                                        </p>
+                                    </div>
+                                    <button type="button" id="btnRunDiagnostics" style="background: #e2e8f0; color: #1e293b; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;" onmouseover="this.style.background='#cbd5e1'" onmouseout="this.style.background='#e2e8f0'">
+                                        🧪 Run PDF Extraction Self-Test
+                                    </button>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem;">
+                                    <!-- Question Paper PDF Dropzone -->
+                                    <div class="pdf-drop-card" id="questionPdfDropzone" style="background: white; border: 2px dashed #94a3b8; border-radius: 12px; padding: 1.25rem; text-align: center; cursor: pointer; transition: all 0.2s; position: relative;">
+                                        <input type="file" id="questionPdfInput" accept=".pdf,application/pdf" style="display: none;">
+                                        
+                                        <!-- Default Empty State -->
+                                        <div id="questionPdfEmptyState">
+                                            <div style="font-size: 1.8rem; margin-bottom: 0.35rem;">📋</div>
+                                            <div style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">Upload Question Paper PDF</div>
+                                            <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;" id="questionPdfPromptText">Drag & drop PDF here, or click to browse</div>
+                                        </div>
+
+                                        <!-- Loaded File Details Card -->
+                                        <div id="questionPdfLoadedCard" class="pdf-loaded-card" style="display: none;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                                <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden; min-width: 140px;">
+                                                    <span style="font-size: 1.35rem;">📄</span>
+                                                    <div style="overflow: hidden;">
+                                                        <div id="questionPdfFileName" style="font-weight: 700; color: #166534; font-size: 0.85rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 170px;" title="Question paper PDF">filename.pdf</div>
+                                                        <div id="questionPdfFileSize" style="font-size: 0.75rem; color: #15803d; font-weight: 600;">0 KB</div>
+                                                    </div>
+                                                </div>
+                                                <div style="display: flex; gap: 0.35rem; align-items: center;">
+                                                    <button type="button" id="btnChangeQuestionPdf" class="btn-change-pdf" title="Choose a different PDF file">
+                                                        🔄 Change
+                                                    </button>
+                                                    <button type="button" id="btnRemoveQuestionPdf" class="btn-cut-pdf" title="Remove or cut this PDF">
+                                                        ✕ Remove / Cut
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Progress / Quality Banner -->
+                                        <div id="questionPdfStatus" style="display: none; margin-top: 0.75rem; text-align: left; background: #f8fafc; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.82rem;">
+                                            <div id="questionPdfStatusText" style="color: #334155; font-weight: 600;"></div>
+                                            <div id="questionPdfQualityBadge" style="margin-top: 0.4rem;"></div>
+                                        </div>
+
+                                        <!-- Actions Row -->
+                                        <div style="display: flex; gap: 0.4rem; justify-content: center; margin-top: 0.75rem; flex-wrap: wrap;">
+                                            <button type="button" id="btnExtractQuestionsFast" class="btn-extract-pill fast" title="Extract digital text via PDF.js (Instant)">
+                                                ⚡ Fast Text
+                                            </button>
+                                            <button type="button" id="btnExtractQuestionsAi" class="btn-extract-pill ai" title="Deep OCR via Gemini Vision (Scanned / handwritten sheets)">
+                                                🧠 AI Vision OCR
+                                            </button>
+                                            <button type="button" id="btnClearQuestionsText" class="btn-extract-pill clear" title="Clear all text in Questions box">
+                                                🗑️ Clear Text
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Marking Scheme PDF Dropzone -->
+                                    <div class="pdf-drop-card" id="schemePdfDropzone" style="background: white; border: 2px dashed #94a3b8; border-radius: 12px; padding: 1.25rem; text-align: center; cursor: pointer; transition: all 0.2s; position: relative;">
+                                        <input type="file" id="schemePdfInput" accept=".pdf,application/pdf" style="display: none;">
+                                        
+                                        <!-- Default Empty State -->
+                                        <div id="schemePdfEmptyState">
+                                            <div style="font-size: 1.8rem; margin-bottom: 0.35rem;">🔑</div>
+                                            <div style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">Upload Answer Key / Marking Scheme PDF</div>
+                                            <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;" id="schemePdfPromptText">Drag & drop PDF here, or click to browse</div>
+                                        </div>
+
+                                        <!-- Loaded File Details Card -->
+                                        <div id="schemePdfLoadedCard" class="pdf-loaded-card" style="display: none;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                                <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden; min-width: 140px;">
+                                                    <span style="font-size: 1.35rem;">📄</span>
+                                                    <div style="overflow: hidden;">
+                                                        <div id="schemePdfFileName" style="font-weight: 700; color: #166534; font-size: 0.85rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 170px;" title="Marking scheme PDF">filename.pdf</div>
+                                                        <div id="schemePdfFileSize" style="font-size: 0.75rem; color: #15803d; font-weight: 600;">0 KB</div>
+                                                    </div>
+                                                </div>
+                                                <div style="display: flex; gap: 0.35rem; align-items: center;">
+                                                    <button type="button" id="btnChangeSchemePdf" class="btn-change-pdf" title="Choose a different PDF file">
+                                                        🔄 Change
+                                                    </button>
+                                                    <button type="button" id="btnRemoveSchemePdf" class="btn-cut-pdf" title="Remove or cut this PDF">
+                                                        ✕ Remove / Cut
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Progress / Quality Banner -->
+                                        <div id="schemePdfStatus" style="display: none; margin-top: 0.75rem; text-align: left; background: #f8fafc; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.82rem;">
+                                            <div id="schemePdfStatusText" style="color: #334155; font-weight: 600;"></div>
+                                            <div id="schemePdfQualityBadge" style="margin-top: 0.4rem;"></div>
+                                        </div>
+
+                                        <!-- Actions Row -->
+                                        <div style="display: flex; gap: 0.4rem; justify-content: center; margin-top: 0.75rem; flex-wrap: wrap;">
+                                            <button type="button" id="btnExtractSchemeFast" class="btn-extract-pill fast" title="Extract digital text via PDF.js (Instant)">
+                                                ⚡ Fast Text
+                                            </button>
+                                            <button type="button" id="btnExtractSchemeAi" class="btn-extract-pill ai" title="Deep OCR via Gemini Vision (Scanned / handwritten sheets)">
+                                                🧠 AI Vision OCR
+                                            </button>
+                                            <button type="button" id="btnClearSchemeText" class="btn-extract-pill clear" title="Clear all text in Marking Scheme box">
+                                                🗑️ Clear Text
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-group">
-                                <label for="sessionQuestions">Pasted Exam Questions *</label>
+                                <label for="sessionQuestions">Exam Questions (Extracted from PDF or paste directly) *</label>
                                 <textarea id="sessionQuestions" required style="min-height: 150px;"
-                                    placeholder="Paste all the exam questions here (you can paste direct text or from a Word doc)...&#10;Q1. Explain the law of demand.&#10;Q2. Draw the GDP circular flow diagram."></textarea>
+                                    placeholder="Questions will automatically appear here once you upload the Question Paper PDF, or you can paste them manually...&#10;Q1. Explain the law of demand. [3 Marks]&#10;Q2. Draw the circular flow diagram. [4 Marks]"></textarea>
                             </div>
 
                             <div class="form-group">
@@ -146,6 +297,8 @@
                             <thead>
                                 <tr style="border-bottom: 2px solid #e2e8f0; background: #f7fafc; color: #4a5568; font-weight: 700;">
                                     <th style="padding: 0.75rem;">Test Name</th>
+                                    <th style="padding: 0.75rem;">Year</th>
+                                    <th style="padding: 0.75rem;">Set</th>
                                     <th style="padding: 0.75rem;">Class</th>
                                     <th style="padding: 0.75rem;">Subject</th>
                                     <th style="padding: 0.75rem;">Max Marks</th>
@@ -155,7 +308,7 @@
                             </thead>
                             <tbody id="sessionManageTableBody">
                                 <tr>
-                                    <td colspan="6" style="padding: 1.5rem; text-align: center; color: #666; font-style: italic;">
+                                    <td colspan="8" style="padding: 1.5rem; text-align: center; color: #666; font-style: italic;">
                                         Loading published test sessions...
                                     </td>
                                 </tr>
@@ -501,12 +654,39 @@
                 <div class="form-grid">
                     <input type="hidden" id="editSessionId">
                     
-                    <div class="form-group">
-                        <label for="editSessionName">Test Name *</label>
-                        <input type="text" id="editSessionName" required placeholder="e.g. Monthly Test">
+                    <div class="form-row edit-session-meta-grid">
+                        <div class="form-group">
+                            <label for="editSessionName">Test Name *</label>
+                            <input type="text" id="editSessionName" required placeholder="e.g. Monthly Test">
+                        </div>
+                        <div class="form-group">
+                            <label for="editSessionYear">Exam Year *</label>
+                            <select id="editSessionYear" required>
+                                <option value="2026">2026</option>
+                                <option value="2025">2025</option>
+                                <option value="2024">2024</option>
+                                <option value="2023">2023</option>
+                                <option value="2022">2022</option>
+                                <option value="2021">2021</option>
+                                <option value="2020">2020</option>
+                                <option value="Standard">Standard / N/A</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editSessionSet">Exam Set *</label>
+                            <select id="editSessionSet" required>
+                                <option value="Standard / All">Standard / No Set</option>
+                                <option value="Set 1">Set 1</option>
+                                <option value="Set 2">Set 2</option>
+                                <option value="Set 3">Set 3</option>
+                                <option value="Set 4">Set 4</option>
+                                <option value="custom">Custom Set...</option>
+                            </select>
+                            <input type="text" id="editSessionCustomSet" placeholder="e.g. Set 58/1/1" style="display: none; margin-top: 0.5rem; padding: 0.4rem; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.85rem;">
+                        </div>
                     </div>
 
-                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <div class="form-row edit-session-meta-grid">
                         <div class="form-group">
                             <label for="editSessionClass">Class *</label>
                             <select id="editSessionClass" required>
@@ -660,7 +840,53 @@
             </form>
         </div>
     </div>
+    <!-- PDF Extraction Automated Self-Test Diagnostic Modal -->
+    <div id="diagnosticModal" class="diagnostic-modal-backdrop" style="display: none;">
+        <div class="diagnostic-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="diagModalTitle">
+            
+            <!-- Sticky Header -->
+            <div class="diagnostic-modal-header">
+                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <span style="font-size: 1.5rem;" aria-hidden="true">🧪</span>
+                    <div>
+                        <h3 id="diagModalTitle" style="margin: 0; color: #0f172a; font-size: 1.15rem; font-weight: 700;">Extraction Self-Test Diagnostic</h3>
+                        <p style="margin: 0.15rem 0 0 0; color: #64748b; font-size: 0.78rem;">Verifying PDF.js client parser, Gate token & backend API</p>
+                    </div>
+                </div>
+                <button type="button" id="btnCloseDiagnosticModal" class="diag-close-btn" aria-label="Close diagnostic modal" title="Close (Esc)">✕</button>
+            </div>
+
+            <!-- Scrollable Body -->
+            <div class="diagnostic-modal-body">
+                <div id="diagnosticRunningState" style="text-align: center; padding: 2rem 1rem;">
+                    <div class="spinner" style="margin: 0 auto 1rem auto; width: 38px; height: 38px;"></div>
+                    <div style="color: #1e293b; font-weight: 600; font-size: 0.95rem;">Executing automated diagnostic tests...</div>
+                    <div style="color: #64748b; font-size: 0.8rem; margin-top: 0.25rem;">Testing PDF.js engine & backend API connectivity</div>
+                </div>
+
+                <div id="diagnosticResultsList" style="display: none;">
+                    <!-- Test items populated dynamically -->
+                </div>
+
+                <div id="diagnosticSummaryCard" style="display: none; margin-top: 1rem; padding: 0.85rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                    <!-- Overall verdict -->
+                </div>
+            </div>
+
+            <!-- Sticky Footer -->
+            <div class="diagnostic-modal-footer">
+                <button type="button" id="btnRerunDiagnostics" class="diag-btn-secondary">
+                    🔄 Re-Run Test
+                </button>
+                <button type="button" id="btnDismissDiagnostics" class="diag-btn-primary">
+                    Done / Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+
     <script type="module" src="admin.js"></script>
 </body>
 
-</html>
+</html>

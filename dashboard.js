@@ -769,7 +769,8 @@ function updateAnalyticsSessionDropdown() {
 
     let html = '<option value="all">All Test Sessions</option>';
     filtered.forEach(s => {
-        html += `<option value="${s.id}">${s.name} (${s.class} - ${s.subject})</option>`;
+        const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` [${s.examSet}]` : '';
+        html += `<option value="${s.id}">${s.name}${setTag} (${s.class} - ${s.subject})</option>`;
     });
 
     sessionFilter.innerHTML = html;

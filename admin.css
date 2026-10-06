@@ -2618,3 +2618,420 @@
                 min-width: 550px !important;
             }
         }
+
+        /* ===== Examination Set Badges & PDF Dropzone Hub ===== */
+        .badge-set {
+            display: inline-block;
+            background: #ede9fe;
+            color: #6d28d9;
+            border: 1px solid #ddd6fe;
+            padding: 0.2rem 0.55rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .pdf-drop-card:hover {
+            border-color: #2563eb !important;
+            background: #f8faff !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .pdf-drop-card.dragover {
+            border-color: #2563eb !important;
+            background: #eff6ff !important;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+
+        .quality-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.65rem;
+            border-radius: 9999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .quality-pill.high {
+            background: #dcfce7;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+        }
+
+        .quality-pill.medium {
+            background: #fef9c3;
+            color: #854d0e;
+            border: 1px solid #fef08a;
+        }
+
+        .quality-pill.scanned {
+            background: #e0e7ff;
+            color: #4338ca;
+            border: 1px solid #c7d2fe;
+        }
+
+        .quality-pill.error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+
+        /* Diagnostic Modal */
+        .diagnostic-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 3500;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            animation: fadeInModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeInModal {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .diagnostic-modal-dialog {
+            background: #ffffff;
+            width: 100%;
+            max-width: 580px;
+            max-height: calc(100vh - 3rem);
+            height: auto;
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            margin: auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            animation: scaleInModal 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes scaleInModal {
+            from { transform: scale(0.96); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .diagnostic-modal-header {
+            flex-shrink: 0;
+            padding: 1.1rem 1.4rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #ffffff;
+            z-index: 2;
+        }
+
+        .diag-close-btn {
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #475569;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .diag-close-btn:hover {
+            background: #fee2e2;
+            color: #dc2626;
+            border-color: #fca5a5;
+            transform: scale(1.05);
+        }
+
+        .diagnostic-modal-body {
+            flex: 1 1 auto;
+            min-height: 0; /* CRITICAL: Enables scrolling in flex child! */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 1.25rem 1.4rem;
+            background: #ffffff;
+        }
+
+        .diagnostic-modal-footer {
+            flex-shrink: 0;
+            padding: 0.9rem 1.4rem;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            align-items: center;
+            z-index: 2;
+        }
+
+        .diag-btn-secondary {
+            padding: 0.6rem 1.1rem;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            color: #334155;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s;
+        }
+
+        .diag-btn-secondary:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+
+        .diag-btn-primary {
+            padding: 0.6rem 1.35rem;
+            border-radius: 8px;
+            border: none;
+            background: #2563eb;
+            color: white;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        }
+
+        .diag-btn-primary:hover {
+            background: #1d4ed8;
+            box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+        }
+
+        .diag-test-item {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 0.85rem 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 0.6rem;
+            gap: 0.75rem;
+        }
+
+        .diag-status-badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+        }
+
+        .diag-status-badge.passed {
+            background: #22c55e;
+            color: white;
+        }
+
+        .diag-status-badge.failed {
+            background: #ef4444;
+            color: white;
+        }
+
+        .diag-status-badge.warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        /* ===== Responsive Form Grids ===== */
+        .session-meta-grid {
+            display: grid;
+            grid-template-columns: 2.2fr 1.2fr 1fr;
+            gap: 1.25rem;
+        }
+
+        .edit-session-meta-grid {
+            display: grid;
+            grid-template-columns: 2fr 1.2fr;
+            gap: 1.25rem;
+        }
+
+        /* Loaded Card & Action Buttons */
+        .pdf-loaded-card {
+            background: #f0fdf4;
+            border: 1.5px solid #86efac;
+            border-radius: 10px;
+            padding: 0.75rem 0.9rem;
+            text-align: left;
+            margin-bottom: 0.75rem;
+            animation: fadeInModal 0.2s ease-in-out;
+        }
+
+        .btn-cut-pdf {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: all 0.2s;
+        }
+
+        .btn-cut-pdf:hover {
+            background: #fca5a5;
+            color: #7f1d1d;
+            border-color: #f87171;
+            transform: translateY(-1px);
+        }
+
+        .btn-change-pdf {
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: all 0.2s;
+        }
+
+        .btn-change-pdf:hover {
+            background: #dcfce7;
+            color: #166534;
+            border-color: #86efac;
+            transform: translateY(-1px);
+        }
+
+        .btn-extract-pill {
+            padding: 0.38rem 0.75rem;
+            font-size: 0.78rem;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .btn-extract-pill:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-extract-pill.fast {
+            background: #e0f2fe;
+            color: #0369a1;
+            border-color: #bae6fd;
+        }
+
+        .btn-extract-pill.fast:hover {
+            background: #bae6fd;
+            color: #075985;
+        }
+
+        .btn-extract-pill.ai {
+            background: #f3e8ff;
+            color: #7e22ce;
+            border-color: #e9d5ff;
+        }
+
+        .btn-extract-pill.ai:hover {
+            background: #e9d5ff;
+            color: #6b21a8;
+        }
+
+        .btn-extract-pill.clear {
+            background: #f1f5f9;
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+        .btn-extract-pill.clear:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+        }
+
+        /* Mobile & Responsive Adaptations */
+        @media (max-width: 860px) {
+            .session-meta-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+            }
+            .session-meta-grid .form-group:first-child {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .session-meta-grid,
+            .edit-session-meta-grid {
+                grid-template-columns: 1fr;
+                gap: 0.85rem;
+            }
+
+            .pdf-extract-hub {
+                padding: 1rem !important;
+            }
+
+            .pdf-drop-card {
+                padding: 1rem !important;
+            }
+
+            .diagnostic-modal-backdrop {
+                padding: 0.5rem;
+                align-items: flex-end; /* Slide-up sheet appearance on phones */
+            }
+
+            .diagnostic-modal-dialog {
+                max-height: 92vh;
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+            }
+
+            .diagnostic-modal-header {
+                padding: 0.85rem 1rem;
+            }
+
+            .diagnostic-modal-header h3 {
+                font-size: 1rem !important;
+            }
+
+            .diagnostic-modal-body {
+                padding: 1rem;
+            }
+
+            .diagnostic-modal-footer {
+                padding: 0.75rem 1rem;
+                flex-direction: column-reverse;
+                gap: 0.5rem;
+            }
+
+            .diag-btn-primary,
+            .diag-btn-secondary {
+                width: 100%;
+                justify-content: center;
+                padding: 0.7rem;
+            }
+        }
