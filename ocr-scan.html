@@ -1329,7 +1329,7 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.85rem; background: #f8fafc; border: 1px solid #e2e8f0; padding: 1.15rem 1.25rem; border-radius: 12px; margin-bottom: 2rem; font-size: 0.95rem;">
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Student Name</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${name}</span>
+                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${escapeHtml(name)}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Date Evaluated</span>
@@ -1337,11 +1337,11 @@
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Class & Subject</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${cls} · ${sub}</span>
+                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${escapeHtml(cls)} · ${escapeHtml(sub)}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Exam Year & Set</span>
-                        <span style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">📅 ${extractYear(selectedSession) || 'Standard'} · 🔖 ${extractSet(selectedSession) || 'Set 1'}</span>
+                        <span style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">📅 ${escapeHtml(extractYear(selectedSession) || 'Standard')} · 🔖 ${escapeHtml(extractSet(selectedSession) || 'Set 1')}</span>
                     </div>
                 </div>
 
@@ -1441,7 +1441,7 @@
 
                 <h3 style="color: #c53030; border-bottom: 2px solid #fed7d7; padding-bottom: 0.5rem; font-family: 'Poppins', sans-serif; font-size: 1.3rem;">🚀 Target Areas to Improve</h3>
                 <ul style="padding-left: 1.5rem; line-height: 1.6; color: #4a5568; font-size: 1.05rem; margin-bottom: 2rem;">
-                    ${report.improvements.map(imp => `<li>${imp}</li>`).join('')}
+                    ${report.improvements.map(imp => `<li>${escapeHtml(imp)}</li>`).join('')}
                 </ul>
 
                 <h3 style="color: #c53030; border-bottom: 2px solid #fed7d7; padding-bottom: 0.5rem; font-family: 'Poppins', sans-serif; font-size: 1.3rem;">🔍 Question-by-Question Mistakes & Corrections</h3>
@@ -1461,38 +1461,38 @@
                                 <div class="report-block" style="background: #fffdfd; border: 1px solid #feb2b2; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #fed7d7; padding-bottom: 0.75rem; margin-bottom: 0.75rem; gap: 1rem;">
                                         <div>
-                                            <h4 style="margin: 0; color: #9b2c2c; font-size: 1.1rem;">${q.questionNumber || 'Question'}</h4>
-                                            <p style="margin: 0.25rem 0 0 0; color: #718096; font-size: 0.9rem;">${qText}</p>
+                                            <h4 style="margin: 0; color: #9b2c2c; font-size: 1.1rem;">${escapeHtml(q.questionNumber || 'Question')}</h4>
+                                            <p style="margin: 0.25rem 0 0 0; color: #718096; font-size: 0.9rem;">${escapeHtml(qText)}</p>
                                         </div>
                                         <div style="background: #fed7d7; color: #9b2c2c; padding: 0.5rem 1rem; border-radius: 999px; font-weight: 700; font-size: 1rem; white-space: nowrap; text-align: center; min-width: 60px; flex-shrink: 0;">
                                             ${eM} / ${mM}
                                         </div>
                                     </div>
                                     <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                                        ${studentAns ? `<p style="margin: 0; color: #718096; font-size: 0.95rem; line-height: 1.5; background: #fff; padding: 0.75rem; border-radius: 6px; border: 1px dashed #cbd5e0;"><strong>What you wrote:</strong> <em>"${studentAns}"</em></p>` : ''}
+                                        ${studentAns ? `<p style="margin: 0; color: #718096; font-size: 0.95rem; line-height: 1.5; background: #fff; padding: 0.75rem; border-radius: 6px; border: 1px dashed #cbd5e0;"><strong>What you wrote:</strong> <em>"${escapeHtml(studentAns)}"</em></p>` : ''}
                                          ${q.incorrectPhrases && q.incorrectPhrases.length > 0 ? `
                                              <div style="background: #fff5f5; border: 1px solid #fed7d7; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 0.5rem;">
                                                  <strong style="color: #c53030; display: block; margin-bottom: 0.25rem;">❌ Identified Mistakes in Your Text:</strong>
                                                  <ul style="margin: 0; padding-left: 1.25rem; color: #9b2c2c;">
                                                      ${q.incorrectPhrases.map(phrase => `
                                                          <li>
-                                                             <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${phrase.wrongText}"</span> 
-                                                             &mdash; <span style="font-style: italic; color: #4a5568;">${phrase.explanation}</span>
+                                                             <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${escapeHtml(phrase.wrongText)}"</span> 
+                                                             &mdash; <span style="font-style: italic; color: #4a5568;">${escapeHtml(phrase.explanation)}</span>
                                                          </li>
                                                      `).join('')}
                                                  </ul>
                                              </div>
                                          ` : ''}
-                                        <p style="margin: 0; color: #9b2c2c; font-size: 0.95rem; line-height: 1.5;"><strong>❌ Your Mistake & Feedback:</strong> ${q.feedback || 'Marks were lost on this question.'}</p>
+                                        <p style="margin: 0; color: #9b2c2c; font-size: 0.95rem; line-height: 1.5;"><strong>❌ Your Mistake & Feedback:</strong> ${escapeHtml(q.feedback || 'Marks were lost on this question.')}</p>
                                         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1rem; border-radius: 8px; font-size: 0.95rem; color: #15803d; line-height: 1.5;">
                                             <strong>🔑 Correct Answer according to Marking Scheme:</strong>
-                                            <div style="margin-top: 0.25rem;">${correctAns}</div>
+                                            <div style="margin-top: 0.25rem;">${escapeHtml(correctAns)}</div>
                                         </div>
                                         ${q.improvements && q.improvements.length > 0 ? `
                                         <div style="margin-top: 0.25rem;">
                                             <strong style="color: #dd6b20; font-size: 0.9rem;">💡 Required Answer / Corrective Steps:</strong>
                                             <ul style="margin: 0.25rem 0 0 0; padding-left: 1.2rem; color: #4a5568; font-size: 0.9rem;">
-                                                ${q.improvements.map(imp => `<li>${imp}</li>`).join('')}
+                                                ${q.improvements.map(imp => `<li>${escapeHtml(imp)}</li>`).join('')}
                                             </ul>
                                         </div>
                                         ` : ''}

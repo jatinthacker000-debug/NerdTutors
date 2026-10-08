@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -50,6 +51,8 @@ export default async function handler(req, res) {
         return res.status(401).json({ error: "Unauthorized: Missing Gate Authentication Token" });
     }
 
+    const GATE_SECRET = process.env.GATE_SECRET || 'nt_gate_hmac_secret_2026_super_secure';
+
     const defaultGateCreds = [
         { username: 'nerd_tutor_alpha', password: 'nt_pass_alpha2026' },
         { username: 'nerd_tutor_beta', password: 'nt_pass_beta2026' },
@@ -73,13 +76,35 @@ export default async function handler(req, res) {
         }
     }
 
-    const isValidGateToken = gateCreds.some(c => {
-        const expectedToken = Buffer.from(`${c.username}:${c.password}`).toString('base64');
-        return expectedToken === gateToken;
-    });
+    function isValidGateAuth(token) {
+        if (!token) return false;
+        // 1. Verify signed HMAC token with expiration
+        try {
+            const raw = Buffer.from(token, 'base64').toString('utf8');
+            const data = JSON.parse(raw);
+            if (data && data.u && data.exp && data.sig) {
+                if (Date.now() > Number(data.exp)) {
+                    console.warn(`⚠️ Gate token for ${data.u} has expired.`);
+                    return false;
+                }
+                const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:${data.exp}`).digest('hex');
+                if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
+                    return true;
+                }
+            }
+        } catch (_) {
+            // Not JSON signed token, fallback to legacy check
+        }
 
-    if (!isValidGateToken) {
-        return res.status(401).json({ error: "Unauthorized: Invalid Gate Authentication Token" });
+        // 2. Legacy Base64 check for transition backwards-compatibility
+        return gateCreds.some(c => {
+            const expectedToken = Buffer.from(`${c.username}:${c.password}`).toString('base64');
+            return expectedToken === token;
+        });
+    }
+
+    if (!isValidGateAuth(gateToken)) {
+        return res.status(401).json({ error: "Unauthorized: Invalid or expired Gate Authentication Token" });
     }
 
     // ===== Parse Body =====
@@ -179,10 +204,12 @@ export default async function handler(req, res) {
 `;
         }
         let overrideInstructionsPrompt = "";
-        if (otherInstructions && otherInstructions.trim() !== "") {
+        if (otherInstructions && typeof otherInstructions === "string" && otherInstructions.trim() !== "") {
+            // Sanitize and limit length to 500 characters to prevent prompt injection buffer overflows
+            const cleanInstructions = otherInstructions.trim().slice(0, 500).replace(/[`$]/g, '');
             overrideInstructionsPrompt = `
-🚨🚨🚨 CRITICAL MASTER DIRECTIVE - ADMINISTRATOR OVERRIDE (PRIORITY ONE):
-"${otherInstructions}"
+🚨🚨🚨 CRITICAL MASTER DIRECTIVE - MODERATOR GUIDANCE:
+"${cleanInstructions}"
 `;
         }
 
@@ -717,9 +744,15 @@ Return the response as a strict JSON object.`;
 
     } catch (err) {
         console.error("❌ OCR Evaluation Error:", err);
+        // Redact any sensitive API keys or URLs from the client response
+        let safeErrorMsg = (err.message || "Unknown error")
+            .replace(/key=[a-zA-Z0-9_\-\.]+/gi, 'key=[REDACTED]')
+            .replace(/AIza[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]')
+            .replace(/sk-[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]');
+
         return res.status(500).json({
             error: "OCR evaluation failed",
-            details: err.message || "Unknown error",
+            details: safeErrorMsg,
             extractedText: "",
             score: 0,
             feedback: "The system could not process the image. Please try again with a clearer photo."

@@ -31,9 +31,22 @@ const server = http.createServer(async (req, res) => {
 
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${pathname}`);
 
+    // Set baseline security headers
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
     // Route API requests
     if (pathname.startsWith('/api/')) {
-        const handlerName = pathname.replace('/api/', '');
+        const handlerName = pathname.replace('/api/', '').split('?')[0];
+
+        // Security check: restrict API handler names to alphanumeric characters, dashes, and underscores
+        if (!/^[a-zA-Z0-9_-]+$/.test(handlerName)) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ error: 'Invalid API endpoint name' }));
+        }
+
         const handlerPath = path.join(__dirname, 'api', `${handlerName}.js`);
 
         if (fs.existsSync(handlerPath)) {
@@ -87,8 +100,28 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // Serve static files
-    let filePath = path.join(__dirname, pathname === '/' ? 'ocr-scan.html' : pathname);
+    // Serve static files safely
+    // 1. Sanitize pathname and resolve absolute path
+    const sanitizedRelPath = pathname === '/' ? 'ocr-scan.html' : pathname.replace(/^\/+/, '');
+    const resolvedPath = path.resolve(__dirname, sanitizedRelPath);
+    const rootDir = path.resolve(__dirname);
+
+    // 2. Prevent directory traversal: resolved path must strictly stay within rootDir
+    if (!resolvedPath.startsWith(rootDir)) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'text/html');
+        return res.end('<h3>403 Forbidden</h3><p>Access denied.</p>');
+    }
+
+    // 3. Prevent access to sensitive dotfiles (.env, .env.local, .git, .gitignore)
+    const fileName = path.basename(resolvedPath);
+    if (fileName.startsWith('.') || fileName.toLowerCase().includes('.env')) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'text/html');
+        return res.end('<h3>403 Forbidden</h3><p>Access to configuration files is restricted.</p>');
+    }
+
+    let filePath = resolvedPath;
     
     // Fallback HTML resolution if extension is omitted (like "/login-gate")
     if (!path.extname(filePath)) {
@@ -100,10 +133,10 @@ const server = http.createServer(async (req, res) => {
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         const ext = path.extname(filePath).toLowerCase();
         const mimeTypes = {
-            '.html': 'text/html',
-            '.css': 'text/css',
-            '.js': 'text/javascript',
-            '.json': 'application/json',
+            '.html': 'text/html; charset=utf-8',
+            '.css': 'text/css; charset=utf-8',
+            '.js': 'text/javascript; charset=utf-8',
+            '.json': 'application/json; charset=utf-8',
             '.png': 'image/png',
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
@@ -117,7 +150,7 @@ const server = http.createServer(async (req, res) => {
         fs.createReadStream(filePath).pipe(res);
     } else {
         res.statusCode = 404;
-        res.setHeader('Content-Type', 'text/html');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.end(`<h3>404 Not Found</h3><p>File not found: ${pathname}</p>`);
     }
 });

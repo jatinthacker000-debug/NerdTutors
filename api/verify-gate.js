@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -23,6 +24,8 @@ try {
 } catch (e) {
     console.warn("Env force load error:", e.message);
 }
+
+const GATE_SECRET = process.env.GATE_SECRET || 'nt_gate_hmac_secret_2026_super_secure';
 
 const DEFAULT_CREDENTIALS = [
     { username: 'nerd_tutor_alpha', password: 'nt_pass_alpha2026' },
@@ -50,6 +53,13 @@ function getCredentials() {
     return DEFAULT_CREDENTIALS;
 }
 
+function createSignedGateToken(username) {
+    const expiresAt = Date.now() + (12 * 60 * 60 * 1000); // Valid for 12 hours
+    const payload = `${username}:${expiresAt}`;
+    const signature = crypto.createHmac('sha256', GATE_SECRET).update(payload).digest('hex');
+    return Buffer.from(JSON.stringify({ u: username, exp: expiresAt, sig: signature })).toString('base64');
+}
+
 export default async function handler(req, res) {
     // CORS headers
     const allowedOrigins = [
@@ -64,6 +74,8 @@ export default async function handler(req, res) {
     }
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
     if (req.method === "OPTIONS") return res.status(200).end();
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -78,11 +90,13 @@ export default async function handler(req, res) {
         }
 
         const creds = getCredentials();
-        const matched = creds.find(c => c.username === username.trim() && c.password === password.trim());
+        const cleanUser = username.trim();
+        const cleanPass = password.trim();
+        const matched = creds.find(c => c.username === cleanUser && c.password === cleanPass);
 
         if (matched) {
-            // Generate a simple token: base64(username:password)
-            const token = Buffer.from(`${username.trim()}:${password.trim()}`).toString('base64');
+            // Generate cryptographically signed HMAC token with 12h expiration
+            const token = createSignedGateToken(cleanUser);
             return res.status(200).json({ success: true, token });
         } else {
             return res.status(401).json({ error: "Invalid username or password" });
