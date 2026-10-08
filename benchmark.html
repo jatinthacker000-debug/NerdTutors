@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Two answer sheets, six examiners | Nerd Tutors benchmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F3FF;--ink:#15174A;--muted:#575A94;--line:rgba(21,23,74,.12);--panel:#FFFFFF;--a:#0B8F85;--b:#CC2C78;--ok:#14935A;--bad:#D6453A;--margin:#E8503A;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#13154A;--ink:#EEEDFF;--muted:#A0A3DA;--line:rgba(238,237,255,.12);--panel:#1B1E63;--a:#4FE0D2;--b:#FF8FC2;--ok:#6EE7A0;--bad:#FF7A6E;--margin:#FF8A70}}
+:root[data-theme="dark"]{--bg:#13154A;--ink:#EEEDFF;--muted:#A0A3DA;--line:rgba(238,237,255,.12);--panel:#1B1E63;--a:#4FE0D2;--b:#FF8FC2;--ok:#6EE7A0;--bad:#FF7A6E;--margin:#FF8A70}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--bg);color:var(--ink);font:400 16px/1.55 "Instrument Sans",system-ui,sans-serif;
+background-image:linear-gradient(var(--line) 1px,transparent 1px);background-size:100% 32px;-webkit-font-smoothing:antialiased}
+.sheet{max-width:1080px;margin:0 auto 0 max(14px,calc(50% - 540px));padding:0 clamp(16px,4vw,40px) 80px clamp(18px,3vw,36px);border-left:2px solid var(--margin);background:linear-gradient(90deg,var(--bg) 0,transparent 0)}
+h1,h2,h3{font-family:"Bricolage Grotesque","Instrument Sans",system-ui,sans-serif;margin:0;letter-spacing:-.025em}
+h1{font-size:clamp(40px,8.2vw,92px);line-height:.96;font-weight:800;max-width:11ch;padding-top:clamp(40px,8vw,88px)}
+h2{font-size:clamp(26px,4.2vw,40px);line-height:1.05;font-weight:700}
+.lede{max-width:58ch;color:var(--muted);font-size:clamp(16px,2vw,19px);margin:22px 0 0;background:var(--bg);padding:2px 0}
+.brand{font-weight:600;font-size:15px;padding-top:26px;color:var(--muted)}
+section{margin-top:clamp(56px,9vw,104px)}
+.hd{background:var(--bg);display:inline-block;padding:2px 10px 2px 0}
+.ctrl{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:center;margin:22px 0 14px}
+.seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--bg)}
+.seg button{font:600 14px "Instrument Sans",sans-serif;color:var(--ink);background:none;border:0;padding:9px 16px;cursor:pointer;transition:background .25s,color .25s}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+button:focus-visible,canvas:focus-visible{outline:3px solid var(--b);outline-offset:2px}
+.leg{display:flex;gap:18px;font-weight:600;font-size:14px;background:var(--bg);padding:2px 6px}
+.leg i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:7px;vertical-align:-1px}
+.stage{background:var(--panel);border:1.5px solid var(--ink);border-radius:10px;padding:14px 8px 8px}
+#ct{font:700 15px "Bricolage Grotesque",sans-serif;margin:0 0 0 10px}
+canvas{display:block;width:100%;height:clamp(330px,50vw,430px);touch-action:pan-y;cursor:crosshair}
+#ro{margin-top:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:18px 20px;min-height:170px}
+#ro h3{font-size:22px;font-weight:700}.role{margin:2px 0 14px;color:var(--muted);font-size:14px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.pair>div{border-top:4px solid var(--c);padding-top:8px;display:flex;flex-direction:column;gap:1px}
+.pair .A{--c:var(--a)}.pair .B{--c:var(--b)}
+.pair b{font-size:14px}.big{font:800 clamp(30px,5vw,44px)/1 "Bricolage Grotesque",sans-serif;letter-spacing:-.03em}
+.big small{font-size:.4em;font-weight:600;color:var(--muted);letter-spacing:0}
+.sub{color:var(--muted);font-size:14px}.none{margin:0;font-weight:500}
+.tab{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}
+.tab button{display:flex;align-items:center;gap:9px;font:600 15px "Instrument Sans",sans-serif;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:10px 16px;cursor:pointer;transition:border-color .2s}
+.tab button i{width:11px;height:11px;border-radius:50%;background:var(--c)}
+.tab button[aria-pressed="true"]{border-color:var(--ink)}
+#sum{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 36px;background:var(--bg);padding:6px 0 18px}
+#sum .score{font:800 clamp(56px,10vw,96px)/.9 "Bricolage Grotesque",sans-serif;letter-spacing:-.04em;color:var(--c)}
+#sum .score small{font-size:.32em;color:var(--muted);letter-spacing:0;font-weight:600}
+#sum dl{display:flex;gap:26px;margin:0;flex-wrap:wrap}#sum dt{font-size:13px;color:var(--muted)}#sum dd{margin:0;font:700 22px "Bricolage Grotesque",sans-serif}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(106px,1fr));gap:8px}
+.cell{--st:var(--ok);position:relative;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--st);border-radius:4px;padding:10px 10px 10px 12px;color:var(--ink);font:inherit;cursor:pointer;min-height:78px;display:flex;flex-direction:column;justify-content:space-between}
+.cell.bad{--st:var(--bad)}.cell.on{outline:2px solid var(--ink)}
+.q{font-weight:600;font-size:14px}.m{font:700 22px "Bricolage Grotesque",sans-serif}.m small{font-size:13px;color:var(--muted);font-weight:500}
+.cell svg{position:absolute;top:9px;right:9px;width:22px;height:22px;fill:none;stroke:var(--st);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.cell path{stroke-dasharray:1;stroke-dashoffset:1;animation:pen .45s ease-out forwards;animation-delay:calc(var(--i)*45ms + 150ms)}
+@keyframes pen{to{stroke-dashoffset:0}}
+#det{margin:16px 0 0;min-height:52px;background:var(--bg);padding:10px 14px;border-left:4px solid var(--ink);font-weight:500}
+.tw{overflow-x:auto;margin-top:22px;background:var(--panel);border:1.5px solid var(--ink);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:15px}
+th,td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}th{font-weight:600;color:var(--muted);font-size:14px}
+td b{font:700 20px "Bricolage Grotesque",sans-serif}td span{display:block;color:var(--muted);font-size:13px}
+.find{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:30px 44px;margin-top:28px}
+.find h3{font-size:20px;font-weight:700;margin-bottom:6px}.find p{margin:0;color:var(--muted);background:var(--bg)}
+footer{margin-top:72px;color:var(--muted);font-size:14px;background:var(--bg);display:inline-block;padding:2px 10px 2px 0}
+@media (max-width:560px){.pair{gap:12px}#ro{padding:14px}}
+@media (prefers-reduced-motion:reduce){.cell path{animation:none;stroke-dashoffset:0}}
+@media print{
+  body{background:#fff;color:#000;background-image:none}
+  .sheet{border-left:none;padding:0;max-width:100%}
+  .stage,table,.tw{border:1px solid #ccc}
+  .seg,.tab button{display:none}
+}
+</style>
+</head>
+<body>
+<main class="sheet">
+<div class="brand">Nerd Tutors evaluator benchmark</div>
+<h1>Two answer sheets. Six examiners.</h1>
+<p class="lede">CBSE Class 12 Economics (030), Set 2, Section B on Indian Economic Development, 40 marks. Trinno Asphalt and Krisha Kothari each handed in six handwritten pages. Every model graded the same scans.</p>
+
+<section aria-labelledby="h-chart">
+<h2 id="h-chart"><span class="hd">Where the marks diverge</span></h2>
+<div class="ctrl">
+<div class="seg" role="group" aria-label="Score type">
+<button data-m="t" aria-pressed="true">Total</button><button data-m="m" aria-pressed="false">Multiple choice</button><button data-m="s" aria-pressed="false">Subjective</button>
+</div>
+<div class="leg"><span><i style="background:var(--a)"></i>Trinno Asphalt</span><span><i style="background:var(--b)"></i>Krisha Kothari</span></div>
+</div>
+<div class="stage"><p id="ct">Total marks out of 40</p>
+<canvas id="cv" tabindex="0" role="img" aria-label="Chart of marks given to each candidate by each examiner. Use left and right arrow keys to move between examiners."></canvas></div>
+<div id="ro" aria-live="polite"></div>
+</section>
+
+<section aria-labelledby="h-sheet">
+<h2 id="h-sheet"><span class="hd">Question by question, live web app</span></h2>
+<div class="tab" role="group" aria-label="Candidate">
+<button data-c="A" aria-pressed="true" style="--c:var(--a)"><i></i>Trinno Asphalt</button>
+<button data-c="B" aria-pressed="false" style="--c:var(--b)"><i></i>Krisha Kothari</button>
+</div>
+<div id="sum"></div>
+<div id="grid"></div>
+<p id="det">Select a question to read the examiner's note.</p>
+</section>
+
+<section aria-labelledby="h-table">
+<h2 id="h-table"><span class="hd">Full scorecard</span></h2>
+<div class="tw"><table id="tb"></table></div>
+</section>
+
+<section aria-labelledby="h-find">
+<h2 id="h-find"><span class="hd">What stands out</span></h2>
+<div class="find">
+<div><h3>Trinno holds steady, Krisha swings</h3><p>Across the five examiners that ran, Trinno lands between 27.5 and 38.5 marks. Krisha lands between 20.5 and 35, a spread of 14.5 marks.</p></div>
+<div><h3>Strict examiners cut Krisha's long answers</h3><p>Gemini 3.8 Flash gave her 15.5 out of 30 on subjective questions, where the live app gave 30. Gemini 3 Flash applied an anti-copying rule and ended at 21.</p></div>
+<div><h3>Two ticked options cost marks</h3><p>Krisha wrote two options on Q18, Q19 and Q23 (A or c, B / D, c or B). The live app marked all three incorrect.</p></div>
+<div><h3>Gemini Pro never ran</h3><p>Both 2.5 Pro and 3.1 Pro have a free-tier quota of 0, so they need a paid plan before they can join this comparison.</p></div>
+</div>
+</section>
+<footer>Evaluator core: api/ocr-evaluate.js</footer>
+</main>
+
+<script>
+const NAME={A:'Trinno Asphalt',B:'Krisha Kothari'};
+const D=[
+{n:'Live web app',s:'Direct browser run',A:{t:38,m:8,s:30,g:'A+',p:95},B:{t:35,m:5,s:30,g:'A',p:87.5}},
+{n:'Gemini 3.8 Flash',s:'Strict moderator',A:{t:38.5,m:9,s:29.5,g:'A+',p:96.25},B:{t:20.5,m:5,s:15.5,g:'C',p:51.25}},
+{n:'Gemini 3.5 Flash Lite',s:'Daily production',A:{t:36,m:6,s:30,g:'A',p:90},B:{t:33,m:7,s:26,g:'B+',p:82.5}},
+{n:'Gemini 3.1 Flash Lite',s:'Fast fallback',A:{t:37.5,m:8,s:29.5,g:'A+',p:93.75},B:{t:35,m:7,s:28,g:'A',p:87.5}},
+{n:'Gemini 3 Flash',s:'Preview evaluator',A:{t:27.5,m:6,s:21.5,g:'B',p:68.75,note:'Strict off-topic override'},B:{t:21,m:5,s:16,g:'C',p:52.5,note:'Strict anti-copying'}},
+{n:'Gemini Pro',s:'2.5 Pro and 3.1 Pro',x:1}];
+const SHORT=[['Live','web app'],['Gemini','3.8 Flash'],['Gemini','3.5 Lite'],['Gemini','3.1 Lite'],['Gemini','3 Flash'],['Gemini','Pro']];
+const MET={t:{max:40,ticks:[0,10,20,30,40],title:'Total marks out of 40'},m:{max:10,ticks:[0,2,4,6,8,10],title:'Multiple choice marks out of 10'},s:{max:30,ticks:[0,10,20,30],title:'Subjective marks out of 30'}};
+const $=s=>document.querySelector(s);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt=v=>Number.isInteger(v)?v:v.toFixed(1);
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- chart ---------- */
+const cv=$('#cv'),cx=cv.getContext('2d');
+let W=0,H=0,dpr=1,met='t',sel=0,dirty=true,prog=reduce?1:0,t0=null,last=0;
+const cur={A:[],B:[]};
+const tgt=(c,i)=>{const v=D[i][c][met];return v==null?null:v/MET[met].max};
+for(const c of['A','B'])for(let i=0;i<5;i++)cur[c][i]=tgt(c,i);
+function size(){dpr=Math.min(devicePixelRatio||1,2);const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);dirty=true}
+function step(dt){let mv=false;for(const c of['A','B'])for(let i=0;i<5;i++){const t=tgt(c,i);if(t==null){cur[c][i]=null;continue}const v=cur[c][i];if(v==null){cur[c][i]=t;mv=true;continue}const d=t-v;if(Math.abs(d)>.0005){cur[c][i]=reduce?t:v+d*(1-Math.exp(-dt*10));mv=true}else cur[c][i]=t}return mv}
+function draw(p){
+ if(!W)return;
+ const ink=css('--ink'),mut=css('--muted'),line=css('--line'),bg=css('--panel'),ca=css('--a'),cb=css('--b');
+ cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);
+ const pl=40,pr=10,pt=28,pb=54,cw=(W-pl-pr)/6,ph=H-pt-pb,M=MET[met];
+ const X=i=>pl+cw*(i+.5),Y=f=>pt+(1-f)*ph,clipX=pl+p*(W-pl-pr)+2;
+ cx.globalAlpha=.07;cx.fillStyle=ink;cx.fillRect(pl+cw*sel,pt-14,cw,ph+14+pb-8);cx.globalAlpha=1;
+ cx.font='500 11px "Instrument Sans",system-ui,sans-serif';cx.textAlign='right';cx.textBaseline='middle';
+ for(const t of M.ticks){const y=Y(t/M.max);cx.strokeStyle=line;cx.lineWidth=1;cx.setLineDash([]);cx.beginPath();cx.moveTo(pl,y);cx.lineTo(W-pr,y);cx.stroke();cx.fillStyle=mut;cx.fillText(t,pl-8,y)}
+ cx.setLineDash([5,5]);cx.strokeStyle=mut;cx.globalAlpha=.55;cx.strokeRect(pl+cw*5+9,pt,cw-18,ph);cx.globalAlpha=1;cx.setLineDash([]);
+ cx.save();cx.translate(X(5),pt+ph/2);cx.rotate(-Math.PI/2);cx.textAlign='center';cx.fillStyle=mut;cx.font='500 12px "Instrument Sans",system-ui,sans-serif';cx.fillText('Paid tier only, free quota is 0',0,0);cx.restore();
+ const fs=cw<58?10:12;cx.textAlign='center';cx.textBaseline='alphabetic';
+ for(let i=0;i<6;i++){cx.font=(i===sel?'700 ':'500 ')+fs+'px "Instrument Sans",system-ui,sans-serif';cx.fillStyle=i===sel?ink:mut;cx.fillText(SHORT[i][0],X(i),H-pb+22);cx.fillText(SHORT[i][1],X(i),H-pb+22+fs+3)}
+ for(let i=0;i<5;i++){const a=cur.A[i],b=cur.B[i];if(a!=null&&b!=null&&X(i)<=clipX){cx.setLineDash([3,4]);cx.strokeStyle=mut;cx.globalAlpha=.5;cx.lineWidth=1.5;cx.beginPath();cx.moveTo(X(i),Y(a));cx.lineTo(X(i),Y(b));cx.stroke();cx.globalAlpha=1;cx.setLineDash([])}}
+ for(const[c,col]of[['B',cb],['A',ca]]){
+  cx.save();cx.beginPath();cx.rect(0,0,clipX,H);cx.clip();
+  cx.strokeStyle=col;cx.globalAlpha=.6;cx.lineWidth=2.5;cx.lineJoin='round';cx.beginPath();let pen=false;
+  for(let i=0;i<5;i++){const v=cur[c][i];if(v==null){pen=false;continue}pen?cx.lineTo(X(i),Y(v)):cx.moveTo(X(i),Y(v));pen=true}
+  cx.stroke();cx.restore();cx.globalAlpha=1;
+ }
+ for(let i=0;i<5;i++){
+  if(X(i)>clipX)continue;
+  const a=D[i].A[met],b=D[i].B[met];
+  for(const[c,col]of[['A',ca],['B',cb]]){
+   const f=cur[c][i];if(f==null)continue;const v=D[i][c][met],x=X(i),y=Y(f);
+   cx.beginPath();cx.arc(x,y,i===sel?8.5:6.5,0,7);cx.fillStyle=col;cx.fill();cx.lineWidth=2.5;cx.strokeStyle=bg;cx.stroke();
+   const other=c==='A'?b:a,up=other==null?true:(c==='A'?a>=b:b>a);
+   cx.font='700 13px "Instrument Sans",system-ui,sans-serif';cx.fillStyle=col;cx.textAlign='center';cx.textBaseline=up?'bottom':'top';cx.fillText(fmt(v),x,up?y-12:y+12);
+  }
+ }
+}
+function loop(ts){
+ const dt=Math.min((ts-last)/1000||0,.05);last=ts;if(t0==null)t0=ts;
+ let p=1;if(prog<1){prog=reduce?1:Math.min(1,Math.max(0,(ts-t0-300)/1700));p=1-Math.pow(1-prog,3);dirty=true}
+ if(step(dt))dirty=true;
+ if(dirty){draw(p);dirty=false}requestAnimationFrame(loop)}
+function readout(){
+ const m=D[sel];let h=`<h3>${m.n}</h3><p class="role">${m.s}</p>`;
+ if(m.x)h+='<p class="none">No result. Gemini Pro needs a paid plan, because the free tier quota is 0.</p>';
+ else h+='<div class="pair">'+['A','B'].map(c=>{const r=m[c];const sp=r.m==null?r.note:`MCQ ${fmt(r.m)}/10, Subjective ${fmt(r.s)}/30`;
+  return `<div class="${c}"><b>${NAME[c]}</b><span class="big">${fmt(r.t)}<small> / 40</small></span><span>${r.p}%, Grade ${r.g}</span><span class="sub">${sp}</span></div>`}).join('')+'</div>';
+ $('#ro').innerHTML=h}
+function setSel(i){sel=i;dirty=true;readout()}
+function pick(e){const r=cv.getBoundingClientRect();setSel(Math.max(0,Math.min(5,Math.floor((e.clientX-r.left-40)/((r.width-50)/6)))))}
+cv.addEventListener('pointermove',pick);cv.addEventListener('pointerdown',pick);
+cv.addEventListener('keydown',e=>{if(e.key==='ArrowRight')setSel(Math.min(5,sel+1));else if(e.key==='ArrowLeft')setSel(Math.max(0,sel-1));else return;e.preventDefault()});
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{met=b.dataset.m;document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b));$('#ct').textContent=MET[met].title;dirty=true});
+addEventListener('resize',size);new ResizeObserver(size).observe(cv);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>dirty=true);
+new MutationObserver(()=>dirty=true).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+if(document.fonts)document.fonts.ready.then(()=>dirty=true);
+size();readout();requestAnimationFrame(loop);
+
+/* ---------- marksheet ---------- */
+const K='Option matched key',TICK='M4 13l5 5L20 6',CROSS='M5 5l14 14M19 5L5 19',CB='Evaluated as full marks (composite block)';
+const Q={
+A:{score:38,grade:'A+',perf:'Excellent',lost:2,ok:18,bad:2,rows:[
+['Q18',1,1,K],['Q19',1,1,K],['Q20',1,1,K],['Q21',1,1,K],['Q22',1,1,K],['Q23',1,0,'Wrote option (ii) instead of key (iv)'],['Q24',1,1,K],['Q25',1,0,'Unattempted, skipped in booklet'],['Q26',1,1,K],['Q27',1,1,K],
+['Q28',3,3,'Full marks on IPR 1956'],['Q29',3,3,'Full marks on China vs India reforms'],['Q30',4,4,'Full marks on Small Scale Industries'],['Q31a',4,4,'Full marks on rural banking and SHGs'],['Q32a',1,1,'Full marks on human capital definition'],['Q32b',3,3,'Full marks on education and health'],['Q33i',3,3,'Full marks on sustainable development'],['Q33ii',3,3,'Full marks on economic planning'],['Q34b1',3,3,'Full marks on demographic indicators'],['Q34b2',3,3,'Full marks on fertility and mortality data']]},
+B:{score:35,grade:'A',perf:'Very Good',lost:5,ok:12,bad:5,rows:[
+['Q18',1,0,'Ambiguous dual option written (A or c)'],['Q19',1,0,'Ambiguous dual option written (B / D)'],['Q20',1,1,K],['Q21',1,1,K],['Q22',1,1,K],['Q23',1,0,'Ambiguous dual option written (c or B)'],['Q24',1,1,K],['Q25',1,0,'Key mismatch'],['Q26',1,0,'Key mismatch'],['Q27',1,1,K],
+['Q28',3,3,'Evaluated as full marks'],['Q29',3,3,'Evaluated as full marks'],['Q30',4,4,'Evaluated as full marks'],['Q31',4,4,CB],['Q32',4,4,CB],['Q33',6,6,CB],['Q34',6,6,CB]]}};
+let cc='A',cnt=0;
+function sheet(c){
+ cc=c;const d=Q[c];
+ document.querySelectorAll('.tab button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===c));
+ $('#sum').style.setProperty('--c',c==='A'?'var(--a)':'var(--b)');
+ $('#sum').innerHTML=`<div class="score"><span id="n">0</span><small> / 40</small></div><dl><div><dt>Grade</dt><dd>${d.grade}, ${d.perf}</dd></div><div><dt>Marks lost</dt><dd>${d.lost}</dd></div><div><dt>Correct</dt><dd>${d.ok}</dd></div><div><dt>Incorrect</dt><dd>${d.bad}</dd></div></dl>`;
+ $('#grid').innerHTML=d.rows.map((r,i)=>{const ok=r[2]>=r[1];return `<button class="cell ${ok?'':'bad'}" style="--i:${i}" data-i="${i}"><span class="q">${r[0]}</span><span class="m">${fmt(r[2])}<small>/${r[1]}</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="${ok?TICK:CROSS}"/></svg></button>`}).join('');
+ $('#det').textContent=c==='B'?'Select a question to read the examiner\'s note. Q31 to Q34 were graded as composite blocks.':'Select a question to read the examiner\'s note.';
+ const id=++cnt,t=performance.now();
+ (function f(now){if(id!==cnt)return;const k=reduce?1:Math.min(1,(now-t)/1000),e=1-Math.pow(1-k,3);$('#n').textContent=fmt(Math.round(d.score*e*2)/2);if(k<1)requestAnimationFrame(f)})(t);
+}
+$('#grid').addEventListener('click',e=>{const b=e.target.closest('.cell');if(!b)return;const r=Q[cc].rows[b.dataset.i];
+ document.querySelectorAll('.cell').forEach(x=>x.classList.toggle('on',x===b));
+ $('#det').textContent=`${r[0]}: ${fmt(r[2])} of ${r[1]}. ${r[3]}.`});
+document.querySelectorAll('.tab button').forEach(b=>b.onclick=()=>sheet(b.dataset.c));
+new IntersectionObserver((en,o)=>{if(en[0].isIntersecting){sheet('A');o.disconnect()}},{threshold:.15}).observe($('#sum'));
+
+/* ---------- table ---------- */
+$('#tb').innerHTML='<thead><tr><th>Examiner</th><th>Trinno Asphalt</th><th>Krisha Kothari</th></tr></thead><tbody>'+D.map(m=>{
+ const cell=c=>{if(m.x)return '<td>No result<span>Free tier quota is 0</span></td>';const r=m[c];return `<td><b>${fmt(r.t)} / 40</b><span>${r.p}%, Grade ${r.g}</span><span>${r.m==null?r.note:`MCQ ${fmt(r.m)}/10, Subjective ${fmt(r.s)}/30`}</span></td>`};
+ return `<tr><td><b style="font-size:16px">${m.n}</b><span>${m.s}</span></td>${cell('A')}${cell('B')}</tr>`}).join('')+'</tbody>';
+</script>
+</body>
+</html>
