@@ -152,7 +152,8 @@ export default async function handler(req, res) {
     }
 
     // ===== Model =====
-    const MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
+    const activeModel = body.model || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+    const MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`;
 
     // ===== Build Prompt Based on Mode =====
     let textPrompt = "";
@@ -219,11 +220,12 @@ For every question, before deciding the final score, you MUST evaluate negative 
 4. \`scoreCalculation\`: Deduct marks for missing items from maxMarks.
 
 ⚠️ STRICT CONSTRAINTS FOR MARK ALLOCATION (BOARD STANDARD):
-- 🔴 EXACT QUESTION WEIGHTS (CRITICAL): Read the exact mark weight specified for each question or section header in the Exam Questions list (e.g. "0.5 x 18 = 9 Marks" means each MCQ Q1 to Q18 is worth maxMarks = 0.5). For every question object in the "results" array, set "maxMarks" to the EXACT numerical weight specified in the question paper for that question. Do NOT default all MCQs to 1 mark if the question paper specifies 0.5 marks or anything else.
-- MCQ questions: MCQ validation is strictly BINARY. For any MCQ question, compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they match exactly, award the exact maxMarks assigned to that question (e.g. 0.5 or 1). If they do not match exactly, score = 0.
-- 🔴 CASE STUDIES & MULTI-PART QUESTIONS: Audit each sub-question independently. If a sub-question is omitted, skipped, unattempted, or answered by merely copying/paraphrasing prompt passage text, award 0 MARKS for that sub-part.
-- 🔴 STRICT CAP ON THEORETICAL ANSWERS WITHOUT REQUIRED EXAMPLES: In 3-mark and 5-mark descriptive questions (e.g. Q19, Q39), if the student provides generic conceptual or theoretical statements without explicitly naming the specific historical movements, proper nouns, dates, or concrete examples required by the marking scheme, you MUST cap the score at 50% to 60% of maxMarks (e.g. max 2/5 or 3/5). Do NOT award full 5/5 or 3/3 marks for theoretical answers missing required examples.
-- 🔴 CRITICAL RULE: ZERO MARKS FOR OFF-TOPIC / OUT-OF-SCOPE TRUTHS. If a student's answer contains factually true statements that do NOT directly address the specific question prompt, award 0 MARKS for that question. Do NOT award partial credit.
+- 🔴 EXACT QUESTION WEIGHTS (CRITICAL): Read the exact mark weight specified for each question or section header in the Exam Questions list. For every question object in the "results" array, set "maxMarks" to the EXACT numerical weight specified in the question paper for that question. Do NOT default all MCQs to 1 mark if the question paper specifies 0.5 marks or anything else.
+- 🔴 MANDATORY SUB-PARTS SPLIT: If any question contains distinct sub-parts (e.g., part a, part b, sub-part i, ii, iii), you MUST evaluate each sub-part separately as an individual entry in the "results" array (e.g., "Q31a", "Q31b") with its corresponding fraction of marks. NEVER bundle multi-part questions into a single composite block.
+- 🔴 POINT-TO-MARK RATIO & BREVITY CAP: For descriptive answers, each mark requires at least one distinct, well-reasoned point or explanation. For questions worth 3 or more marks, if a student provides only 1 single brief point or sentence, cap the score at a maximum of 40% to 50% of maxMarks (e.g., maximum 1.5 out of 4). Never award full marks for single-point answers on high-mark questions.
+- 🔴 CASE STUDIES & PASSAGE COPYING RULE: In case study, comprehension, or data-interpretation questions, compare the student's text directly against the provided prompt passage. If the student correctly locates and copies or quotes relevant sentences from the passage without original paraphrasing or independent subject analysis, award 50% (HALF MARKS) of maxMarks for that sub-part (locating the correct relevant portion demonstrates basic comprehension, but lacks original synthesis). Never award full marks for direct passage copying.
+- MCQ questions: MCQ validation is strictly BINARY. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they match exactly, award maxMarks. If they do not match, or if the student writes multiple conflicting options (e.g., "A or C", "B / D"), score = 0.
+- 🔴 CRITICAL RULE: ZERO MARKS FOR OFF-TOPIC TRUTHS: If a student's answer contains factually true statements that do not directly address the specific question prompt, award 0 MARKS for that question. Do NOT award partial credit.
 - SPELLING & TERMINOLOGY PENALTY: Deduct 0.5 marks for each spelling error, grammatical mistake, or incorrect academic term.
 
 ⚠️ STRICT QUESTION MAPPING & SKIPPED DETECTOR (CRITICAL):
@@ -427,7 +429,7 @@ Return STRICT JSON only (no markdown, no code blocks):
         };
     }
 
-    async function callGeminiModel(reqBody, modelName = "gemini-3.5-flash-lite", preferredKeyIndex = 0) {
+    async function callGeminiModel(reqBody, modelName = activeModel, preferredKeyIndex = 0) {
         const currentModelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
         let lastError = null;
         for (let attempt = 0; attempt < apiKeys.length; attempt++) {
@@ -465,8 +467,8 @@ Return STRICT JSON only (no markdown, no code blocks):
     }
 
     async function evaluateSinglePassFallback() {
-        console.log("📤 Calling fallback single-pass Gemini Vision directly...");
-        const geminiJson = await callGeminiModel(requestBody, "gemini-3.5-flash-lite", 0);
+        console.log(`📤 Calling fallback single-pass Gemini Vision directly with ${activeModel}...`);
+        const geminiJson = await callGeminiModel(requestBody, activeModel, 0);
         const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         const clean = text.replace(/```json|```/g, "").trim();
         console.log("🧼 CLEAN JSON received from fallback Gemini Vision");
@@ -507,7 +509,7 @@ Format your output in clean Markdown, organizing by question numbers or sections
         }
 
         // Call Gemini for Transcription using Key Index 0
-        const geminiJson = await callGeminiModel(transcribeRequestBody, "gemini-3.5-flash-lite", 0);
+        const geminiJson = await callGeminiModel(transcribeRequestBody, activeModel, 0);
         return geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
@@ -584,16 +586,17 @@ Return the response as a strict JSON object.`;
 
         // Call Gemini for Grading using Key Index 1 (if available, else index 0)
         const preferredKey = apiKeys.length >= 2 ? 1 : 0;
-        console.log(`🧠 [Pass 2: Gemini Grading] Starting evaluation using gemini-3.5-flash-lite with preferred Key Index ${preferredKey + 1}...`);
-        const geminiJson = await callGeminiModel(gradeRequestBody, "gemini-3.5-flash-lite", preferredKey);
+        console.log(`🧠 [Pass 2: Gemini Grading] Starting evaluation using ${activeModel} with preferred Key Index ${preferredKey + 1}...`);
+        const geminiJson = await callGeminiModel(gradeRequestBody, activeModel, preferredKey);
         return geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
     let result = null;
     const kimiApiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
+    const useKimi = !body.geminiOnly && body.useKimi !== false && Boolean(kimiApiKey);
 
     try {
-        if (kimiApiKey) {
+        if (useKimi) {
             try {
                 console.log("🧠 Starting Dual-API Grading Flow (Gemini + Kimi)...");
                 // Pass 1: Transcribe via Gemini
@@ -613,18 +616,18 @@ Return the response as a strict JSON object.`;
             }
         } else {
             try {
-                console.log("🧠 Starting Dual-Pass Gemini-Only Grading Flow...");
+                console.log(`🧠 Starting Dual-Pass Gemini-Only Grading Flow (${activeModel})...`);
                 // Pass 1: Transcribe via Gemini (using Key 0)
                 const transcription = await transcribeWithGemini(requestBody, mode);
                 console.log("✍️ Gemini Transcription complete.");
 
-                // Pass 2: Grade via Gemini-3.5-flash-lite (using Key 1 if available)
+                // Pass 2: Grade via Gemini activeModel
                 const gradeText = await gradeWithGemini(transcription, textPrompt);
                 console.log("✅ Gemini evaluation complete.");
 
                 const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
                 result = JSON.parse(cleanGrade);
-                result.modelUsed = `gemini-transcription + gemini-3.5-flash-lite`;
+                result.modelUsed = `gemini-transcription + ${activeModel}`;
             } catch (dualGeminiErr) {
                 console.error("⚠️ Dual-Pass Gemini Grading failed, falling back to single-pass:", dualGeminiErr.message);
                 result = await evaluateSinglePassFallback();
