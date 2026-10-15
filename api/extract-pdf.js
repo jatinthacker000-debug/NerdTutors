@@ -94,13 +94,70 @@ export default async function handler(req, res) {
 
     // ===== Fast Diagnostic Self-Test Mode =====
     if (body.action === 'self-test' || body.mode === 'test') {
-        const rawKeys = process.env.GEMINI_API_KEY || process.env.GEMINI_API || process.env.GEMINI_KEY;
-        const hasKeys = Boolean(rawKeys && rawKeys.trim().length > 0);
+        const keySlots = [
+            'GEMINI_API_KEY',
+            'GEMINI_API_KEY_2',
+            'GEMINI_API_KEY_3',
+            'GEMINI_API_KEY_4',
+            'GEMINI_API_KEY_5',
+            'GEMINI_API',
+            'GEMINI_KEY',
+            'GEMINI_API_2',
+            'GEMINI_KEY_2'
+        ];
+
+        const rawList = [];
+        for (const slot of keySlots) {
+            const val = process.env[slot];
+            if (val && typeof val === 'string' && val.trim().length > 0) {
+                const parts = val.split(',').map(s => s.trim()).filter(Boolean);
+                parts.forEach((p, idx) => {
+                    rawList.push({
+                        slot: slot + (parts.length > 1 ? `[#${idx + 1}]` : ''),
+                        key: p,
+                        masked: p.length > 8 ? `${p.slice(0, 4)}...${p.slice(-4)}` : '***',
+                        isPrimary: slot === 'GEMINI_API_KEY' && idx === 0
+                    });
+                });
+            }
+        }
+
+        // Test each key's live Google API status
+        const details = await Promise.all(rawList.map(async (item) => {
+            try {
+                const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${item.key}`);
+                const ok = testRes.status === 200;
+                return {
+                    slot: item.slot,
+                    maskedKey: item.masked,
+                    type: item.isPrimary ? 'primary' : 'backup',
+                    status: ok ? 'active' : 'inactive_or_error',
+                    httpCode: testRes.status
+                };
+            } catch (err) {
+                return {
+                    slot: item.slot,
+                    maskedKey: item.masked,
+                    type: item.isPrimary ? 'primary' : 'backup',
+                    status: 'network_error',
+                    error: err.message
+                };
+            }
+        }));
+
+        const totalKeys = details.length;
+        const backupKeys = details.filter(d => d.type === 'backup').length;
+        const activeKeys = details.filter(d => d.status === 'active').length;
+
         return res.status(200).json({
             success: true,
             status: "online",
-            message: "PDF Extraction AI Engine is operational",
-            geminiConfigured: hasKeys,
+            message: "Diagnostic Probe Complete",
+            totalKeysFound: totalKeys,
+            primaryKeysCount: details.filter(d => d.type === 'primary').length,
+            backupKeysCount: backupKeys,
+            activeKeysCount: activeKeys,
+            details: details,
             timestamp: new Date().toISOString()
         });
     }
