@@ -195,6 +195,20 @@ export default async function handler(req, res) {
 - Pay specific focus to correct economic definitions, concepts, and logical relationships (e.g. inflation, nominal vs real GDP, supply/demand elasticity).
 - Grade strictly on the precision of terminology used (e.g., base year vs current year pricing).
 `;
+        } else if (sub.includes("business studies") || sub.includes("business")) {
+            subjectSpecificInstructions = `
+⚠️ SUBJECT-SPECIFIC EVALUATION CRITERIA (BUSINESS STUDIES):
+- Focus on precise business terminology, principles of management (Fayol/Taylor), functions of management (planning, organizing, staffing, directing, controlling).
+- For case studies: Check for correct concept identification, quoting lines where required, and clear logical justification.
+- Marketing & Financial Management: Award marks for specific features, objectives, and distinguishing characteristics.
+`;
+        } else if (sub.includes("accountancy") || sub.includes("accounts") || sub.includes("accounting")) {
+            subjectSpecificInstructions = `
+⚠️ SUBJECT-SPECIFIC EVALUATION CRITERIA (ACCOUNTANCY):
+- Focus on accounting principles, format of ledger accounts, journal entries (debit/credit rules, narrations).
+- Calculations & Working Notes: Ensure step-marks for working notes, formulas, and arithmetic accuracy.
+- Terminology & Standards: Check for correct application of Accounting Standards / Ind AS rules.
+`;
         } else if (sub.includes("social science") || sub.includes("history") || sub.includes("geography") || sub.includes("civics")) {
             subjectSpecificInstructions = `
 ⚠️ SUBJECT-SPECIFIC EVALUATION CRITERIA (SOCIAL SCIENCE / HISTORY / GEOGRAPHY):
