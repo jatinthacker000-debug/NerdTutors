@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
 import { elements } from './js/admin-modules/shared-state.js';
-import { showToast, switchTab } from './js/admin-modules/admin-utils.js';
+import { showToast, switchTab, syncClassSubjects } from './js/admin-modules/admin-utils.js';
 import { setupAiTrainer } from './js/admin-modules/ai-trainer.js';
 import { setupExcelUpload } from './js/admin-modules/excel-uploader.js';
 import {
@@ -127,6 +127,20 @@ function setupEventListeners() {
             showToast('Logout failed', 'error');
         }
     });
+
+    // Dynamic Class <-> Subject Synchronization (CBSE Standard)
+    const sessionClass = document.getElementById('sessionClass');
+    const sessionSubject = document.getElementById('sessionSubject');
+    if (sessionClass && sessionSubject) {
+        sessionClass.addEventListener('change', () => syncClassSubjects(sessionClass, sessionSubject));
+        syncClassSubjects(sessionClass, sessionSubject);
+    }
+
+    const editSessionClass = document.getElementById('editSessionClass');
+    const editSessionSubject = document.getElementById('editSessionSubject');
+    if (editSessionClass && editSessionSubject) {
+        editSessionClass.addEventListener('change', () => syncClassSubjects(editSessionClass, editSessionSubject));
+    }
 
     // Create Session Form
     const createSessionForm = document.getElementById('createSessionForm');

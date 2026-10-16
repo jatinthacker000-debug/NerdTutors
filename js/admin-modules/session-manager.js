@@ -19,7 +19,7 @@ import {
     orderBy
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-import { showToast, escapeHtml } from './admin-utils.js';
+import { showToast, escapeHtml, syncClassSubjects } from './admin-utils.js';
 import { smartExtractPdf, runExtractionDiagnosticTest, initPdfJs } from './pdf-extractor.js';
 
 export async function createTestSession() {
@@ -1147,8 +1147,12 @@ async function editSession(id) {
             }
         }
 
-        document.getElementById('editSessionClass').value = data.class || 'Class 12th';
-        document.getElementById('editSessionSubject').value = data.subject || 'Economics';
+        const editCls = document.getElementById('editSessionClass');
+        const editSub = document.getElementById('editSessionSubject');
+        if (editCls && editSub) {
+            editCls.value = data.class || 'Class 12th';
+            syncClassSubjects(editCls, editSub, data.subject || 'Economics');
+        }
         document.getElementById('editSessionMaxMarks').value = data.maxMarks || 100;
         document.getElementById('editSessionQuestions').value = data.questions || '';
         document.getElementById('editSessionMarkingScheme').value = data.markingScheme || '';

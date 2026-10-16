@@ -611,6 +611,17 @@
             }
         }
 
+        function syncStudentSubjectOptions(targetSubject = null) {
+            const cls = studentClass.value;
+            const subjects = cls === 'Class 10th' 
+                ? ['Social Science'] 
+                : ['Economics', 'Business Studies', 'Accountancy'];
+
+            const current = targetSubject || studentSubject.value;
+            studentSubject.innerHTML = subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+            studentSubject.value = subjects.includes(current) ? current : subjects[0];
+        }
+
         function loadDraft() {
             if (localStorage.getItem('ocr_scan_studentName') !== null) {
                 studentNameInput.value = localStorage.getItem('ocr_scan_studentName');
@@ -618,9 +629,9 @@
             if (localStorage.getItem('ocr_scan_studentClass') !== null) {
                 studentClass.value = localStorage.getItem('ocr_scan_studentClass');
             }
-            if (localStorage.getItem('ocr_scan_studentSubject') !== null) {
-                studentSubject.value = localStorage.getItem('ocr_scan_studentSubject');
-            }
+            const savedSubject = localStorage.getItem('ocr_scan_studentSubject');
+            syncStudentSubjectOptions(savedSubject);
+
             loadImagesDraft();
             renderFileList();
             validateForm();
@@ -876,12 +887,8 @@
         // Event listeners
         studentNameInput.addEventListener('input', saveDraft);
 
-        studentClass.addEventListener('change', (e) => {
-            if (e.target.value === 'Class 10th') {
-                studentSubject.value = 'Social Science';
-            } else if (e.target.value === 'Class 12th') {
-                studentSubject.value = 'Economics';
-            }
+        studentClass.addEventListener('change', () => {
+            syncStudentSubjectOptions();
             populateYearDropdown();
             populateExaminationDropdown();
             saveDraft();

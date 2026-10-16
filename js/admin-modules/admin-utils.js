@@ -74,3 +74,17 @@ export function closeConfirmModal() {
     document.getElementById('confirmModal').classList.remove('show');
     confirmCallback = null;
 }
+
+// Sync class and subject options (CBSE Standard: Class 10th has Social Science only; Class 12th has Economics, Business Studies, Accountancy)
+export function syncClassSubjects(classElement, subjectElement, targetSubject = null) {
+    if (!classElement || !subjectElement) return;
+    const cls = classElement.value;
+    const subjects = cls === 'Class 10th'
+        ? ['Social Science']
+        : ['Economics', 'Business Studies', 'Accountancy'];
+
+    const current = targetSubject || subjectElement.value;
+    subjectElement.innerHTML = subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+    subjectElement.value = subjects.includes(current) ? current : subjects[0];
+}
+

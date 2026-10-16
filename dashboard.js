@@ -746,6 +746,7 @@ async function loadSessionsForAnalyticsFilter() {
             analyticsSessions.push({ id: docSnap.id, ...docSnap.data() });
         });
         
+        syncAnalyticsSubjectFilter();
         updateAnalyticsSessionDropdown();
     } catch (error) {
         console.error("Error loading sessions for analytics filter:", error);
@@ -774,6 +775,44 @@ function updateAnalyticsSessionDropdown() {
     });
 
     sessionFilter.innerHTML = html;
+}
+
+function syncAnalyticsSubjectFilter() {
+    const subFilter = document.getElementById('analyticsSubjectFilter');
+    if (!subFilter) return;
+
+    const classVal = document.getElementById('analyticsClassFilter')?.value || 'all';
+    let options = [];
+
+    if (classVal === 'Class 10th') {
+        options = [
+            { value: 'all', label: 'All Subjects (Class 10th)' },
+            { value: 'Social Science', label: 'Social Science' }
+        ];
+    } else if (classVal === 'Class 12th') {
+        options = [
+            { value: 'all', label: 'All Subjects (Class 12th)' },
+            { value: 'Economics', label: 'Economics' },
+            { value: 'Business Studies', label: 'Business Studies' },
+            { value: 'Accountancy', label: 'Accountancy' }
+        ];
+    } else {
+        options = [
+            { value: 'all', label: 'All Subjects' },
+            { value: 'Economics', label: 'Economics' },
+            { value: 'Business Studies', label: 'Business Studies' },
+            { value: 'Accountancy', label: 'Accountancy' },
+            { value: 'Social Science', label: 'Social Science' }
+        ];
+    }
+
+    const current = subFilter.value;
+    subFilter.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    if (options.some(o => o.value === current)) {
+        subFilter.value = current;
+    } else {
+        subFilter.value = 'all';
+    }
 }
 
 // Helper to escape HTML safely
@@ -1245,6 +1284,7 @@ function setupEventListeners() {
     // Analytics Filters
     if (elements.analyticsClassFilter) {
         elements.analyticsClassFilter.addEventListener('change', () => {
+            syncAnalyticsSubjectFilter();
             updateAnalyticsSessionDropdown();
             initAnalyticsCharts();
         });
