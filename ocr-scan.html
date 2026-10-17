@@ -1083,6 +1083,10 @@
                  if (gateToken) {
                      xhr.setRequestHeader('X-Gate-Token', gateToken);
                  }
+                 const userEmail = auth?.currentUser?.email || '';
+                 if (userEmail) {
+                     xhr.setRequestHeader('X-User-Email', userEmail);
+                 }
                  if (timeoutMs) xhr.timeout = timeoutMs;
 
                 // Upload phase: bytes leaving the device (this is the slow part on weak internet).

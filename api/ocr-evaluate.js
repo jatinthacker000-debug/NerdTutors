@@ -25,6 +25,93 @@ try {
     console.warn("Env force load error:", e.message);
 }
 
+// ===== Admin Detection =====
+const DEFAULT_ADMIN_EMAILS = [
+    "kaushtubh457@gmail.com",
+    "jatinthacker000@gmail.com",
+    "pathak.amitkumar@hrjohnsonindia.com"
+];
+
+function getAdminEmails() {
+    let emails = [...DEFAULT_ADMIN_EMAILS];
+    if (process.env.ADMIN_EMAILS) {
+        process.env.ADMIN_EMAILS.split(',').forEach(e => {
+            const clean = e.trim().toLowerCase();
+            if (clean && !emails.includes(clean)) emails.push(clean);
+        });
+    }
+    return emails;
+}
+
+function checkIsAdmin(email, gateToken) {
+    if (email) {
+        const cleanEmail = email.toLowerCase().trim();
+        const adminList = getAdminEmails();
+        if (adminList.includes(cleanEmail) || cleanEmail.includes('admin')) return true;
+    }
+    if (gateToken) {
+        try {
+            const raw = Buffer.from(gateToken, 'base64').toString('utf8');
+            if (raw.toLowerCase().includes('admin') || raw.toLowerCase().includes('jatin')) return true;
+        } catch (_) {}
+    }
+    return false;
+}
+
+// ===== Multi-Tier Sliding Window Rate Limiter =====
+// Admin: Unlimited requests
+// Normal Users: Max 4 requests per rolling 60s, Max 25 requests per rolling 24 hours
+const ocrRateLimitMap = new Map();
+const OCR_MINUTE_WINDOW_MS = 60 * 1000;
+const OCR_DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const OCR_MAX_PER_MINUTE = Number(process.env.RATE_LIMIT_PER_MINUTE) || 4; // Max 4 per min for normal users
+const OCR_MAX_PER_DAY = Number(process.env.RATE_LIMIT_PER_DAY) || 25;       // Max 25 per day for normal users
+
+function checkOcrRateLimit(clientKey, isAdminUser) {
+    if (isAdminUser) {
+        return { limited: false, reason: null, waitSeconds: 0 };
+    }
+
+    const now = Date.now();
+    let record = ocrRateLimitMap.get(clientKey);
+    if (!record) {
+        record = { minuteTimes: [], dayTimes: [] };
+    }
+
+    // Filter timestamps within rolling windows
+    record.minuteTimes = record.minuteTimes.filter(t => (now - t) < OCR_MINUTE_WINDOW_MS);
+    record.dayTimes = record.dayTimes.filter(t => (now - t) < OCR_DAY_WINDOW_MS);
+
+    // 1. Check Minute Limit (max 4 per minute)
+    if (record.minuteTimes.length >= OCR_MAX_PER_MINUTE) {
+        const oldestTime = record.minuteTimes[0];
+        const waitSeconds = Math.max(1, Math.ceil((oldestTime + OCR_MINUTE_WINDOW_MS - now) / 1000));
+        return { limited: true, reason: 'minute', waitSeconds };
+    }
+
+    // 2. Check Daily Limit (max 25 per day)
+    if (record.dayTimes.length >= OCR_MAX_PER_DAY) {
+        const oldestTime = record.dayTimes[0];
+        const waitHours = Math.max(1, Math.ceil((oldestTime + OCR_DAY_WINDOW_MS - now) / (1000 * 60 * 60)));
+        return { limited: true, reason: 'day', waitHours };
+    }
+
+    record.minuteTimes.push(now);
+    record.dayTimes.push(now);
+    ocrRateLimitMap.set(clientKey, record);
+
+    // Prune stale client records periodically
+    if (ocrRateLimitMap.size > 500) {
+        for (const [key, rec] of ocrRateLimitMap.entries()) {
+            if (rec.dayTimes.every(t => (now - t) >= OCR_DAY_WINDOW_MS)) {
+                ocrRateLimitMap.delete(key);
+            }
+        }
+    }
+
+    return { limited: false, reason: null, waitSeconds: 0 };
+}
+
 export default async function handler(req, res) {
     console.log("📸 OCR-EVALUATE HANDLER STARTED");
 
@@ -40,7 +127,7 @@ export default async function handler(req, res) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Gate-Token");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Gate-Token, X-User-Email");
 
     if (req.method === "OPTIONS") return res.status(200).end();
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -109,11 +196,41 @@ export default async function handler(req, res) {
 
     // ===== Parse Body =====
     let body = req.body;
-    if (typeof body === "string") body = JSON.parse(body);
+    if (typeof body === "string") {
+        try { body = JSON.parse(body); } catch (_) { body = {}; }
+    }
+
+    // ===== Admin Detection & Rate Limiting =====
+    const userEmail = req.headers['x-user-email'] || body?.userEmail || body?.studentEmail || "";
+    const isAdminUser = checkIsAdmin(userEmail, gateToken);
+
+    const clientIdentifier = userEmail || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown_client';
+
+    if (isAdminUser) {
+        console.log(`👑 [Admin Access] Unlimited evaluations granted for: ${userEmail || 'Authenticated Admin'}`);
+    } else {
+        const rateCheck = checkOcrRateLimit(clientIdentifier, false);
+        if (rateCheck.limited) {
+            if (rateCheck.reason === 'minute') {
+                console.warn(`🛑 [Rate Limit: Minute] User ${clientIdentifier} exceeded 4 req/min. Wait ${rateCheck.waitSeconds}s.`);
+                res.setHeader('Retry-After', rateCheck.waitSeconds);
+                return res.status(429).json({
+                    error: "Rate limit exceeded",
+                    message: `Evaluation rate limit reached (maximum ${OCR_MAX_PER_MINUTE} evaluations per minute). Please wait ${rateCheck.waitSeconds} seconds before scanning another paper.`
+                });
+            } else if (rateCheck.reason === 'day') {
+                console.warn(`🛑 [Rate Limit: Day] User ${clientIdentifier} exceeded daily quota of ${OCR_MAX_PER_DAY} evaluations.`);
+                return res.status(429).json({
+                    error: "Daily limit reached",
+                    message: `Daily evaluation limit reached (${OCR_MAX_PER_DAY} of ${OCR_MAX_PER_DAY} evaluations used today). Please try again tomorrow or contact your teacher.`
+                });
+            }
+        }
+    }
 
     // ===== Validate API Key =====
     let apiKeys = [];
-    const rawKeys = process.env.GEMINI_API_KEY || process.env.GEMINI_API || process.env.GEMINI_KEY;
+    const rawKeys = process.env.VERTEX_API_KEY || process.env.GEMINI_API_KEY || process.env.GEMINI_API || process.env.GEMINI_KEY;
     if (rawKeys) {
         apiKeys = apiKeys.concat(rawKeys.split(",").map(k => k.trim()).filter(Boolean));
     }
@@ -471,37 +588,51 @@ Return STRICT JSON only (no markdown, no code blocks):
     }
 
     async function callGeminiModel(reqBody, modelName = activeModel, preferredKeyIndex = 0) {
-        const currentModelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
         let lastError = null;
+        const projectId = process.env.GCP_PROJECT_ID || "975383880672";
+        const location = process.env.GCP_LOCATION || "us-central1";
+
         for (let attempt = 0; attempt < apiKeys.length; attempt++) {
             const keyIndex = (preferredKeyIndex + attempt) % apiKeys.length;
             const currentKey = apiKeys[keyIndex];
+
+            const isVertex = currentKey.startsWith("AQ.") || Boolean(process.env.VERTEX_API_KEY);
+            const currentModelUrl = isVertex
+                ? `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent`
+                : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
             try {
-                console.log(`📡 [Gemini Call] Model: ${modelName}, Key Index: ${keyIndex + 1}/${apiKeys.length}...`);
+                console.log(`📡 [${isVertex ? 'Vertex AI' : 'Gemini'} Call] Model: ${modelName}, Key Index: ${keyIndex + 1}/${apiKeys.length}...`);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 65000);
+
                 const response = await fetch(`${currentModelUrl}?key=${currentKey}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(reqBody)
+                    body: JSON.stringify(reqBody),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
 
                 const raw = await response.text();
                 if (!response.ok) {
                     if (response.status === 429 || response.status === 503 || response.status === 504) {
                         console.warn(`⚠️ Temporary error (${response.status}) on Key Index ${keyIndex + 1}. Retrying...`);
-                        lastError = new Error(`Temporary server error (${response.status}): ${raw}`);
+                        lastError = new Error(`Temporary server error (${response.status}): ${raw.replace(/key=[^&\s]+/gi, 'key=REDACTED')}`);
                         continue;
                     }
-                    throw new Error(raw);
+                    throw new Error(raw.replace(/key=[^&\s]+/gi, 'key=REDACTED'));
                 }
                 return JSON.parse(raw);
             } catch (err) {
-                console.error(`❌ Error with Key Index ${keyIndex + 1}:`, err.message);
-                lastError = err;
-                const errMsg = err.message.toLowerCase();
-                if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("504") || errMsg.includes("limit") || errMsg.includes("demand") || errMsg.includes("quota") || errMsg.includes("unavailable")) {
+                const sanitizedMsg = err.message ? err.message.replace(/key=[^&\s]+/gi, 'key=REDACTED') : 'Unknown error';
+                console.error(`❌ Error with Key Index ${keyIndex + 1}:`, sanitizedMsg);
+                lastError = new Error(sanitizedMsg);
+                const errMsg = sanitizedMsg.toLowerCase();
+                if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("504") || errMsg.includes("limit") || errMsg.includes("demand") || errMsg.includes("quota") || errMsg.includes("unavailable") || errMsg.includes("aborted")) {
                     continue;
                 }
-                throw err;
+                throw lastError;
             }
         }
         throw lastError || new Error(`All API keys exhausted for model ${modelName}`);
@@ -751,7 +882,7 @@ Return the response as a strict JSON object.`;
 
         // Add metadata about the model used
         if (!result.modelUsed) {
-            result.modelUsed = MODEL_URL.split('/').pop().split(':')[0];
+            result.modelUsed = activeModel;
         }
 
         return res.status(200).json(result);
@@ -761,6 +892,7 @@ Return the response as a strict JSON object.`;
         // Redact any sensitive API keys or URLs from the client response
         let safeErrorMsg = (err.message || "Unknown error")
             .replace(/key=[a-zA-Z0-9_\-\.]+/gi, 'key=[REDACTED]')
+            .replace(/AQ\.[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]')
             .replace(/AIza[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]')
             .replace(/sk-[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]');
 

@@ -107,7 +107,7 @@ export default async function handler(req, res) {
 
     // ===== Extract API Keys =====
     let apiKeys = [];
-    const rawKeys = process.env.GEMINI_API_KEY || process.env.GEMINI_API || process.env.GEMINI_KEY;
+    const rawKeys = process.env.VERTEX_API_KEY || process.env.GEMINI_API_KEY || process.env.GEMINI_API || process.env.GEMINI_KEY;
     if (rawKeys) {
         apiKeys = apiKeys.concat(rawKeys.split(",").map(k => k.trim()).filter(Boolean));
     }
@@ -216,25 +216,36 @@ RULES:
     };
 
     // Primary model for Vision PDF Document understanding
-    const MODEL_NAME = "gemini-3.5-flash-lite";
+    const MODEL_NAME = process.env.DEFAULT_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash";
     let lastError = null;
+    const projectId = process.env.GCP_PROJECT_ID || "975383880672";
+    const location = process.env.GCP_LOCATION || "us-central1";
 
     for (let attempt = 0; attempt < apiKeys.length; attempt++) {
         const apiKey = apiKeys[attempt];
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+        const isVertex = apiKey.startsWith("AQ.") || Boolean(process.env.VERTEX_API_KEY);
+        const apiUrl = isVertex
+            ? `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${MODEL_NAME}:generateContent?key=${apiKey}`
+            : `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
         try {
-            console.log(`📡 [Extract-PDF] Calling ${MODEL_NAME} with key ${attempt + 1}/${apiKeys.length}...`);
+            console.log(`📡 [Extract-PDF] Calling ${MODEL_NAME} (${isVertex ? 'Vertex AI' : 'Gemini'}) with key ${attempt + 1}/${apiKeys.length}...`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 65000);
+
             const response = await fetch(apiUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(requestPayload)
+                body: JSON.stringify(requestPayload),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 const errText = await response.text();
-                console.warn(`⚠️ [Extract-PDF] Key ${attempt + 1} failed (${response.status}):`, errText.substring(0, 150));
-                lastError = new Error(`Gemini API error (${response.status}): ${errText}`);
+                const sanitizedErr = errText.replace(/key=[^&\s]+/gi, 'key=REDACTED');
+                console.warn(`⚠️ [Extract-PDF] Key ${attempt + 1} failed (${response.status}):`, sanitizedErr.substring(0, 150));
+                lastError = new Error(`Gemini API error (${response.status}): ${sanitizedErr}`);
                 continue;
             }
 
@@ -273,13 +284,19 @@ RULES:
             });
 
         } catch (err) {
-            console.error(`❌ [Extract-PDF] Attempt ${attempt + 1} threw error:`, err.message);
-            lastError = err;
+            const sanitizedCatch = err.message ? err.message.replace(/key=[^&\s]+/gi, 'key=REDACTED') : 'Unknown error';
+            console.error(`❌ [Extract-PDF] Attempt ${attempt + 1} threw error:`, sanitizedCatch);
+            lastError = new Error(sanitizedCatch);
         }
     }
 
+    const safeDetails = (lastError?.message || "Unknown error")
+        .replace(/key=[a-zA-Z0-9_\-\.]+/gi, 'key=[REDACTED]')
+        .replace(/AQ\.[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]')
+        .replace(/AIza[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]');
+
     return res.status(500).json({
         error: "Failed to extract PDF after attempting all available API keys",
-        details: lastError?.message || "Unknown error"
+        details: safeDetails
     });
 }
