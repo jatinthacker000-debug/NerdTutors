@@ -49,6 +49,10 @@ function setupAuth() {
     onAuthStateChanged(auth, (user) => {
         if (user) {
             if (isAdmin(user.email) || user.email?.includes('admin')) {
+                localStorage.setItem('gate_authenticated', 'true');
+                if (!localStorage.getItem('gate_token')) {
+                    localStorage.setItem('gate_token', btoa('admin:' + (user.email || 'jatin_admin')));
+                }
                 showAdminPanel(user);
             } else {
                 showAccessDenied(user);
