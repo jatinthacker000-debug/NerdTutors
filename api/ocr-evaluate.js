@@ -748,55 +748,6 @@ Format your output in clean Markdown, organizing by question numbers or sections
         return geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
-    async function gradeWithKimi(apiKey, transcription, textPrompt, mode) {
-        const kimiModel = process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k3";
-        const kimiApiUrl = process.env.KIMI_API_URL || process.env.MOONSHOT_API_URL || "https://api.moonshot.ai/v1/chat/completions";
-
-        const kimiSystemPrompt = `You are a high-reasoning exam evaluator.
-Below is the text transcription of the student's answer sheets/files extracted using Gemini Vision:
-<student_transcription>
-${transcription}
-</student_transcription>
-
-Please use the transcribed student text in <student_transcription> as the student's answers to grade. Wherever the instructions below refer to reading the image, scanning the files, or extracting text from the visual sheets, perform that evaluation using this transcription.
-Return the response as a strict JSON object.`;
-
-        const requestBody = {
-            model: kimiModel,
-            messages: [
-                {
-                    role: "system",
-                    content: kimiSystemPrompt
-                },
-                {
-                    role: "user",
-                    content: textPrompt
-                }
-            ],
-            temperature: 0.0,
-            response_format: { type: "json_object" }
-        };
-
-        console.log(`📡 [Pass 2: Kimi Grading] Sending request to Kimi model: ${kimiModel}...`);
-        const response = await fetch(kimiApiUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(requestBody)
-        });
-
-        const raw = await response.text();
-        if (!response.ok) {
-            throw new Error(`Kimi API error (${response.status}): ${raw}`);
-        }
-
-        const json = JSON.parse(raw);
-        const textContent = json?.choices?.[0]?.message?.content || "";
-        return textContent;
-    }
-
     async function gradeWithGemini(transcription, textPrompt) {
         const geminiSystemPrompt = `You are a high-reasoning exam evaluator.
 Below is the text transcription of the student's answer sheets/files extracted using Gemini Vision:
@@ -833,59 +784,24 @@ Return the response as a strict JSON object.`;
     }
 
     let result = null;
-    const kimiApiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
-    const useKimi = !body.geminiOnly && body.useKimi !== false && Boolean(kimiApiKey);
 
     try {
-        if (useKimi) {
-            let transcription = "";
-            try {
-                console.log("🧠 Starting Dual-API Grading Flow (Gemini + Kimi)...");
-                // Pass 1: Transcribe via Gemini
-                transcription = await transcribeWithGemini(requestBody, mode);
-                console.log("✍️ Gemini Transcription complete.");
+        try {
+            console.log(`🧠 Starting Dual-Pass Gemini-Only Grading Flow (${activeModel})...`);
+            // Pass 1: Transcribe via Gemini (using Key 0)
+            const transcription = await transcribeWithGemini(requestBody, mode);
+            console.log("✍️ Gemini Transcription complete.");
 
-                // Pass 2: Grade via Kimi
-                const kimiText = await gradeWithKimi(kimiApiKey, transcription, textPrompt, mode);
-                console.log("✅ Kimi evaluation complete.");
+            // Pass 2: Grade via Gemini activeModel
+            const gradeText = await gradeWithGemini(transcription, textPrompt);
+            console.log("✅ Gemini evaluation complete.");
 
-                const cleanKimi = kimiText.replace(/```json|```/g, "").trim();
-                result = JSON.parse(cleanKimi);
-                result.modelUsed = `gemini-transcription + ${process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k3"}`;
-            } catch (dualApiErr) {
-                console.error("⚠️ Dual-API Grading failed:", dualApiErr.message);
-                if (transcription) {
-                    try {
-                        console.log(`🔄 Reusing extracted transcription to grade directly with Gemini (${activeModel})...`);
-                        const gradeText = await gradeWithGemini(transcription, textPrompt);
-                        const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
-                        result = JSON.parse(cleanGrade);
-                        result.modelUsed = `gemini-transcription + ${activeModel}`;
-                    } catch (geminiGradeErr) {
-                        result = await evaluateSinglePassFallback();
-                    }
-                } else {
-                    result = await evaluateSinglePassFallback();
-                }
-            }
-        } else {
-            try {
-                console.log(`🧠 Starting Dual-Pass Gemini-Only Grading Flow (${activeModel})...`);
-                // Pass 1: Transcribe via Gemini (using Key 0)
-                const transcription = await transcribeWithGemini(requestBody, mode);
-                console.log("✍️ Gemini Transcription complete.");
-
-                // Pass 2: Grade via Gemini activeModel
-                const gradeText = await gradeWithGemini(transcription, textPrompt);
-                console.log("✅ Gemini evaluation complete.");
-
-                const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
-                result = JSON.parse(cleanGrade);
-                result.modelUsed = `gemini-transcription + ${activeModel}`;
-            } catch (dualGeminiErr) {
-                console.error("⚠️ Dual-Pass Gemini Grading failed, falling back to single-pass:", dualGeminiErr.message);
-                result = await evaluateSinglePassFallback();
-            }
+            const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
+            result = JSON.parse(cleanGrade);
+            result.modelUsed = `gemini-transcription + ${activeModel}`;
+        } catch (dualGeminiErr) {
+            console.error("⚠️ Dual-Pass Gemini Grading failed, falling back to single-pass:", dualGeminiErr.message);
+            result = await evaluateSinglePassFallback();
         }
 
         // Programmatic score check to override MCQ scores if feedback says "Incorrect" or "wrong"

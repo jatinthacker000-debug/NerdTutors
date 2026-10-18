@@ -62,10 +62,11 @@ This section contains the exact implementations, structures, and business logic 
 
 ---
 
-## 5. Next Steps: Dual-API Grading Architecture
+## 5. Dual-Pass Grading Architecture (Pure Gemini 3.8 Flash)
 * **Strategy**:
-  * **Pass 1 (Transcription via Gemini)**: Call `gemini-2.5-flash` or `gemini-3.1-flash-lite` to extract and transcribe the handwriting on the student sheets into structured Markdown.
-  * **Pass 2 (Grading via Kimi)**: Send the transcribed Markdown + Exam Questions + marking scheme to the Kimi API (Moonshot AI) to execute high-reasoning evaluation and return the final structured JSON report card.
-* **Target File for Implementation**: [api/ocr-evaluate.js](file:///d:/Trinno/NerdTutors/api/ocr-evaluate.js).
+  * **Pass 1 (High-Resolution Visual Transcription)**: Call `gemini-3.8-flash` with `mediaResolution: "MEDIA_RESOLUTION_HIGH"` to transcribe handwritten student sheets into Markdown.
+  * **Pass 2 (Deterministic Evaluator)**: Call `gemini-3.8-flash` with a 1,024-token thinking budget to evaluate transcribed student answers against official questions, model answers, and the CBSE 2.0 deterministic rules matrix ([api/cbse-rules.json](file:///d:/Trinno/NerdTutors/api/cbse-rules.json)).
+  * **Fallback**: Single-pass direct vision evaluation if dual-pass fails.
+* **Core File**: [api/ocr-evaluate.js](file:///d:/Trinno/NerdTutors/api/ocr-evaluate.js).
 
 
