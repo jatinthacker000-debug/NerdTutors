@@ -489,9 +489,6 @@ window.openEditGateKey = function(username) {
 window.copyFirestoreRuleSnippet = function() {
     const ruleSnippet = `match /gateCredentials/{document=**} {
   allow read, write: if request.auth != null;
-}
-match /eval_directives/{document=**} {
-  allow read, write: if request.auth != null;
 }`;
     navigator.clipboard.writeText(ruleSnippet).then(() => {
         showToast("Firestore Security Rules copied! Paste in Firebase Console > Firestore > Rules.", "success");

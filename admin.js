@@ -16,7 +16,6 @@ import {
 
 import { elements } from './js/admin-modules/shared-state.js';
 import { showToast, switchTab, syncClassSubjects } from './js/admin-modules/admin-utils.js';
-import { setupAiTrainer } from './js/admin-modules/ai-trainer.js';
 import { setupExcelUpload } from './js/admin-modules/excel-uploader.js';
 import {
     setupMcqFields,
@@ -41,7 +40,6 @@ function init() {
     setupExcelUpload();
     setupNewFeatures();
     setupMcqFields(); // NEW: Setup MCQ toggle
-    setupAiTrainer(); // AI Trainer: Auto-Discrepancy Analyzer
     setupPdfExtractionHub(); // Direct PDF Ingestion & Diagnostic Self-Test Hub
     loadDraft();
 }
