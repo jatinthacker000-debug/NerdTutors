@@ -106,11 +106,17 @@ ${JSON.stringify(selectedRules, null, 2)}
 }
 
 function getUniversalGuardrails() {
-    if (!cbseRules || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.UNIVERSAL_COGNITIVE_GUARDRAILS) {
+    if (!cbseRules || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR) {
         return "";
     }
-    const guardrails = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.UNIVERSAL_COGNITIVE_GUARDRAILS;
+    const guardrails = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.UNIVERSAL_COGNITIVE_GUARDRAILS || {};
+    const generalGuidelines = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.CBSE_GENERAL_MARKING_GUIDELINES || {};
     return `
+================================================================================
+🚨 CBSE GENERAL MARKING GUIDELINES:
+================================================================================
+${JSON.stringify(generalGuidelines, null, 2)}
+
 ================================================================================
 🚨 UNIVERSAL COGNITIVE GUARDRAILS (CBSE DETERMINISTIC EVALUATION):
 ================================================================================
