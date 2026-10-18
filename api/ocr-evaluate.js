@@ -293,8 +293,11 @@ export default async function handler(req, res) {
         }
     }
 
-    // ===== Model =====
+    // ===== Model & Evaluation Configuration =====
     const activeModel = body.model || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+    const cachedContentId = body.cachedContent || body.cachedContentId || null;
+    const defaultThinkingBudget = Number(process.env.THINKING_BUDGET || 1024);
+    const thinkingBudget = body.thinkingBudget !== undefined ? Number(body.thinkingBudget) : defaultThinkingBudget;
     const MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`;
 
     // ===== Build Prompt Based on Mode =====
@@ -573,6 +576,7 @@ Return STRICT JSON only (no markdown, no code blocks):
         }));
 
         requestBody = {
+            ...(cachedContentId ? { cachedContent: cachedContentId } : {}),
             contents: [{
                 parts: [
                     ...imageParts,
@@ -583,9 +587,11 @@ Return STRICT JSON only (no markdown, no code blocks):
             }],
             generationConfig: {
                 temperature: 0.0,
-                thinkingConfig: {
-                    thinkingBudget: 0
-                }
+                ...(thinkingBudget > 0 ? {
+                    thinkingConfig: {
+                        thinkingBudget: thinkingBudget
+                    }
+                } : {})
             }
         };
     }
@@ -748,6 +754,7 @@ Please use the transcribed student text in <student_transcription> as the studen
 Return the response as a strict JSON object.`;
 
         const gradeRequestBody = {
+            ...(cachedContentId ? { cachedContent: cachedContentId } : {}),
             contents: [{
                 parts: [
                     { text: geminiSystemPrompt + "\n\n" + textPrompt }
@@ -756,9 +763,11 @@ Return the response as a strict JSON object.`;
             generationConfig: {
                 temperature: 0.0,
                 responseMimeType: "application/json",
-                thinkingConfig: {
-                    thinkingBudget: 0
-                }
+                ...(thinkingBudget > 0 ? {
+                    thinkingConfig: {
+                        thinkingBudget: thinkingBudget
+                    }
+                } : {})
             }
         };
 
