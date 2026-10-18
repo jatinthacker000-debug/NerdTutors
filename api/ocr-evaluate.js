@@ -804,17 +804,25 @@ Return the response as a strict JSON object.`;
             result = await evaluateSinglePassFallback();
         }
 
-        // Programmatic score check to override MCQ scores if feedback says "Incorrect" or "wrong"
+        // Programmatic score check to override MCQ scores if feedback explicitly says student's choice was wrong
         if (result && Array.isArray(result.results)) {
             result.results.forEach(resObj => {
                 const feedbackText = (resObj.feedback || "").toLowerCase();
-                const isIncorrectText = feedbackText.includes("incorrect") ||
-                    feedbackText.includes("wrong") ||
-                    feedbackText.includes("correct answer is") ||
-                    feedbackText.includes("should be") ||
-                    feedbackText.includes("instead of") ||
+                const isCorrectOption = feedbackText.includes("correct option") ||
+                    feedbackText.includes("correct answer selected") ||
+                    feedbackText.includes("correct choice") ||
+                    feedbackText.startsWith("correct");
+
+                const isExplicitlyWrong = (
+                    feedbackText.includes("incorrect option") ||
+                    feedbackText.includes("wrong option") ||
+                    feedbackText.includes("incorrect choice") ||
+                    feedbackText.includes("not attempted") ||
+                    feedbackText.includes("unattempted") ||
                     feedbackText.includes("0/1") ||
-                    feedbackText.includes("0 out of 1");
+                    feedbackText.includes("0 out of 1") ||
+                    (feedbackText.includes("incorrect") && !feedbackText.includes("statement") && !feedbackText.includes("reason"))
+                );
 
                 const isMCQ = Number(resObj.maxMarks) <= 1 && (
                     resObj.questionNumber?.toLowerCase().includes("q") ||
@@ -822,8 +830,8 @@ Return the response as a strict JSON object.`;
                     !isNaN(Number(resObj.questionNumber))
                 );
 
-                if (isMCQ && isIncorrectText) {
-                    console.log(`🔧 Programmatic Override: Overriding MCQ score of ${resObj.questionNumber} to 0 due to 'Incorrect' text in feedback.`);
+                if (isMCQ && isExplicitlyWrong && !isCorrectOption) {
+                    console.log(`🔧 Programmatic Override: Overriding MCQ score of ${resObj.questionNumber} to 0.`);
                     resObj.score = 0;
                 }
 

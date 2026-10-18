@@ -132,56 +132,49 @@
       },
       "CLAUSE_13_ARITHMETIC_AND_CAP_AUDIT": {
         "rule": "Never award more marks for an answer than assigned to it. Ensure exact mathematical totaling of all individual question scores into the final grand total."
+      },
+      "CLAUSE_15_NO_LANGUAGE_OR_GRAMMAR_PENALTY": {
+        "rule": "CRITICAL: Under CBSE Board examination standards for non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing (e.g., 'did not returned', 'it does not pushes', 'liseness', awkward prepositions). As long as the core economic concept, mechanism, or principle is intelligible, award FULL due credit. Examiners are strictly forbidden from deducting marks for language flaws in commerce/economics papers."
+      },
+      "CLAUSE_16_SUBSTANTIVE_ECONOMIC_EQUIVALENCE": {
+        "rule": "The marking scheme carries suggestive value points, NOT an exhaustive legal straitjacket. If a student explains valid, alternative economic reasoning (e.g., informal sector employment, low compliance culture, or tax bracket thresholds to explain tax revenue stagnation in Q34b(ii)), award full/substantive credit even if the student's answer omits specific secondary points (like customs tariffs) from the marking scheme."
       }
     },
 
     "UNIVERSAL_COGNITIVE_GUARDRAILS": {
-      "U_01_NEGATIVE_EVIDENCE_FIRST_PROTOCOL": {
+      "U_01_FAIR_EVIDENCE_EVALUATION_PROTOCOL": {
         "initialization_score": 0.0,
-        "execution_order": "MANDATORY_PRE_SCORING_STEP",
+        "execution_order": "MANDATORY_SCORING_STEP",
         "algorithm": [
-          "1. Initialize Question_Score = 0.0 and Max_Ceiling = Rubric_Max_Marks.",
-          "2. Decompose Official_Rubric into discrete Atomic_Propositions [P_1, P_2, ..., P_n].",
-          "3. Scan Stage 1 OCR transcript to identify all omitted propositions -> populate 'missing_evidence_array[]'.",
-          "4. Identify all factually contradicted propositions -> populate 'falsified_evidence_array[]'.",
-          "5. Identify all claims lacking causal connectors -> populate 'unlinked_claims_array[]'.",
-          "6. Compute Max_Ceiling = Rubric_Max_Marks - SUM(Weights of missing_evidence_array) - SUM(Weights of falsified_evidence_array).",
-          "7. Lock Final_Score <= Max_Ceiling. You are FORBIDDEN from generating a positive score before outputting the negative evidence arrays."
+          "1. Read the student answer fairly and identify all valid economic points, arguments, and principles presented.",
+          "2. Compare against the official rubric to award marks for every valid point conveyed.",
+          "3. Only withhold marks for genuinely missing concepts, factual inaccuracies, or direct self-contradictions.",
+          "4. Never deduct marks for English grammar or minor spelling slips."
         ]
       },
       "U_02_BREVITY_AND_SEMANTIC_DEDUPLICATION_CAPS": {
         "cosine_similarity_deduplication_threshold": 0.80,
-        "paraphrase_rule": "IF Clause_B is a syntactic restatement or negation-inversion of Clause_A, MERGE Clause_B into Clause_A and set Credit(Clause_B) = 0.0.",
+        "paraphrase_rule": "IF Clause_B is an exact redundant restatement of Clause_A, count it as a single point.",
         "hard_mark_ceilings_by_unique_valid_propositions": {
           "2_mark_question": {
-            "min_unique_propositions_for_full_marks": 2,
-            "single_proposition_or_under_15_words_cap": 1.0
+            "min_unique_propositions_for_full_marks": 2
           },
           "3_mark_question": {
-            "min_unique_propositions_for_full_marks": 3,
-            "max_score_formula": "MIN(Calculated_Score, Unique_Valid_Propositions * 1.0)",
-            "under_25_words_non_numerical_cap": 1.0
+            "min_unique_propositions_for_full_marks": 3
           },
           "4_mark_question": {
-            "min_unique_propositions_for_full_marks": 4,
-            "max_score_formula": "MIN(Calculated_Score, Unique_Valid_Propositions * 1.0)"
+            "min_unique_propositions_for_full_marks": 4
           },
           "5_mark_question": {
-            "min_unique_propositions_for_full_marks": 5,
-            "max_score_formula": "MIN(Calculated_Score, Unique_Valid_Propositions * 1.0)",
-            "single_sentence_dump_cap": 1.0
+            "min_unique_propositions_for_full_marks": 5
           },
           "6_mark_question": {
-            "min_unique_propositions_for_full_marks": 6,
-            "max_score_formula": "MIN(Calculated_Score, Unique_Valid_Propositions * 1.0)"
+            "min_unique_propositions_for_full_marks": 6
           }
         }
       },
       "U_03_CASE_STUDY_PASSAGE_OVERLAP_FILTER": {
-        "ngram_window_size": 5,
-        "full_answer_overlap_zero_trigger": 0.65,
-        "sentence_level_overlap_strip_threshold": 0.85,
-        "enforcement": "IF 5-gram overlap with source case passage >= 0.65 AND external textbook vocabulary count == 0 THEN SET Score = 0.0 (Flag: VERBATIM_PASSAGE_DUMP). Strip any unquoted sentence with >= 0.85 overlap prior to rubric matching."
+        "enforcement": "In CBSE Case Study / Case-Based questions (e.g. Q33), the text passage is provided specifically for students to extract and cite relevant facts and data. If the student accurately identifies and utilizes the key facts from the passage (e.g., floriculture higher profitability per unit area, small and marginal farmer landholdings) to answer the question, award FULL MARKS. Do NOT cap or penalize the answer for drawing directly from the provided case text."
       },
       "U_04_ZERO_TOLERANCE_KILL_SWITCHES": {
         "triggers": [
