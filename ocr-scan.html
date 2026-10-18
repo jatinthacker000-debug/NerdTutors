@@ -373,9 +373,21 @@
             <div class="subtitle">Enter details, upload your answer sheet photos, and get instant grading.</div>
 
             <form id="submitTestForm">
-                <div class="form-group">
-                    <label for="studentName">Student Full Name *</label>
-                    <input type="text" id="studentName" required placeholder="Enter your full name">
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label for="studentName">Student Full Name *</label>
+                        <input type="text" id="studentName" required placeholder="Enter your full name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="studentBatch">🏫 Coaching Batch / Group *</label>
+                        <select id="studentBatch" required>
+                            <option value="Both">Both (Show All Tests)</option>
+                            <option value="Nerd Tutors OSEM">Nerd Tutors OSEM</option>
+                            <option value="Nalanda">Nalanda</option>
+                            <option value="Others">Others</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="grid-2">
@@ -510,6 +522,7 @@
 
         // DOM elements
         const studentNameInput = document.getElementById('studentName');
+        const studentBatch = document.getElementById('studentBatch');
         const studentClass = document.getElementById('studentClass');
         const studentSubject = document.getElementById('studentSubject');
         const studentExamYear = document.getElementById('studentExamYear');
@@ -566,9 +579,17 @@
             return base || session.name || 'Untitled Exam';
         }
 
+        function isSessionForBatch(session, chosenBatch) {
+            if (!chosenBatch || chosenBatch === 'Both') return true;
+            const group = session.targetGroup || 'Both';
+            if (group === 'Both') return true;
+            return group === chosenBatch;
+        }
+
         // Form persistence functions (Cache memory)
         function saveDraft() {
             localStorage.setItem('ocr_scan_studentName', studentNameInput.value);
+            if (studentBatch) localStorage.setItem('ocr_scan_studentBatch', studentBatch.value);
             localStorage.setItem('ocr_scan_studentClass', studentClass.value);
             localStorage.setItem('ocr_scan_studentSubject', studentSubject.value);
             if (studentExamYear) localStorage.setItem('ocr_scan_examYear', studentExamYear.value);
@@ -625,6 +646,9 @@
         function loadDraft() {
             if (localStorage.getItem('ocr_scan_studentName') !== null) {
                 studentNameInput.value = localStorage.getItem('ocr_scan_studentName');
+            }
+            if (localStorage.getItem('ocr_scan_studentBatch') !== null && studentBatch) {
+                studentBatch.value = localStorage.getItem('ocr_scan_studentBatch');
             }
             if (localStorage.getItem('ocr_scan_studentClass') !== null) {
                 studentClass.value = localStorage.getItem('ocr_scan_studentClass');
@@ -683,7 +707,8 @@
         function populateYearDropdown() {
             const cls = studentClass.value;
             const sub = studentSubject.value;
-            const relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive');
+            const chosenBatch = studentBatch?.value || 'Both';
+            const relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive' && isSessionForBatch(s, chosenBatch));
 
             // Unique years
             const yearsSet = new Set();
@@ -707,8 +732,9 @@
             const cls = studentClass.value;
             const sub = studentSubject.value;
             const chosenYear = studentExamYear?.value || '';
+            const chosenBatch = studentBatch?.value || 'Both';
 
-            let relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive');
+            let relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive' && isSessionForBatch(s, chosenBatch));
             if (chosenYear) {
                 relevant = relevant.filter(s => extractYear(s) === chosenYear);
             }
@@ -778,7 +804,8 @@
             // Find all sessions for this examination key
             const cls = studentClass.value;
             const sub = studentSubject.value;
-            const relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive');
+            const chosenBatch = studentBatch?.value || 'Both';
+            const relevant = allSessions.filter(s => s.class === cls && s.subject === sub && s.status !== 'inactive' && isSessionForBatch(s, chosenBatch));
             const examSessions = relevant.filter(s => {
                 const baseName = extractExamBaseName(s);
                 const year = extractYear(s);
@@ -886,6 +913,12 @@
 
         // Event listeners
         studentNameInput.addEventListener('input', saveDraft);
+
+        studentBatch?.addEventListener('change', () => {
+            populateYearDropdown();
+            populateExaminationDropdown();
+            saveDraft();
+        });
 
         studentClass.addEventListener('change', () => {
             syncStudentSubjectOptions();
@@ -1181,10 +1214,12 @@
                 const docRef = await addDoc(collection(db, 'testResults'), {
                     studentName: studentNameInput.value.trim(),
                     studentId: auth.currentUser ? auth.currentUser.uid : null,
+                    batch: studentBatch ? studentBatch.value : 'Both',
                     class: studentClass.value,
                     subject: studentSubject.value,
                     sessionId: selectedSession.id,
                     sessionName: selectedSession.name,
+                    targetGroup: selectedSession.targetGroup || 'Both',
                     examYear: extractYear(selectedSession) || 'Standard',
                     examSet: extractSet(selectedSession) || 'Standard / All',
                     score: report.totalScore,
@@ -1343,6 +1378,10 @@
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Student Name</span>
                         <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${escapeHtml(name)}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Batch / Group</span>
+                        <span style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">🏫 ${escapeHtml(studentBatch?.value || selectedSession?.targetGroup || 'Both')}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Date Evaluated</span>

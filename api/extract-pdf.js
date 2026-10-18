@@ -211,7 +211,10 @@ RULES:
             }
         ],
         generationConfig: {
-            temperature: 0.1
+            temperature: 0.1,
+            thinkingConfig: {
+                thinkingBudget: 0
+            }
         }
     };
 

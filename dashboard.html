@@ -191,6 +191,14 @@
                                 placeholder="Search by student name...">
                         </div>
 
+                        <select class="filter-select" id="batchFilter">
+                            <option value="all">All Batches</option>
+                            <option value="Both">Both (Shared)</option>
+                            <option value="Nerd Tutors OSEM">Nerd Tutors OSEM</option>
+                            <option value="Nalanda">Nalanda</option>
+                            <option value="Others">Others</option>
+                        </select>
+
                         <select class="filter-select" id="testTypeFilter">
                             <option value="all">All Types</option>
                             <option value="mcq">MCQ Only</option>
@@ -217,6 +225,7 @@
                             <thead>
                                 <tr>
                                     <th class="sortable" data-sort="name">Student Name ↕</th>
+                                    <th>Batch</th>
                                     <th>Student ID</th>
                                     <th class="sortable" data-sort="date">Date ↕</th>
                                     <th>Type</th>
@@ -349,6 +358,7 @@
                             <thead>
                                 <tr>
                                     <th>Student Name</th>
+                                    <th>Batch</th>
                                     <th>Class</th>
                                     <th>Subject</th>
                                     <th>Score</th>
@@ -373,8 +383,19 @@
 
                     <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
                         <h4 style="margin: 0 0 1rem 0; font-size: 1.15rem; color: #1e3c72; font-weight: 700;">Filter results and download as CSV</h4>
-                        <p style="color: #64748b; font-size: 0.9rem; margin-top: 0; margin-bottom: 1.5rem;">Select your desired class and test session to filter. The export file will automatically include the correct test name, class, subject, and scores.</p>
+                        <p style="color: #64748b; font-size: 0.9rem; margin-top: 0; margin-bottom: 1.5rem;">Select your desired batch, class, and test session to filter. The export file will automatically include the student's batch, test name, class, subject, and scores.</p>
                         
+                        <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem;">
+                            <label for="exportBatchFilter" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Select Batch / Group</label>
+                            <select id="exportBatchFilter" class="filter-select" style="width: 100%; height: 40px; padding: 0 0.75rem; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
+                                <option value="all">All Batches</option>
+                                <option value="Both">Both (Shared)</option>
+                                <option value="Nerd Tutors OSEM">Nerd Tutors OSEM</option>
+                                <option value="Nalanda">Nalanda</option>
+                                <option value="Others">Others</option>
+                            </select>
+                        </div>
+
                         <div class="form-group" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem;">
                             <label for="exportClassFilter" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Select Class</label>
                             <select id="exportClassFilter" class="filter-select" style="width: 100%; height: 40px; padding: 0 0.75rem; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">

@@ -85,7 +85,7 @@
                 <div class="question-form">
                     <form id="createSessionForm">
                         <div class="form-grid">
-                            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem;">
                                 <div class="form-group">
                                     <label for="sessionClass">Select Class *</label>
                                     <select id="sessionClass" required>
@@ -100,6 +100,15 @@
                                         <option value="Business Studies">Business Studies</option>
                                         <option value="Accountancy">Accountancy</option>
                                         <option value="Social Science">Social Science</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="sessionBatch">Batch / Target Group *</label>
+                                    <select id="sessionBatch" required>
+                                        <option value="Both" selected>Both (OSEM & Nalanda)</option>
+                                        <option value="Nerd Tutors OSEM">Nerd Tutors OSEM</option>
+                                        <option value="Nalanda">Nalanda</option>
+                                        <option value="Others">Others</option>
                                     </select>
                                 </div>
                             </div>
@@ -301,6 +310,7 @@
                                     <th style="padding: 0.75rem;">Test Name</th>
                                     <th style="padding: 0.75rem;">Year</th>
                                     <th style="padding: 0.75rem;">Set</th>
+                                    <th style="padding: 0.75rem;">Batch</th>
                                     <th style="padding: 0.75rem;">Class</th>
                                     <th style="padding: 0.75rem;">Subject</th>
                                     <th style="padding: 0.75rem;">Max Marks</th>
@@ -310,7 +320,7 @@
                             </thead>
                             <tbody id="sessionManageTableBody">
                                 <tr>
-                                    <td colspan="8" style="padding: 1.5rem; text-align: center; color: #666; font-style: italic;">
+                                    <td colspan="9" style="padding: 1.5rem; text-align: center; color: #666; font-style: italic;">
                                         Loading published test sessions...
                                     </td>
                                 </tr>
@@ -343,6 +353,7 @@
                             <thead>
                                 <tr style="background: #f5f7ff; border-bottom: 2px solid #e2e8f0; color: #1e3c72; font-weight: 600;">
                                     <th style="padding: 1rem;">Student Name</th>
+                                    <th style="padding: 1rem;">Batch</th>
                                     <th style="padding: 1rem;">Class</th>
                                     <th style="padding: 1rem;">Subject</th>
                                     <th style="padding: 1rem;">Score</th>
@@ -352,7 +363,7 @@
                             </thead>
                             <tbody id="resultsTableBody">
                                 <tr>
-                                    <td colspan="6" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
+                                    <td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
                                         Select a session to load student results.
                                     </td>
                                 </tr>
@@ -703,6 +714,15 @@
                                 <option value="Business Studies">Business Studies</option>
                                 <option value="Accountancy">Accountancy</option>
                                 <option value="Social Science">Social Science</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editSessionBatch">Batch / Group *</label>
+                            <select id="editSessionBatch" required>
+                                <option value="Both">Both (OSEM & Nalanda)</option>
+                                <option value="Nerd Tutors OSEM">Nerd Tutors OSEM</option>
+                                <option value="Nalanda">Nalanda</option>
+                                <option value="Others">Others</option>
                             </select>
                         </div>
                     </div>

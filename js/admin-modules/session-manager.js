@@ -38,6 +38,7 @@ export async function createTestSession() {
     }
 
     const sessionMaxMarks = document.getElementById('sessionMaxMarks').value;
+    const sessionBatch = document.getElementById('sessionBatch')?.value || 'Both';
     const sessionQuestions = document.getElementById('sessionQuestions').value;
     const sessionMarkingScheme = document.getElementById('sessionMarkingScheme').value;
     const sessionOtherInstructions = document.getElementById('sessionOtherInstructions')?.value || "";
@@ -46,6 +47,7 @@ export async function createTestSession() {
         await addDoc(collection(db, 'testSessions'), {
             class: sessionClass,
             subject: sessionSubject,
+            targetGroup: sessionBatch,
             name: sessionName,
             examGroup: sessionName,
             examYear: sessionYear,
@@ -111,7 +113,7 @@ export async function loadResultsForSession(sessionId) {
 
     tbody.innerHTML = `
         <tr>
-            <td colspan="6" style="padding: 2rem; text-align: center;">
+            <td colspan="7" style="padding: 2rem; text-align: center;">
                 <div class="spinner" style="margin: 0 auto;"></div>
             </td>
         </tr>
@@ -131,7 +133,7 @@ export async function loadResultsForSession(sessionId) {
         if (results.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
+                    <td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
                         No student evaluations found for this session yet.
                     </td>
                 </tr>
@@ -148,6 +150,9 @@ export async function loadResultsForSession(sessionId) {
             html += `
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                     <td style="padding: 1rem; font-weight: 600; color: #2d3748;">${escapeHtml(res.studentName)}</td>
+                    <td style="padding: 1rem;">
+                        <span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(res.batch || res.targetGroup || 'Both')}</span>
+                    </td>
                     <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.class)}</td>
                     <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.subject)}</td>
                     <td style="padding: 1rem;">
@@ -239,10 +244,14 @@ window.viewReportCard = function(resultId) {
             <p style="margin: 4px 0 0 0; color: #718096; font-size: 0.85rem; text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Official Academic Report Card</p>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; font-size: 0.9rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; font-size: 0.9rem;">
             <div style="display: flex; flex-direction: column; gap: 0.15rem;">
                 <span style="font-weight: 500; color: #718096; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;">Student Name</span>
                 <span style="font-weight: 700; color: #2d3748;">${escapeHtml(res.studentName)}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                <span style="font-weight: 500; color: #718096; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;">Batch / Group</span>
+                <span style="font-weight: 700; color: #1e3c72;">${escapeHtml(res.batch || res.targetGroup || 'Both')}</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 0.15rem;">
                 <span style="font-weight: 500; color: #718096; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;">Date Evaluated</span>
@@ -517,7 +526,7 @@ window.printReportCard = function(resultId) {
                 .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
                 .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
                 
-                .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+                .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
                 .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
                 .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
                 .meta-item .value { font-weight: 700; color: #2d3748; }
@@ -571,6 +580,10 @@ window.printReportCard = function(resultId) {
                 <div class="meta-item">
                     <span class="label">Student Name</span>
                     <span class="value">${res.studentName || 'Student'}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">Batch / Group</span>
+                    <span class="value">${res.batch || res.targetGroup || 'Both'}</span>
                 </div>
                 <div class="meta-item">
                     <span class="label">Date Evaluated</span>
@@ -900,7 +913,7 @@ export async function loadTestSessionsForManagement() {
         if (querySnapshot.empty) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" style="padding: 1.5rem; text-align: center; color: #666; font-style: italic;">
+                    <td colspan="9" style="padding: 1.5rem; text-align: center; color: #666; font-style: italic;">
                         No published test sessions found. Create one above!
                     </td>
                 </tr>
@@ -923,6 +936,9 @@ export async function loadTestSessionsForManagement() {
                     </td>
                     <td style="padding: 0.75rem;">
                         <span class="badge-set">${escapeHtml(data.examSet || 'Standard')}</span>
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        <span style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 0.2rem 0.55rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(data.targetGroup || 'Both')}</span>
                     </td>
                     <td style="padding: 0.75rem; color: #4a5568;">${escapeHtml(data.class)}</td>
                     <td style="padding: 0.75rem; color: #4a5568;">${escapeHtml(data.subject)}</td>
@@ -954,7 +970,7 @@ export async function loadTestSessionsForManagement() {
         console.error('Error loading sessions for management:', error);
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" style="padding: 1.5rem; text-align: center; color: #e53e3e; font-weight: 600;">
+                <td colspan="9" style="padding: 1.5rem; text-align: center; color: #e53e3e; font-weight: 600;">
                     Error loading test sessions.
                 </td>
             </tr>
@@ -1153,6 +1169,9 @@ async function editSession(id) {
             editCls.value = data.class || 'Class 12th';
             syncClassSubjects(editCls, editSub, data.subject || 'Economics');
         }
+        if (document.getElementById('editSessionBatch')) {
+            document.getElementById('editSessionBatch').value = data.targetGroup || 'Both';
+        }
         document.getElementById('editSessionMaxMarks').value = data.maxMarks || 100;
         document.getElementById('editSessionQuestions').value = data.questions || '';
         document.getElementById('editSessionMarkingScheme').value = data.markingScheme || '';
@@ -1197,12 +1216,14 @@ document.getElementById('editSessionForm')?.addEventListener('submit', async (e)
     }
 
     const editYear = document.getElementById('editSessionYear')?.value || '2023';
+    const batch = document.getElementById('editSessionBatch')?.value || 'Both';
     try {
         await updateDoc(doc(db, 'testSessions', id), {
             name,
             examGroup: name,
             examYear: editYear,
             examSet,
+            targetGroup: batch,
             class: cls,
             subject,
             maxMarks,

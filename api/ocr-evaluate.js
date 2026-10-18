@@ -582,7 +582,10 @@ Return STRICT JSON only (no markdown, no code blocks):
                 ]
             }],
             generationConfig: {
-                temperature: 0.0
+                temperature: 0.0,
+                thinkingConfig: {
+                    thinkingBudget: 0
+                }
             }
         };
     }
@@ -752,7 +755,10 @@ Return the response as a strict JSON object.`;
             }],
             generationConfig: {
                 temperature: 0.0,
-                responseMimeType: "application/json"
+                responseMimeType: "application/json",
+                thinkingConfig: {
+                    thinkingBudget: 0
+                }
             }
         };
 

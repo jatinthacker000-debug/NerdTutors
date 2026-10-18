@@ -58,6 +58,7 @@ const elements = {
 
     // Results page filters
     searchInput: document.getElementById('searchInput'),
+    batchFilter: document.getElementById('batchFilter'),
     scoreFilter: document.getElementById('scoreFilter'),
     dateFilter: document.getElementById('dateFilter'),
     testTypeFilter: document.getElementById('testTypeFilter'),
@@ -225,6 +226,7 @@ function renderTable() {
 
         row.innerHTML = `
                 <td class="student-name">${result.studentName || 'Anonymous'}</td>
+                <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${result.batch || result.targetGroup || 'Both'}</span></td>
                 <td>${result.studentId?.substring(0, 8) || '-'}</td>
                 <td>${dateStr}<br><small style="color: #94a3b8;">${timeStr}</small></td>
                 <td>${result.totalScore || '0/0'}</td>
@@ -307,6 +309,7 @@ function updateCharts() {
 // ==================== FILTERS ====================
 function applyFilters() {
     const searchTerm = elements.searchInput?.value?.toLowerCase() || '';
+    const batchFilter = elements.batchFilter?.value || 'all';
     const scoreFilter = elements.scoreFilter?.value || 'all';
     const dateFilter = elements.dateFilter?.value || 'all';
     const typeFilter = elements.testTypeFilter?.value || 'all';
@@ -315,6 +318,12 @@ function applyFilters() {
         // Search filter
         if (searchTerm && !result.studentName?.toLowerCase().includes(searchTerm)) {
             return false;
+        }
+
+        // Batch filter
+        if (batchFilter !== 'all') {
+            const studentBatch = result.batch || result.targetGroup || 'Both';
+            if (studentBatch !== batchFilter) return false;
         }
 
         // Test type filter
@@ -479,17 +488,18 @@ function exportResult(resultId) {
 
 // Export all results
 function exportAllResults() {
-    let csv = 'Student Name,Student ID,Date,Score,Percentage,Questions\n';
+    let csv = 'Student Name,Batch,Student ID,Date,Score,Percentage,Questions\n';
 
     appState.filteredResults.forEach(result => {
         const name = `"${(result.studentName || 'Anonymous').replace(/"/g, '""')}"`;
+        const batch = `"${(result.batch || result.targetGroup || 'Both').replace(/"/g, '""')}"`;
         const id = result.studentId || '-';
         const date = `"${new Date(result.submittedAt).toLocaleString().replace(/"/g, '""')}"`;
         const score = result.totalScore || '0/0';
         const percentage = result.percentage || '0%';
         const questions = result.totalQuestions || 0;
 
-        csv += `${name},${id},${date},${score},${percentage},${questions}\n`;
+        csv += `${name},${batch},${id},${date},${score},${percentage},${questions}\n`;
     });
 
     // Download CSV
@@ -530,6 +540,7 @@ function renderFullTable() {
 
         row.innerHTML = `
                 <td class="student-name">${result.studentName || 'Anonymous'}</td>
+                <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${result.batch || result.targetGroup || 'Both'}</span></td>
                 <td>${result.studentId?.substring(0, 8) || '-'}</td>
                 <td>${dateStr}<br><small style="color: #94a3b8;">${timeStr}</small></td>
                 <td>${result.totalScore || '0/0'}</td>
@@ -1101,13 +1112,14 @@ function renderLeaderboardAndDetailedTable(filteredResults) {
     const sortedDetails = [...filteredResults].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
     
     detailedBody.innerHTML = sortedDetails.length === 0 
-        ? '<tr><td colspan="6" style="text-align:center;">No data available</td></tr>'
+        ? '<tr><td colspan="7" style="text-align:center;">No data available</td></tr>'
         : sortedDetails.map(r => {
             const date = new Date(r.submittedAt);
             const dateStr = date.toLocaleDateString();
             return `
                 <tr>
                     <td class="student-name">${r.studentName || 'Anonymous'}</td>
+                    <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${r.batch || r.targetGroup || 'Both'}</span></td>
                     <td>${r.class || '-'}</td>
                     <td>${r.subject || '-'}</td>
                     <td>${r.totalScore || '0/0'}</td>
@@ -1157,11 +1169,15 @@ function updateExportSessionDropdown() {
 
 // ==================== EXECUTE FILTERED EXPORT ====================
 function executeFilteredExport() {
+    const batchVal = document.getElementById('exportBatchFilter')?.value || 'all';
     const classVal = document.getElementById('exportClassFilter')?.value || 'all';
     const sessionVal = document.getElementById('exportSessionFilter')?.value || 'all';
 
     let filtered = [...appState.testResults];
 
+    if (batchVal !== 'all') {
+        filtered = filtered.filter(r => (r.batch || r.targetGroup || 'Both') === batchVal);
+    }
     if (classVal !== 'all') {
         filtered = filtered.filter(r => r.class === classVal);
     }
@@ -1174,10 +1190,11 @@ function executeFilteredExport() {
         return;
     }
 
-    // CSV headers including Test Name, Class, Subject, Student ID, score metrics
-    let csv = 'Test Name,Class,Subject,Student Name,Student ID,Date,Score,Percentage,Type\n';
+    // CSV headers including Test Name, Batch, Class, Subject, Student ID, score metrics
+    let csv = 'Test Name,Batch,Class,Subject,Student Name,Student ID,Date,Score,Percentage,Type\n';
     filtered.forEach(result => {
         const testName = `"${(result.testSessionName || result.testName || 'General Evaluation').replace(/"/g, '""')}"`;
+        const batch = `"${(result.batch || result.targetGroup || 'Both').replace(/"/g, '""')}"`;
         const cls = result.class || '-';
         const sub = result.subject || '-';
         const studentName = `"${(result.studentName || 'Anonymous').replace(/"/g, '""')}"`;
@@ -1187,7 +1204,7 @@ function executeFilteredExport() {
         const percentage = result.percentage || '0%';
         const type = result.testType || 'text';
 
-        csv += `${testName},${cls},${sub},${studentName},${studentId},${date},${score},${percentage},${type}\n`;
+        csv += `${testName},${batch},${cls},${sub},${studentName},${studentId},${date},${score},${percentage},${type}\n`;
     });
 
     const sanitizedClass = classVal.replace(/\s+/g, '_');
@@ -1262,6 +1279,9 @@ function setupEventListeners() {
     // Filters
     if (elements.searchInput) {
         elements.searchInput.addEventListener('input', applyFilters);
+    }
+    if (elements.batchFilter) {
+        elements.batchFilter.addEventListener('change', applyFilters);
     }
     if (elements.scoreFilter) {
         elements.scoreFilter.addEventListener('change', applyFilters);
