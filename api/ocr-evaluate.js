@@ -765,6 +765,11 @@ Format your output in clean Markdown, organizing by question numbers or sections
             }
         }
 
+        // Transcription is pure OCR — remove thinkingConfig to run at instant Flash speed
+        if (transcribeRequestBody.generationConfig) {
+            delete transcribeRequestBody.generationConfig.thinkingConfig;
+        }
+
         // Call Gemini for Transcription using Key Index 0
         const geminiJson = await callGeminiModel(transcribeRequestBody, activeModel, 0);
         return geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
