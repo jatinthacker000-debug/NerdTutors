@@ -212,6 +212,7 @@ RULES:
         ],
         generationConfig: {
             temperature: 0.1,
+            mediaResolution: "MEDIA_RESOLUTION_HIGH",
             thinkingConfig: {
                 thinkingBudget: Number(process.env.THINKING_BUDGET || 512)
             }

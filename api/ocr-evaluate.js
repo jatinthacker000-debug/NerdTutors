@@ -621,6 +621,7 @@ Return STRICT JSON only (no markdown, no code blocks):
             }],
             generationConfig: {
                 temperature: 0.0,
+                mediaResolution: "MEDIA_RESOLUTION_HIGH",
                 ...(thinkingBudget > 0 ? {
                     thinkingConfig: {
                         thinkingBudget: thinkingBudget
