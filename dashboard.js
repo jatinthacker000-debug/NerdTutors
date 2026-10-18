@@ -13,6 +13,7 @@ import {
     getDocs,
     onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { initQuestionMatrix, renderQuestionMatrix, populateMatrixSessionDropdown } from './js/matrix-manager.js';
 
 // ==================== APP STATE ==================== 
 const appState = {
@@ -41,6 +42,7 @@ const elements = {
     resultsPage: document.getElementById('resultsPage'),
     analyticsPage: document.getElementById('analyticsPage'),
     exportPage: document.getElementById('exportPage'),
+    matrixPage: document.getElementById('matrixPage'),
 
     // Stats
     totalStudents: document.getElementById('totalStudents'),
@@ -154,6 +156,9 @@ async function loadTestResults() {
         if (appState.charts.scoreDistribution && appState.charts.dailyActivity) {
             updateCharts();
         }
+
+        // Update Question Performance Matrix
+        renderQuestionMatrix(appState.testResults);
 
     } catch (error) {
         console.error('❌ Error loading results:', error);
@@ -598,7 +603,7 @@ function showPage(pageName) {
     currentPage = pageName;
 
     // Hide all pages
-    const pages = ['dashboardPage', 'studentsPage', 'resultsPage', 'analyticsPage', 'exportPage'];
+    const pages = ['dashboardPage', 'studentsPage', 'resultsPage', 'analyticsPage', 'exportPage', 'matrixPage'];
     pages.forEach(page => {
         const el = elements[page];
         if (el) {
@@ -613,7 +618,8 @@ function showPage(pageName) {
         'students': 'studentsPage',
         'results': 'resultsPage',
         'analytics': 'analyticsPage',
-        'export': 'exportPage'
+        'export': 'exportPage',
+        'matrix': 'matrixPage'
     };
 
     const targetPage = elements[pageMap[pageName]];
@@ -763,6 +769,7 @@ async function loadSessionsForAnalyticsFilter() {
         
         syncAnalyticsSubjectFilter();
         updateAnalyticsSessionDropdown();
+        populateMatrixSessionDropdown(analyticsSessions);
     } catch (error) {
         console.error("Error loading sessions for analytics filter:", error);
     }
@@ -1397,6 +1404,10 @@ function setupEventListeners() {
                     showPage('analytics');
                     initAnalyticsCharts();
                     break;
+                case '#matrix':
+                    showPage('matrix');
+                    renderQuestionMatrix(appState.testResults);
+                    break;
                 case '#export':
                     showPage('export');
                     break;
@@ -1427,6 +1438,17 @@ function setupEventListeners() {
             document.querySelector('.nav-item[href="#results"]').classList.add('active');
         });
     }
+
+    // Go to Matrix button from Analytics
+    const btnGoToMatrix = document.getElementById('btnGoToMatrix');
+    if (btnGoToMatrix) {
+        btnGoToMatrix.addEventListener('click', () => {
+            showPage('matrix');
+            renderQuestionMatrix(appState.testResults);
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.querySelector('.nav-item[href="#matrix"]')?.classList.add('active');
+        });
+    }
 }
 
 // ==================== MAKE FUNCTIONS GLOBAL ====================
@@ -1451,6 +1473,9 @@ async function init() {
 
         // Load sessions list for analytics filter
         await loadSessionsForAnalyticsFilter();
+
+        // Initialize Question Performance Matrix
+        initQuestionMatrix(appState, analyticsSessions);
 
         // Setup event listeners
         setupEventListeners();

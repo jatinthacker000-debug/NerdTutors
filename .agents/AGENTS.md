@@ -69,4 +69,24 @@ This section contains the exact implementations, structures, and business logic 
   * **Fallback**: Single-pass direct vision evaluation if dual-pass fails.
 * **Core File**: [api/ocr-evaluate.js](file:///d:/Trinno/NerdTutors/api/ocr-evaluate.js).
 
+---
+
+## 6. Firebase Gate Passwords Management & Access Keys Registry
+* **Purpose**: Store and manage gate access credentials directly in **Firebase Firestore** (`collection: 'gateCredentials'`) rather than in frontend code or static env files, with real-time CRUD from the Admin Panel.
+* **Component Map**:
+  - [api/manage-gate.js](file:///d:/Trinno/NerdTutors/api/manage-gate.js): Backend API handling credential actions (`add`, `delete`, `sync`, `GET`).
+  - [api/verify-gate.js](file:///d:/Trinno/NerdTutors/api/verify-gate.js): Validates submitted passwords on the backend against built-in defaults + persistent Firestore sync credentials and returns cryptographically signed HMAC tokens.
+  - [js/admin-modules/gate-manager.js](file:///d:/Trinno/NerdTutors/js/admin-modules/gate-manager.js): Native Firestore module auto-seeding the 5 default master credentials, creating custom credentials, and real-time syncing.
+  - [admin.html](file:///d:/Trinno/NerdTutors/admin.html): Added **🔑 Gate Access Keys** tab with password generator, copy shortcuts, and deletion controls.
+
+---
+
+## 7. Question-Wise Student Performance Matrix (`dashboard.html` / `js/matrix-manager.js`)
+* **Purpose**: Comprehensive item-response grid displaying Question Numbers (Q1..Q34) as rows and individual Students as columns with awarded marks, class accuracy rates, and cell drilldown drawers.
+* **Component Map**:
+  - [dashboard.html](file:///d:/Trinno/NerdTutors/dashboard.html): Added `#matrixPage` section and sidebar navigation item `#matrix`.
+  - [js/matrix-manager.js](file:///d:/Trinno/NerdTutors/js/matrix-manager.js): Core matrix data engine with natural question sorting (`Q1`, `Q2` ... `Q10`, `Q17(i)`, `Q17(ii)`, `Q34b(ii)`), dynamic session filtering, toughest/easiest question detection, and CSV export.
+  - [dashboard.css](file:///d:/Trinno/NerdTutors/dashboard.css): Sticky question column and header styling with green/amber/red performance pills.
+
+
 

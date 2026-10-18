@@ -32,6 +32,7 @@ import {
     populateMockData,
     setupPdfExtractionHub
 } from './js/admin-modules/session-manager.js';
+import { setupGateManager } from './js/admin-modules/gate-manager.js';
 
 // Initialize
 function init() {
@@ -42,6 +43,7 @@ function init() {
     setupMcqFields(); // NEW: Setup MCQ toggle
     setupAiTrainer(); // AI Trainer: Auto-Discrepancy Analyzer
     setupPdfExtractionHub(); // Direct PDF Ingestion & Diagnostic Self-Test Hub
+    setupGateManager(); // 🔑 Backend & Firebase Gate Password Management
     loadDraft();
 }
 
@@ -75,6 +77,7 @@ function showAdminPanel(user) {
 
     loadTestSessionsForDropdown();
     loadTestSessionsForManagement();
+    setupGateManager();
 }
 
 // Show Access Denied

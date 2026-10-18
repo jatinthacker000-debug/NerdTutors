@@ -36,21 +36,53 @@ const DEFAULT_CREDENTIALS = [
 ];
 
 function getCredentials() {
+    let creds = [...DEFAULT_CREDENTIALS];
+
+    // 1. Load from persistent server file if present
+    try {
+        const primaryPath = path.join(process.cwd(), 'api', 'gate-credentials.json');
+        const rootPath = path.join(process.cwd(), 'gate-credentials.json');
+        const tmpPath = path.join('/tmp', 'gate-credentials.json');
+        const targetPath = fs.existsSync(primaryPath) ? primaryPath : (fs.existsSync(rootPath) ? rootPath : (fs.existsSync(tmpPath) ? tmpPath : null));
+        
+        if (targetPath) {
+            const data = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    if (item.username && item.password) {
+                        const existing = creds.find(c => c.username.toLowerCase() === item.username.toLowerCase());
+                        if (existing) {
+                            existing.password = item.password;
+                        } else {
+                            creds.push({ username: item.username, password: item.password });
+                        }
+                    }
+                });
+            }
+        }
+    } catch (e) {
+        console.warn("Could not load dynamic gate-credentials.json:", e.message);
+    }
+
+    // 2. Support environment variable overrides (GATE_CREDENTIALS=user1:pass1,user2:pass2)
     if (process.env.GATE_CREDENTIALS) {
         try {
-            // Support comma-separated format: user1:pass1,user2:pass2
-            return process.env.GATE_CREDENTIALS.split(',').map(pair => {
+            process.env.GATE_CREDENTIALS.split(',').forEach(pair => {
                 const parts = pair.split(':');
-                return {
-                    username: parts[0]?.trim(),
-                    password: parts[1]?.trim()
-                };
-            }).filter(c => c.username && c.password);
+                const u = parts[0]?.trim();
+                const p = parts[1]?.trim();
+                if (u && p) {
+                    const existing = creds.find(c => c.username.toLowerCase() === u.toLowerCase());
+                    if (existing) existing.password = p;
+                    else creds.push({ username: u, password: p });
+                }
+            });
         } catch (e) {
-            console.error("Failed to parse GATE_CREDENTIALS env var, using defaults:", e);
+            console.error("Failed to parse GATE_CREDENTIALS env var:", e);
         }
     }
-    return DEFAULT_CREDENTIALS;
+
+    return creds;
 }
 
 function createSignedGateToken(username) {
