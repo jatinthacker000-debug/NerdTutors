@@ -1207,7 +1207,8 @@
                     maxMarks: selectedSession.maxMarks,
                     images: uploadedFiles,
                     subject: selectedSession.subject,
-                    otherInstructions: selectedSession.otherInstructions || ""
+                    otherInstructions: selectedSession.otherInstructions || "",
+                    cachedContentId: selectedSession.cachedContentId || null
                 });
 
                 const report = await submitWithRetry(payloadString);

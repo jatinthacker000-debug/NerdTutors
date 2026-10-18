@@ -213,7 +213,7 @@ RULES:
         generationConfig: {
             temperature: 0.1,
             thinkingConfig: {
-                thinkingBudget: 0
+                thinkingBudget: Number(process.env.THINKING_BUDGET || 512)
             }
         }
     };
