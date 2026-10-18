@@ -173,22 +173,48 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (action === "update" || action === "edit" || action === "modify") {
+                const targetUser = (username || "").trim();
+                const newPassword = (password || "").trim();
+                const newLabel = (label || "").trim();
+
+                let currentCreds = loadAllCredentials();
+                const toUpdate = currentCreds.find(c => c.username.toLowerCase() === targetUser.toLowerCase() || (id && c.id === id));
+
+                if (!toUpdate) {
+                    return res.status(404).json({ error: `Credential "${targetUser}" not found.` });
+                }
+
+                if (newPassword && newPassword.length < 4) {
+                    return res.status(400).json({ error: "Password must be at least 4 characters long." });
+                }
+
+                if (newPassword) toUpdate.password = newPassword;
+                if (newLabel) toUpdate.label = newLabel;
+                toUpdate.updatedAt = new Date().toISOString();
+
+                saveCredentials(currentCreds);
+
+                return res.status(200).json({
+                    success: true,
+                    message: `Gate credential "${toUpdate.username}" successfully updated!`,
+                    credential: toUpdate,
+                    credentials: currentCreds
+                });
+            }
+
             if (action === "delete" || action === "remove") {
                 const targetId = id;
                 const targetUser = (username || "").trim();
 
                 let currentCreds = loadAllCredentials();
-                const toDelete = currentCreds.find(c => (targetId && c.id === targetId) || (targetUser && c.username === targetUser));
+                const toDelete = currentCreds.find(c => (targetId && c.id === targetId) || (targetUser && c.username.toLowerCase() === targetUser.toLowerCase()));
 
                 if (!toDelete) {
                     return res.status(404).json({ error: "Credential not found." });
                 }
 
-                if (toDelete.role === "system") {
-                    return res.status(403).json({ error: "System default credentials cannot be deleted." });
-                }
-
-                currentCreds = currentCreds.filter(c => c.id !== toDelete.id && c.username !== toDelete.username);
+                currentCreds = currentCreds.filter(c => c.id !== toDelete.id && c.username.toLowerCase() !== toDelete.username.toLowerCase());
                 saveCredentials(currentCreds);
 
                 return res.status(200).json({

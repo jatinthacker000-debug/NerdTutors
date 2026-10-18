@@ -1,8 +1,8 @@
 // ============================================
-// GATE MANAGER MODULE (FIREBASE FIRESTORE NATIVE)
-// All Gate Passwords & Access Keys are stored in and managed
-// directly via Firebase Firestore (collection: 'gateCredentials')
-// with a seamless backend API fallback if Firestore rules are pending.
+// GATE MANAGER MODULE (DYNAMIC BACKEND & FIRESTORE)
+// All Gate Passwords & Access Keys are managed dynamically
+// through Firebase Firestore & secure backend API (/api/manage-gate).
+// NO hardcoded keys or passwords exist in frontend code.
 // ============================================
 
 import { db, auth } from '../../firebase-config.js';
@@ -18,18 +18,9 @@ import { showToast, escapeHtml } from './admin-utils.js';
 
 let gateCredentialsCache = [];
 let isGateManagerInitialized = false;
-let isFirestorePermissionRestricted = false;
-
-const DEFAULT_FIREBASE_CREDENTIALS = [
-    { username: 'nerd_tutor_alpha', password: 'nt_pass_alpha2026', label: 'Alpha Master Moderator Key', role: 'system' },
-    { username: 'nerd_tutor_beta', password: 'nt_pass_beta2026', label: 'Beta Master Moderator Key', role: 'system' },
-    { username: 'nerd_tutor_gamma', password: 'nt_pass_gamma2026', label: 'Gamma Master Moderator Key', role: 'system' },
-    { username: 'nerd_tutor_delta', password: 'nt_pass_delta2026', label: 'Delta Master Moderator Key', role: 'system' },
-    { username: 'nerd_tutor_epsilon', password: 'nt_pass_epsilon2026', label: 'Epsilon Master Moderator Key', role: 'system' }
-];
 
 export function setupGateManager() {
-    console.log("🔐 Initializing Gate Manager Module (Firebase Firestore)...");
+    console.log("🔐 Initializing Gate Manager Module...");
     if (!isGateManagerInitialized) {
         setupEventListeners();
         isGateManagerInitialized = true;
@@ -38,8 +29,9 @@ export function setupGateManager() {
 }
 
 /**
- * Load credentials directly from Firebase Firestore collection 'gateCredentials'.
- * Falls back to secure backend API if Firebase Security Rules deny client access.
+ * Load credentials dynamically:
+ * 1. Attempts to load from Firebase Firestore ('gateCredentials').
+ * 2. If Firestore permissions are restricted or empty, loads from backend API (/api/manage-gate).
  */
 export async function loadGateCredentials() {
     const listBody = document.getElementById('gateKeysTableBody');
@@ -73,68 +65,53 @@ export async function loadGateCredentials() {
             });
         });
 
-        // Auto-shift: Guarantee that all 5 default master keys are permanently saved in Firebase Firestore
-        let newlySeededCount = 0;
-        for (const item of DEFAULT_FIREBASE_CREDENTIALS) {
-            const exists = creds.some(c => c.username.toLowerCase() === item.username.toLowerCase());
-            if (!exists) {
-                try {
-                    await setDoc(doc(db, 'gateCredentials', item.username), {
-                        username: item.username,
-                        password: item.password,
-                        label: item.label,
-                        role: item.role,
-                        source: 'firebase',
-                        createdAt: serverTimestamp()
-                    });
-                    creds.push({
-                        id: item.username,
-                        ...item,
-                        source: 'firebase',
-                        createdAt: new Date().toISOString()
-                    });
-                    newlySeededCount++;
-                } catch (_) {}
-            }
+        if (creds.length > 0) {
+            gateCredentialsCache = creds;
+            renderGateCredentials(creds, false);
+            syncCredentialsToBackend(creds);
+            return;
         }
 
-        if (newlySeededCount > 0) {
-            console.log(`🔥 Auto-shifted ${newlySeededCount} master credentials directly into Firebase Firestore collection 'gateCredentials'.`);
-        }
-
-        isFirestorePermissionRestricted = false;
-        gateCredentialsCache = creds;
-        renderGateCredentials(creds, false);
-
-        // Sync to backend cache for server token verification
-        syncCredentialsToBackend(creds);
+        // If Firestore is empty, load active keys from backend API
+        await loadFromBackendApi(listBody);
 
     } catch (err) {
-        console.warn("⚠️ Firebase Firestore gateCredentials permission notice:", err.message);
-        isFirestorePermissionRestricted = true;
-
-        // Graceful resilient fallback to /api/manage-gate backend handler
-        try {
-            const res = await fetch('/api/manage-gate');
-            if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data.credentials) && data.credentials.length > 0) {
-                    gateCredentialsCache = data.credentials;
-                    renderGateCredentials(data.credentials, true);
-                    return;
-                }
-            }
-        } catch (_) {}
-
-        // Secondary fallback to default master credentials
-        gateCredentialsCache = DEFAULT_FIREBASE_CREDENTIALS;
-        renderGateCredentials(DEFAULT_FIREBASE_CREDENTIALS, true);
+        console.warn("⚠️ Firestore access restricted, fetching from backend API:", err.message);
+        await loadFromBackendApi(listBody, true);
     }
 }
 
 /**
- * Explicit Shift & Migrate: Reads all default credentials and server credentials
- * and writes every single one directly into Firebase Firestore ('gateCredentials').
+ * Fallback to backend API handler /api/manage-gate
+ */
+async function loadFromBackendApi(listBody, isPermissionNotice = false) {
+    try {
+        const res = await fetch('/api/manage-gate');
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.credentials) && data.credentials.length > 0) {
+                gateCredentialsCache = data.credentials;
+                renderGateCredentials(data.credentials, isPermissionNotice);
+                return;
+            }
+        }
+    } catch (e) {
+        console.error("Backend fetch error:", e);
+    }
+
+    if (listBody) {
+        listBody.innerHTML = `
+            <tr>
+                <td colspan="6" style="padding: 2rem; text-align: center; color: #64748b;">
+                    No gate credentials loaded. Click "Refresh Keys" or create a key above.
+                </td>
+            </tr>
+        `;
+    }
+}
+
+/**
+ * Explicit Shift / Sync: Pushes current credentials to Firebase Firestore
  */
 export async function shiftCredentialsToFirebase() {
     const shiftBtn = document.getElementById('btnShiftToFirebase');
@@ -146,62 +123,47 @@ export async function shiftCredentialsToFirebase() {
 
     try {
         let count = 0;
-        // 1. Shift all default credentials
-        for (const item of DEFAULT_FIREBASE_CREDENTIALS) {
-            await setDoc(doc(db, 'gateCredentials', item.username), {
-                username: item.username,
-                password: item.password,
-                label: item.label,
-                role: item.role,
-                source: 'firebase',
-                lastUpdated: serverTimestamp()
-            }, { merge: true });
-            count++;
-        }
-
-        // 2. Query any existing credentials from backend file/memory to shift them into Firebase
-        try {
-            const res = await fetch('/api/manage-gate');
-            if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data.credentials)) {
-                    for (const cred of data.credentials) {
-                        if (cred.username && cred.password) {
-                            await setDoc(doc(db, 'gateCredentials', cred.username), {
-                                username: cred.username,
-                                password: cred.password,
-                                label: cred.label || 'Moderator Key',
-                                role: cred.role || (cred.username.startsWith('nerd_tutor_') ? 'system' : 'custom'),
-                                source: 'firebase',
-                                lastUpdated: serverTimestamp()
-                            }, { merge: true });
-                            count++;
-                        }
+        // Fetch all active credentials from backend
+        const res = await fetch('/api/manage-gate');
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.credentials)) {
+                for (const cred of data.credentials) {
+                    if (cred.username && cred.password) {
+                        await setDoc(doc(db, 'gateCredentials', cred.username), {
+                            username: cred.username,
+                            password: cred.password,
+                            label: cred.label || 'Moderator Key',
+                            role: cred.role || 'custom',
+                            source: 'firebase',
+                            lastUpdated: serverTimestamp()
+                        }, { merge: true });
+                        count++;
                     }
                 }
             }
-        } catch (_) {}
+        }
 
-        showToast(`🔥 Successfully shifted & saved ${count} credentials to Firebase Firestore!`, 'success');
+        showToast(`🔥 Successfully shifted and synced ${count} keys directly to Firebase Firestore!`, 'success');
         await loadGateCredentials();
     } catch (err) {
         console.error("❌ Error shifting credentials to Firebase:", err);
         if (err.message.includes('permission') || err.code === 'permission-denied') {
             window.copyFirestoreRuleSnippet();
-            showToast("Firebase Firestore rules blocked direct write. Rule copied to clipboard! Paste in Firebase Console > Rules.", "error");
+            showToast("Firebase Firestore rules blocked direct write. Rule copied to clipboard!", "error");
         } else {
             showToast("Error shifting to Firebase: " + err.message, 'error');
         }
     } finally {
         if (shiftBtn) {
             shiftBtn.disabled = false;
-            shiftBtn.innerHTML = originalText || `🔥 Shift / Sync to Firebase`;
+            shiftBtn.innerHTML = originalText || `🔥 Shift / Sync All to Firebase`;
         }
     }
 }
 
 /**
- * Synchronize loaded Firestore credentials to the backend server for token creation
+ * Synchronize loaded Firestore credentials to the backend server
  */
 async function syncCredentialsToBackend(credsList) {
     try {
@@ -236,7 +198,6 @@ export function renderGateCredentials(credentials, isPermissionNotice = false) {
     if (systemCountEl) systemCountEl.textContent = credentials.filter(c => c.role === 'system').length;
     if (customCountEl) customCountEl.textContent = credentials.filter(c => c.role !== 'system').length;
 
-    // Toggle Firestore rules banner if permissions are restricted
     if (noticeContainer) {
         noticeContainer.style.display = isPermissionNotice ? 'block' : 'none';
     }
@@ -254,7 +215,7 @@ export function renderGateCredentials(credentials, isPermissionNotice = false) {
         return;
     }
 
-    // Sort: system first, then custom by date descending
+    // Sort by role then date descending
     const sorted = [...credentials].sort((a, b) => {
         if (a.role === 'system' && b.role !== 'system') return -1;
         if (a.role !== 'system' && b.role === 'system') return 1;
@@ -295,13 +256,13 @@ export function renderGateCredentials(credentials, isPermissionNotice = false) {
                     }
                 </td>
                 <td style="padding: 0.9rem 1rem; color: #64748b; font-size: 0.85rem;">
-                    <span title="Stored in Database: gateCredentials">☁️ ${dateStr}</span>
+                    <span title="Stored securely on backend & database">☁️ ${dateStr}</span>
                 </td>
                 <td style="padding: 0.9rem 1rem; text-align: right;">
-                    ${isSystem 
-                        ? `<span style="color: #94a3b8; font-size: 0.8rem; font-style: italic;">Protected</span>` 
-                        : `<button class="btn" onclick="window.deleteGateKey('${safeUser}')" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">🗑️ Delete</button>`
-                    }
+                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+                        <button class="btn" onclick="window.openEditGateKey('${safeUser}')" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s;" title="Modify Password or Label">✏️ Edit</button>
+                        <button class="btn" onclick="window.deleteGateKey('${safeUser}')" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s;" title="Delete this Gate Key">🗑️ Delete</button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -311,9 +272,10 @@ export function renderGateCredentials(credentials, isPermissionNotice = false) {
 }
 
 function setupEventListeners() {
-    const form = document.getElementById('createGateKeyForm');
-    if (form) {
-        form.addEventListener('submit', async (e) => {
+    // 1. Create New Key Form
+    const createForm = document.getElementById('createGateKeyForm');
+    if (createForm) {
+        createForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const usernameInput = document.getElementById('gateUsernameInput');
             const passwordInput = document.getElementById('gatePasswordInput');
@@ -337,7 +299,6 @@ function setupEventListeners() {
                 return;
             }
 
-            // Check if username already exists in cache
             if (gateCredentialsCache.some(c => c.username.toLowerCase() === username.toLowerCase())) {
                 showToast(`Username "${username}" already exists. Please choose a different one.`, "error");
                 return;
@@ -349,7 +310,7 @@ function setupEventListeners() {
             }
 
             try {
-                // 1. Attempt direct write to Firebase Firestore
+                // Try direct write to Firebase Firestore
                 try {
                     await setDoc(doc(db, 'gateCredentials', username), {
                         username,
@@ -359,11 +320,9 @@ function setupEventListeners() {
                         source: 'firebase',
                         createdAt: serverTimestamp()
                     });
-                } catch (fbErr) {
-                    console.warn("Direct Firestore write restricted, saving via backend API:", fbErr.message);
-                }
+                } catch (_) {}
 
-                // 2. Always persist via backend API
+                // Always persist via backend API
                 const res = await fetch('/api/manage-gate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -382,12 +341,10 @@ function setupEventListeners() {
 
                 showToast(`Gate password for "${username}" created and active!`, 'success');
 
-                // Reset form fields
                 if (usernameInput) usernameInput.value = '';
                 if (passwordInput) passwordInput.value = '';
                 if (labelInput) labelInput.value = '';
 
-                // Reload credentials
                 await loadGateCredentials();
 
             } catch (err) {
@@ -402,26 +359,132 @@ function setupEventListeners() {
         });
     }
 
-    // Helper: Generate Random Password
+    // 2. Edit Key Form
+    const editForm = document.getElementById('editGateKeyForm');
+    if (editForm) {
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const usernameInput = document.getElementById('editGateKeyUsername');
+            const passwordInput = document.getElementById('editGateKeyPassword');
+            const labelInput = document.getElementById('editGateKeyLabel');
+            const submitBtn = document.getElementById('btnSubmitEditGateKey');
+
+            const username = usernameInput?.value.trim();
+            const password = passwordInput?.value.trim();
+            const label = labelInput?.value.trim() || 'Moderator Gate Key';
+
+            if (!password || password.length < 4) {
+                showToast("Password must be at least 4 characters long.", "error");
+                return;
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Updating...';
+            }
+
+            try {
+                // Update Firestore if available
+                try {
+                    await setDoc(doc(db, 'gateCredentials', username), {
+                        password,
+                        label,
+                        lastUpdated: serverTimestamp()
+                    }, { merge: true });
+                } catch (_) {}
+
+                // Update via backend API
+                const res = await fetch('/api/manage-gate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update',
+                        username,
+                        password,
+                        label
+                    })
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.error || 'Failed to update gate key');
+                }
+
+                showToast(`Gate key for "${username}" updated successfully!`, 'success');
+
+                // Close modal
+                const modal = document.getElementById('editGateKeyModal');
+                if (modal) modal.style.display = 'none';
+
+                await loadGateCredentials();
+
+            } catch (err) {
+                console.error("❌ Key update error:", err);
+                showToast("Update error: " + err.message, 'error');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '💾 Save Changes';
+                }
+            }
+        });
+    }
+
+    // Helper: Generate Random Password for Creation
     const btnGenPass = document.getElementById('btnGenerateGatePassword');
     if (btnGenPass) {
         btnGenPass.addEventListener('click', () => {
             const passInput = document.getElementById('gatePasswordInput');
             if (!passInput) return;
-            const words = ['eco', 'nerd', 'tutor', 'cbse', 'exam', 'star', 'batch', 'pro'];
-            const w1 = words[Math.floor(Math.random() * words.length)];
-            const w2 = words[Math.floor(Math.random() * words.length)];
-            const num = Math.floor(1000 + Math.random() * 9000);
-            passInput.value = `${w1}_${w2}_${num}`;
+            passInput.value = generateSecureKey();
             passInput.type = 'text';
             showToast("Secure password generated!", "info");
         });
     }
+
+    // Helper: Generate Random Password for Editing
+    const btnGenEditPass = document.getElementById('btnGenEditGatePassword');
+    if (btnGenEditPass) {
+        btnGenEditPass.addEventListener('click', () => {
+            const passInput = document.getElementById('editGateKeyPassword');
+            if (!passInput) return;
+            passInput.value = generateSecureKey();
+            passInput.type = 'text';
+            showToast("New secure password generated!", "info");
+        });
+    }
+}
+
+function generateSecureKey() {
+    const words = ['eco', 'nerd', 'tutor', 'cbse', 'exam', 'star', 'batch', 'pro'];
+    const w1 = words[Math.floor(Math.random() * words.length)];
+    const w2 = words[Math.floor(Math.random() * words.length)];
+    const num = Math.floor(1000 + Math.random() * 9000);
+    return `${w1}_${w2}_${num}`;
 }
 
 // Global Helpers for HTML attributes
 window.reloadGateCredentials = loadGateCredentials;
 window.shiftCredentialsToFirebase = shiftCredentialsToFirebase;
+
+window.openEditGateKey = function(username) {
+    const cred = gateCredentialsCache.find(c => c.username.toLowerCase() === username.toLowerCase());
+    if (!cred) {
+        showToast("Key not found in cache", "error");
+        return;
+    }
+
+    const modal = document.getElementById('editGateKeyModal');
+    const userField = document.getElementById('editGateKeyUsername');
+    const passField = document.getElementById('editGateKeyPassword');
+    const labelField = document.getElementById('editGateKeyLabel');
+
+    if (userField) userField.value = cred.username;
+    if (passField) passField.value = cred.password || '';
+    if (labelField) labelField.value = cred.label || '';
+
+    if (modal) modal.style.display = 'flex';
+};
 
 window.copyFirestoreRuleSnippet = function() {
     const ruleSnippet = `match /gateCredentials/{document=**} {
@@ -458,17 +521,22 @@ window.deleteGateKey = async function(username) {
     }
 
     try {
-        // 1. Direct deletion from Firebase Firestore if accessible
+        // Direct deletion from Firebase Firestore if accessible
         try {
             await deleteDoc(doc(db, 'gateCredentials', username));
         } catch (_) {}
 
-        // 2. Deletion from backend API
-        await fetch('/api/manage-gate', {
+        // Deletion from backend API
+        const res = await fetch('/api/manage-gate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'delete', username: username, id: username })
         });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Failed to delete gate key');
+        }
 
         showToast(`Gate password for "${username}" deleted.`, 'success');
         await loadGateCredentials();
