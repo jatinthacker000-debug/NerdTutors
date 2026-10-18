@@ -1214,6 +1214,14 @@
                 const report = await submitWithRetry(payloadString);
                 loadingStatus.textContent = "Analyzing results & drafting report card...";
 
+                // 🔒 Hard Cap Enforcement: Score can NEVER exceed maxMarks under any condition
+                const lockedMax = Number(selectedSession.maxMarks) > 0 
+                    ? Number(selectedSession.maxMarks) 
+                    : (Number(report.maxMarks) > 0 ? Number(report.maxMarks) : 40);
+                const clampedScore = Math.min(Math.max(0, Number(report.totalScore) || 0), lockedMax);
+                report.totalScore = clampedScore;
+                report.maxMarks = lockedMax;
+
                 // Save results in Firestore
                 const docRef = await addDoc(collection(db, 'testResults'), {
                     studentName: studentNameInput.value.trim(),
@@ -1226,8 +1234,8 @@
                     targetGroup: selectedSession.targetGroup || 'Both',
                     examYear: extractYear(selectedSession) || 'Standard',
                     examSet: extractSet(selectedSession) || 'Standard / All',
-                    score: report.totalScore,
-                    maxMarks: report.maxMarks,
+                    score: clampedScore,
+                    maxMarks: lockedMax,
                     overallFeedback: report.overallFeedback,
                     improvements: report.improvements,
                     breakdown: report.results || [],
@@ -1597,10 +1605,18 @@
                 const report = await submitWithRetry(lastPayloadString);
                 loadingStatus.textContent = "Updating report card database record...";
 
+                // 🔒 Hard Cap Enforcement: Score can NEVER exceed maxMarks under any condition
+                const lockedMax = Number(selectedSession?.maxMarks) > 0 
+                    ? Number(selectedSession.maxMarks) 
+                    : (Number(report.maxMarks) > 0 ? Number(report.maxMarks) : 40);
+                const clampedScore = Math.min(Math.max(0, Number(report.totalScore) || 0), lockedMax);
+                report.totalScore = clampedScore;
+                report.maxMarks = lockedMax;
+
                 // Update results in Firestore
                 await updateDoc(doc(db, 'testResults', currentSavedResultId), {
-                    score: report.totalScore,
-                    maxMarks: report.maxMarks,
+                    score: clampedScore,
+                    maxMarks: lockedMax,
                     overallFeedback: report.overallFeedback,
                     improvements: report.improvements,
                     breakdown: report.results || [],

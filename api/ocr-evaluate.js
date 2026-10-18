@@ -886,7 +886,7 @@ Return the response as a strict JSON object.`;
                 resObj.score = s;
             });
 
-            // Use question paper explicit max if found, or user-specified maxMarks, or calculated sum from questions
+            // Use user-specified maxMarks if provided and > 0, otherwise detect from questions text or sum of items
             let paperExplicitMax = null;
             if (typeof questions === "string") {
                 const headerMatch = questions.match(/\((\d+)\s*Marks?\)/i) || questions.match(/Total\s*Marks?[:\s]*(\d+)/i) || questions.match(/Max(?:imum)?\s*Marks?[:\s]*(\d+)/i);
@@ -898,26 +898,24 @@ Return the response as a strict JSON object.`;
             const sessionMax = Number(maxMarks);
             const calculatedPaperMax = result.results.reduce((sum, r) => sum + (Number(r.maxMarks) || 0), 0);
 
-            if (paperExplicitMax && paperExplicitMax > 0) {
-                result.maxMarks = paperExplicitMax;
-            } else if (calculatedPaperMax > 0 && Number.isFinite(sessionMax) && sessionMax > 0 && Math.abs(calculatedPaperMax - sessionMax) > 5) {
-                // If question weights sum to e.g. 40, but sessionMax was set to 80 in Firestore, trust the actual questions sum!
-                console.log(`🔧 Auto-Correcting Max Marks: Session metadata said ${sessionMax}, but actual question paper items sum to ${calculatedPaperMax}. Using ${calculatedPaperMax}.`);
-                result.maxMarks = calculatedPaperMax;
-            } else if (Number.isFinite(sessionMax) && sessionMax > 0) {
+            if (Number.isFinite(sessionMax) && sessionMax > 0) {
+                // User/session explicitly configured maxMarks (e.g. 40) -> lock to it strictly
                 result.maxMarks = sessionMax;
+            } else if (paperExplicitMax && paperExplicitMax > 0) {
+                result.maxMarks = paperExplicitMax;
             } else if (calculatedPaperMax > 0) {
                 result.maxMarks = calculatedPaperMax;
             } else {
                 result.maxMarks = 100;
             }
 
-            // Recalculate totalScore to ensure mathematical accuracy and clamp to maxMarks
+            // 🔒 HARD-LOCK: Under NO condition can totalScore exceed maxMarks or be below 0
             let calculatedTotal = result.results.reduce((sum, r) => sum + (Number(r.score) || 0), 0);
             if (calculatedTotal > result.maxMarks) {
-                console.log(`🔧 Programmatic Override: Clamping totalScore ${calculatedTotal} to maxMarks ${result.maxMarks}.`);
+                console.log(`🔧 Hard Cap: Clamping totalScore ${calculatedTotal} strictly to maxMarks ${result.maxMarks}.`);
                 calculatedTotal = result.maxMarks;
             }
+            if (calculatedTotal < 0) calculatedTotal = 0;
 
             result.totalScore = calculatedTotal;
         }
