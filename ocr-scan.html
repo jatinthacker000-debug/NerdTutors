@@ -1199,25 +1199,16 @@
                 console.log("- Files:", uploadedFiles.length, "· ~" + currentPayloadMB().toFixed(2) + " MB payload");
                 console.log("- Override Instructions:", selectedSession?.otherInstructions || "(None)");
 
-                // Dynamic model selection (?model=gemini-argon or ?model=gemini-3.8-flash) or session config
-                const urlParams = new URLSearchParams(window.location.search);
-                const activeModel = urlParams.get('model') || selectedSession?.model || undefined;
-
                 // Call session-evaluate backend endpoint (S1 retry + S2 progress).
-                const payloadObj = {
+                const payloadString = JSON.stringify({
                     mode: 'session-evaluate',
                     questions: selectedSession.questions,
                     markingScheme: selectedSession.markingScheme,
                     maxMarks: selectedSession.maxMarks,
                     images: uploadedFiles,
                     subject: selectedSession.subject,
-                    otherInstructions: selectedSession.otherInstructions || "",
-                    cachedContentId: selectedSession.cachedContentId || null
-                };
-                if (activeModel) {
-                    payloadObj.model = activeModel;
-                }
-                const payloadString = JSON.stringify(payloadObj);
+                    otherInstructions: selectedSession.otherInstructions || ""
+                });
 
                 const report = await submitWithRetry(payloadString);
                 loadingStatus.textContent = "Analyzing results & drafting report card...";
