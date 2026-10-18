@@ -5,8 +5,7 @@
     <script src="gate-guard.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NerdTutors Admin | Join the change</title>
-    <link rel="icon" type="image/png" href="assets/images/logo.png">
+    <title>Admin Panel - Question Management</title>
 
     <!-- SheetJS Library for Excel parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -58,13 +57,7 @@
         <!-- Header -->
         <div class="admin-header">
             <div class="admin-title">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <img src="assets/images/logo.png" alt="NerdTutors Logo" style="width: 40px; height: 40px; border-radius: 10px; object-fit: cover; box-shadow: 0 4px 12px rgba(99,102,241,0.25);">
-                    <div>
-                        <h1 style="margin: 0; font-size: 1.4rem; line-height: 1.2;">NerdTutors Question Admin</h1>
-                        <span style="font-size: 0.75rem; color: #818cf8; font-weight: 600; letter-spacing: 0.04em;">Join the change</span>
-                    </div>
-                </div>
+                <h1>📚 NerdTutors Question Admin</h1>
                 <div class="user-info">
                     <a href="index.html" class="btn-dashboard" style="text-decoration:none;">← Home</a>
                     <button class="btn-dashboard" onclick="window.open('dashboard.html', '_blank')">
@@ -84,7 +77,7 @@
                 <button class="tab-btn active" data-tab="create-session">➕ Create Test Session</button>
                 <button class="tab-btn" data-tab="view-results">📋 View Results</button>
                 <button class="tab-btn" data-tab="evaluate-answers">📝 Manual PDF Evaluation</button>
-                <button class="tab-btn" data-tab="ai-trainer">🧠 AI Trainer & Verified Loop</button>
+                <button class="tab-btn" data-tab="gate-keys">🔑 Gate Access Keys</button>
             </div>
 
             <!-- Create Test Session Tab -->
@@ -480,56 +473,130 @@
                 </div>
             </div>
 
-            <!-- AI Trainer & Verified Loop Tab -->
-            <div class="tab-panel" id="ai-trainerTab">
-                <div class="content-box" style="background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 2rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 1rem;">
+            <!-- Gate Access Keys Tab Panel -->
+            <div class="tab-panel" id="gate-keysTab">
+                <div class="question-form" style="padding: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
                         <div>
-                            <h2 style="margin: 0; color: #0f172a; font-size: 1.5rem;">🧠 AI Discrepancy Analyzer & Rule Generator</h2>
-                            <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.9rem;">Paste the two raw texts below. Click the button, and Gemini API will automatically compare them, extract the exact mistakes, generate the conclusion, and save it to Firebase!</p>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                <h2 style="margin: 0; color: #0f172a; font-size: 1.6rem; font-family: 'Poppins', sans-serif;">🔑 Gate Access Keys & Moderator Passwords</h2>
+                                <span style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🔥 Firebase Firestore Native</span>
+                            </div>
+                            <p style="margin: 0; color: #64748b; font-size: 0.95rem;">
+                                All credentials are saved directly to Firebase Firestore (<code>collection: gateCredentials</code>). Verified securely on backend without frontend leaks.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" id="btnShiftToFirebase" class="btn" onclick="window.shiftCredentialsToFirebase()" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25);">
+                                🔥 Shift / Sync All to Firebase
+                            </button>
+                            <button type="button" class="btn" onclick="window.reloadGateCredentials()" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+                                🔄 Refresh Keys
+                            </button>
                         </div>
                     </div>
 
-                    <form id="verifyCorrectionForm" style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <!-- Side-by-side Simple Boxes -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                            <!-- Box 1: Production AI Data -->
-                            <div style="background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 8px; padding: 1.25rem;">
-                                <label for="verifyAiBreakdown" style="font-weight: 700; color: #991b1b; display: block; margin-bottom: 0.5rem; font-size: 1.05rem;">
-                                    🤖 1. Paste Production AI Evaluation Text Here
-                                </label>
-                                <textarea id="verifyAiBreakdown" required style="width: 100%; min-height: 220px; padding: 0.75rem; border: 1px solid #f87171; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" placeholder="Paste current AI output here (e.g. Q1 Score 1/1, Q2 Score 0/1, Q20 Score 4/4...)"></textarea>
+                    <!-- Firestore Security Rules Notice (Shown automatically if client Firestore permissions are restricted) -->
+                    <div id="gateFirestoreRulesNotice" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 1.1rem 1.4rem; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 280px;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                    <span style="font-size: 1.2rem;">🔒</span>
+                                    <strong style="color: #92400e; font-size: 0.95rem;">Firestore Security Rule Update Recommended</strong>
+                                    <span style="background: #dcfce7; color: #166534; font-size: 0.72rem; padding: 2px 6px; border-radius: 6px; font-weight: 700;">Active via Secure Backend</span>
+                                </div>
+                                <p style="margin: 0; color: #78350f; font-size: 0.85rem; line-height: 1.45;">
+                                    All gate credentials below are <strong>100% active and working</strong> via backend synchronization. To enable direct Firebase Console client syncing, add the permission rule for <code>gateCredentials</code> in your Firebase Console.
+                                </p>
                             </div>
-
-                            <!-- Box 2: Client Benchmark PDF Data -->
-                            <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 1.25rem;">
-                                <label for="verifyTeacherBreakdown" style="font-weight: 700; color: #166534; display: block; margin-bottom: 0.5rem; font-size: 1.05rem;">
-                                    👑 2. Paste Client Benchmark PDF Text Here
-                                </label>
-                                <textarea id="verifyTeacherBreakdown" required style="width: 100%; min-height: 220px; padding: 0.75rem; border: 1px solid #4ade80; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" placeholder="Paste Client PDF text here (e.g. Q1 Correct, Q20 0/4 Copied prompt text...)"></textarea>
-                            </div>
+                            <button type="button" onclick="window.copyFirestoreRuleSnippet()" style="background: #f59e0b; color: white; border: none; padding: 0.55rem 1.1rem; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);">
+                                📋 Copy Rule Snippet
+                            </button>
                         </div>
-
-                        <!-- Auto Generate Button -->
-                        <button type="submit" id="btnAutoAnalyze" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 1rem 2rem; border-radius: 8px; font-size: 1.1rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(30,60,114,0.3); align-self: center;">
-                            ⚡ Auto-Analyze via Gemini API & Save Critical Rule to Firebase
-                        </button>
-                    </form>
-
-                    <!-- Result Box generated by Gemini API -->
-                    <div id="aiConclusionResultCard" style="display: none; margin-top: 2rem; background: #faf5ff; border: 2px solid #d8b4fe; border-radius: 10px; padding: 1.5rem;">
-                        <h3 style="margin-top: 0; color: #6b21a8; font-size: 1.2rem;">✨ Gemini API Analysis Result & Generated Critical Directive</h3>
-                        <div id="aiConclusionText" style="white-space: pre-wrap; font-family: monospace; font-size: 0.95rem; color: #4c1d95; background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e9d5ff; margin-bottom: 1rem;"></div>
-                        <span style="color: #059669; font-weight: 700; font-size: 0.9rem;">✅ Saved to Firebase Collection 'eval_directives' & Active in System!</span>
                     </div>
 
-                    <!-- Evolved Critical Directives Display -->
-                    <div style="margin-top: 2.5rem; border-top: 2px solid #f1f5f9; padding-top: 1.5rem;">
-                        <h3 style="margin-top: 0; color: #0f172a; font-size: 1.2rem;">🔥 Critical Prompt Directives Saved in Firebase</h3>
-                        <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">These rules are automatically loaded into Gemini's system prompt during every single evaluation to prevent repeating past mistakes!</p>
+                    <!-- Key Stats Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem;">
+                            <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Active Keys</div>
+                            <div style="font-size: 1.8rem; font-weight: 800; color: #4338ca; margin-top: 0.25rem;" id="gateTotalKeysCount">5</div>
+                            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem;">Available for login</div>
+                        </div>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem;">
+                            <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">System Default Keys</div>
+                            <div style="font-size: 1.8rem; font-weight: 800; color: #2563eb; margin-top: 0.25rem;" id="gateSystemKeysCount">5</div>
+                            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem;">Pre-configured master gates</div>
+                        </div>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem;">
+                            <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Custom Created Keys</div>
+                            <div style="font-size: 1.8rem; font-weight: 800; color: #059669; margin-top: 0.25rem;" id="gateCustomKeysCount">0</div>
+                            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem;">Added via Admin Panel</div>
+                        </div>
+                    </div>
 
-                        <div id="directivesList" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                            <!-- Directives rendered dynamically -->
+                    <!-- Create New Key Form Box -->
+                    <div style="background: white; border: 1.5px solid #e0e7ff; border-radius: 16px; padding: 1.75rem; margin-bottom: 2.5rem; box-shadow: 0 4px 16px rgba(99, 102, 241, 0.05);">
+                        <h3 style="margin: 0 0 0.5rem 0; color: #1e293b; font-size: 1.2rem; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>➕</span> Create New Gate Password
+                        </h3>
+                        <p style="margin: 0 0 1.5rem 0; color: #64748b; font-size: 0.88rem;">Create credentials for specific batches, schools, or teachers. Users can instantly log in at <code>login-gate.html</code>.</p>
+                        
+                        <form id="createGateKeyForm">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+                                <div>
+                                    <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #334155; margin-bottom: 0.4rem;">Gate Username *</label>
+                                    <div style="position: relative;">
+                                        <input type="text" id="gateUsernameInput" required placeholder="e.g. eco_class12_batch" style="width: 100%; padding: 0.75rem 1rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; font-family: monospace; box-sizing: border-box; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
+                                    </div>
+                                    <small style="color: #94a3b8; font-size: 0.75rem; display: block; margin-top: 4px;">Only letters, numbers, and underscores.</small>
+                                </div>
+
+                                <div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                                        <label style="font-weight: 600; font-size: 0.85rem; color: #334155;">Gate Password *</label>
+                                        <button type="button" id="btnGenerateGatePassword" style="background: none; border: none; color: #6366f1; font-size: 0.75rem; font-weight: 700; cursor: pointer; text-decoration: underline;">🎲 Generate Secure</button>
+                                    </div>
+                                    <div style="position: relative;">
+                                        <input type="text" id="gatePasswordInput" required placeholder="Enter or generate password" style="width: 100%; padding: 0.75rem 1rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; font-family: monospace; box-sizing: border-box; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
+                                    </div>
+                                    <small style="color: #94a3b8; font-size: 0.75rem; display: block; margin-top: 4px;">Min 4 characters. Stored securely on the backend.</small>
+                                </div>
+
+                                <div>
+                                    <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #334155; margin-bottom: 0.4rem;">Description / Batch Label</label>
+                                    <input type="text" id="gateLabelInput" placeholder="e.g. Class 12 Economics - Test 3 Batch" style="width: 100%; padding: 0.75rem 1rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
+                                    <small style="color: #94a3b8; font-size: 0.75rem; display: block; margin-top: 4px;">Helps you identify who is using this key.</small>
+                                </div>
+                            </div>
+
+                            <button type="submit" id="btnSaveGateKey" style="background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: white; border: none; border-radius: 8px; padding: 0.8rem 1.8rem; font-weight: 700; font-size: 0.95rem; cursor: pointer; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); transition: transform 0.2s;">
+                                ➕ Create Gate Key
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Active Keys Table -->
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
+                        <div style="padding: 1.25rem 1.5rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0; color: #1e293b; font-size: 1.1rem; font-weight: 700;">📋 Active Access Keys Registry</h3>
+                            <span style="font-size: 0.8rem; color: #64748b;">Credentials verified via backend server</span>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead>
+                                    <tr style="background: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
+                                        <th style="padding: 0.75rem 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Username</th>
+                                        <th style="padding: 0.75rem 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Password</th>
+                                        <th style="padding: 0.75rem 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Description</th>
+                                        <th style="padding: 0.75rem 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Key Type</th>
+                                        <th style="padding: 0.75rem 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase;">Created</th>
+                                        <th style="padding: 0.75rem 1rem; font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="gateKeysTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -871,6 +938,47 @@
             </form>
         </div>
     </div>
+
+    <!-- Edit Gate Key Modal -->
+    <div id="editGateKeyModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); z-index: 3000; justify-content: center; align-items: center; padding: 1rem; backdrop-filter: blur(4px);">
+        <div style="background: white; width: 100%; max-width: 480px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.15); padding: 2rem; position: relative; font-family: 'Inter', sans-serif;">
+            <button onclick="document.getElementById('editGateKeyModal').style.display='none'" style="position: absolute; top: 1.25rem; right: 1.25rem; border: none; background: none; font-size: 1.5rem; cursor: pointer; color: #a0aec0; transition: color 0.2s;" onmouseover="this.style.color='#4a5568'" onmouseout="this.style.color='#a0aec0'">×</button>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="font-size: 1.4rem;">✏️</span>
+                <h3 style="margin: 0; color: #1e293b; font-family: 'Poppins', sans-serif; font-size: 1.3rem;">Modify Gate Key</h3>
+            </div>
+            <p style="margin: 0 0 1.5rem 0; color: #64748b; font-size: 0.88rem;">Update the password or description for this gate key.</p>
+            
+            <form id="editGateKeyForm">
+                <div style="margin-bottom: 1.25rem;">
+                    <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #334155; margin-bottom: 0.4rem;">Username (Locked)</label>
+                    <input type="text" id="editGateKeyUsername" readonly style="width: 100%; padding: 0.75rem 1rem; border: 1.5px solid #e2e8f0; background: #f8fafc; border-radius: 8px; font-size: 0.95rem; font-family: monospace; color: #475569; font-weight: 600; box-sizing: border-box; outline: none;">
+                </div>
+
+                <div style="margin-bottom: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                        <label style="font-weight: 600; font-size: 0.85rem; color: #334155;">Password *</label>
+                        <button type="button" id="btnGenEditGatePassword" style="background: none; border: none; color: #6366f1; font-size: 0.75rem; font-weight: 700; cursor: pointer; text-decoration: underline;">🎲 Generate Secure</button>
+                    </div>
+                    <div style="position: relative;">
+                        <input type="text" id="editGateKeyPassword" required style="width: 100%; padding: 0.75rem 1rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; font-family: monospace; box-sizing: border-box; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
+                    </div>
+                    <small style="color: #94a3b8; font-size: 0.75rem; display: block; margin-top: 4px;">Must be at least 4 characters.</small>
+                </div>
+
+                <div style="margin-bottom: 1.75rem;">
+                    <label style="display: block; font-weight: 600; font-size: 0.85rem; color: #334155; margin-bottom: 0.4rem;">Description / Batch Label</label>
+                    <input type="text" id="editGateKeyLabel" placeholder="e.g. Master Moderator Key" style="width: 100%; padding: 0.75rem 1rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <button type="button" onclick="document.getElementById('editGateKeyModal').style.display='none'" style="flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid #cbd5e0; background: white; color: #4a5568; font-weight: 600; cursor: pointer;">Cancel</button>
+                    <button type="submit" id="btnSubmitEditGateKey" style="flex: 1; padding: 0.75rem; border-radius: 8px; border: none; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: white; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">💾 Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- PDF Extraction Automated Self-Test Diagnostic Modal -->
     <div id="diagnosticModal" class="diagnostic-modal-backdrop" style="display: none;">
         <div class="diagnostic-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="diagModalTitle">
