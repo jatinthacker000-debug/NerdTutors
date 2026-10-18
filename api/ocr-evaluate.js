@@ -637,8 +637,15 @@ Return STRICT JSON only (no markdown, no code blocks):
         };
     }
 
+    const cumulativeUsage = { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 };
+
     async function callGeminiModel(reqBody, modelName = activeModel, preferredKeyIndex = 0) {
         let lastError = null;
+        if (reqBody && Array.isArray(reqBody.contents)) {
+            reqBody.contents.forEach(c => {
+                if (!c.role) c.role = "user";
+            });
+        }
         const projectId = process.env.GCP_PROJECT_ID || "975383880672";
         const location = process.env.GCP_LOCATION || "us-central1";
 
@@ -654,7 +661,7 @@ Return STRICT JSON only (no markdown, no code blocks):
             try {
                 console.log(`📡 [${isVertex ? 'Vertex AI' : 'Gemini'} Call] Model: ${modelName}, Key Index: ${keyIndex + 1}/${apiKeys.length}...`);
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 65000);
+                const timeoutId = setTimeout(() => controller.abort(), 180000);
 
                 const response = await fetch(`${currentModelUrl}?key=${currentKey}`, {
                     method: "POST",
@@ -673,7 +680,13 @@ Return STRICT JSON only (no markdown, no code blocks):
                     }
                     throw new Error(raw.replace(/key=[^&\s]+/gi, 'key=REDACTED'));
                 }
-                return JSON.parse(raw);
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.usageMetadata) {
+                    cumulativeUsage.promptTokens += (parsed.usageMetadata.promptTokenCount || 0);
+                    cumulativeUsage.candidatesTokens += (parsed.usageMetadata.candidatesTokenCount || 0);
+                    cumulativeUsage.totalTokens += (parsed.usageMetadata.totalTokenCount || 0);
+                }
+                return parsed;
             } catch (err) {
                 const sanitizedMsg = err.message ? err.message.replace(/key=[^&\s]+/gi, 'key=REDACTED') : 'Unknown error';
                 console.error(`❌ Error with Key Index ${keyIndex + 1}:`, sanitizedMsg);
@@ -825,10 +838,11 @@ Return the response as a strict JSON object.`;
 
     try {
         if (useKimi) {
+            let transcription = "";
             try {
                 console.log("🧠 Starting Dual-API Grading Flow (Gemini + Kimi)...");
                 // Pass 1: Transcribe via Gemini
-                const transcription = await transcribeWithGemini(requestBody, mode);
+                transcription = await transcribeWithGemini(requestBody, mode);
                 console.log("✍️ Gemini Transcription complete.");
 
                 // Pass 2: Grade via Kimi
@@ -840,7 +854,19 @@ Return the response as a strict JSON object.`;
                 result.modelUsed = `gemini-transcription + ${process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL || "kimi-k3"}`;
             } catch (dualApiErr) {
                 console.error("⚠️ Dual-API Grading failed:", dualApiErr.message);
-                result = await evaluateSinglePassFallback();
+                if (transcription) {
+                    try {
+                        console.log(`🔄 Reusing extracted transcription to grade directly with Gemini (${activeModel})...`);
+                        const gradeText = await gradeWithGemini(transcription, textPrompt);
+                        const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
+                        result = JSON.parse(cleanGrade);
+                        result.modelUsed = `gemini-transcription + ${activeModel}`;
+                    } catch (geminiGradeErr) {
+                        result = await evaluateSinglePassFallback();
+                    }
+                } else {
+                    result = await evaluateSinglePassFallback();
+                }
             }
         } else {
             try {
@@ -936,10 +962,18 @@ Return the response as a strict JSON object.`;
             result.totalScore = calculatedTotal;
         }
 
-        // Add metadata about the model used
+        // Add metadata about the model used and tokens burned
         if (!result.modelUsed) {
             result.modelUsed = activeModel;
         }
+
+        result.tokenUsage = {
+            promptTokens: cumulativeUsage.promptTokens,
+            completionTokens: cumulativeUsage.candidatesTokens,
+            totalTokens: cumulativeUsage.totalTokens || (cumulativeUsage.promptTokens + cumulativeUsage.candidatesTokens),
+            costUsd: Number((cumulativeUsage.promptTokens * 0.000000075 + cumulativeUsage.candidatesTokens * 0.0000003).toFixed(6)),
+            costInr: Number(((cumulativeUsage.promptTokens * 0.000000075 + cumulativeUsage.candidatesTokens * 0.0000003) * 86).toFixed(4))
+        };
 
         return res.status(200).json(result);
 
