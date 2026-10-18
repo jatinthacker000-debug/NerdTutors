@@ -195,6 +195,9 @@ export default async function handler(req, res) {
                     success: true,
                     message: `Gate credential "${toDelete.username}" successfully deleted.`,
                     credentials: currentCreds
+                });
+            }
+
             if (action === "sync" && Array.isArray(body.credentials)) {
                 let currentCreds = loadAllCredentials();
                 body.credentials.forEach(item => {

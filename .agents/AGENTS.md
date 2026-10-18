@@ -72,12 +72,12 @@ This section contains the exact implementations, structures, and business logic 
 ---
 
 ## 6. Firebase Gate Passwords Management & Access Keys Registry
-* **Purpose**: Store and manage gate access credentials directly in **Firebase Firestore** (`collection: 'gateCredentials'`) rather than in frontend code or static env files, with real-time CRUD from the Admin Panel.
+* **Purpose**: Store and manage all gate access credentials directly in **Firebase Firestore** (`collection: 'gateCredentials'`) rather than local application files, with document IDs mapped directly to usernames (`doc(db, 'gateCredentials', username)`).
 * **Component Map**:
   - [api/manage-gate.js](file:///d:/Trinno/NerdTutors/api/manage-gate.js): Backend API handling credential actions (`add`, `delete`, `sync`, `GET`).
   - [api/verify-gate.js](file:///d:/Trinno/NerdTutors/api/verify-gate.js): Validates submitted passwords on the backend against built-in defaults + persistent Firestore sync credentials and returns cryptographically signed HMAC tokens.
-  - [js/admin-modules/gate-manager.js](file:///d:/Trinno/NerdTutors/js/admin-modules/gate-manager.js): Native Firestore module auto-seeding the 5 default master credentials, creating custom credentials, and real-time syncing.
-  - [admin.html](file:///d:/Trinno/NerdTutors/admin.html): Added **🔑 Gate Access Keys** tab with password generator, copy shortcuts, and deletion controls.
+  - [js/admin-modules/gate-manager.js](file:///d:/Trinno/NerdTutors/js/admin-modules/gate-manager.js): Native Firestore module saving directly to Firestore, auto-seeding/shifting default master credentials on admin login, handling deletions, and exposing `shiftCredentialsToFirebase()` (`window.shiftCredentialsToFirebase`).
+  - [admin.html](file:///d:/Trinno/NerdTutors/admin.html): Added **🔑 Gate Access Keys** tab with "🔥 Shift / Sync All to Firebase" action, random password generator, copy shortcuts, and real-time key registry.
 
 ---
 

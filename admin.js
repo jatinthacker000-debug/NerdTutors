@@ -43,7 +43,6 @@ function init() {
     setupMcqFields(); // NEW: Setup MCQ toggle
     setupAiTrainer(); // AI Trainer: Auto-Discrepancy Analyzer
     setupPdfExtractionHub(); // Direct PDF Ingestion & Diagnostic Self-Test Hub
-    setupGateManager(); // 🔑 Backend & Firebase Gate Password Management
     loadDraft();
 }
 

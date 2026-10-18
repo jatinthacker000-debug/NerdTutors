@@ -534,14 +534,22 @@
                 <div class="question-form" style="padding: 2rem;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
                         <div>
-                            <h2 style="margin: 0; color: #0f172a; font-size: 1.6rem; font-family: 'Poppins', sans-serif;">🔑 Gate Access Keys & Moderator Passwords</h2>
-                            <p style="margin: 0.35rem 0 0 0; color: #64748b; font-size: 0.95rem;">
-                                Secure, backend-verified credentials for students, teachers, and moderators. Passwords are encrypted on the backend and never exposed in frontend code.
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                <h2 style="margin: 0; color: #0f172a; font-size: 1.6rem; font-family: 'Poppins', sans-serif;">🔑 Gate Access Keys & Moderator Passwords</h2>
+                                <span style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🔥 Firebase Firestore Native</span>
+                            </div>
+                            <p style="margin: 0; color: #64748b; font-size: 0.95rem;">
+                                All credentials are saved directly to Firebase Firestore (<code>collection: gateCredentials</code>). Verified securely on backend without frontend leaks.
                             </p>
                         </div>
-                        <button type="button" class="btn" onclick="window.reloadGateCredentials()" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
-                            🔄 Refresh Keys
-                        </button>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" id="btnShiftToFirebase" class="btn" onclick="window.shiftCredentialsToFirebase()" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25);">
+                                🔥 Shift / Sync All to Firebase
+                            </button>
+                            <button type="button" class="btn" onclick="window.reloadGateCredentials()" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+                                🔄 Refresh Keys
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Key Stats Cards -->
