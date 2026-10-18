@@ -5,7 +5,8 @@
     <script src="gate-guard.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Economics Test Platform</title>
+    <title>Admin Dashboard - NerdTutors</title>
+    <link rel="icon" type="image/png" href="assets/images/logo.png">
 
     <!-- Dashboard Styles -->
     <link rel="stylesheet" href="dashboard.css">
@@ -17,8 +18,12 @@
 <body>
     <!-- ==================== SIDEBAR ==================== -->
     <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <h1>📊 Admin Dashboard</h1>
+        <div class="sidebar-header" style="display:flex; align-items:center; gap:12px;">
+            <img src="assets/images/logo.png" alt="NerdTutors Logo" style="width:38px; height:38px; border-radius:10px; object-fit:cover; box-shadow: 0 4px 12px rgba(99,102,241,0.25);">
+            <div>
+                <h1 style="font-size:1.2rem; font-weight:800; margin:0; line-height:1.2;">NerdTutors</h1>
+                <span style="font-size:0.75rem; color:#818cf8; font-weight:600; letter-spacing:0.04em;">Join the change</span>
+            </div>
         </div>
         <nav class="nav-menu">
             <a href="#dashboard" class="nav-item active">
@@ -36,10 +41,6 @@
             <a href="#analytics" class="nav-item">
                 <span class="nav-icon">📈</span>
                 <span>Analytics</span>
-            </a>
-            <a href="#matrix" class="nav-item">
-                <span class="nav-icon">🔢</span>
-                <span>Question Matrix</span>
             </a>
             <a href="#export" class="nav-item">
                 <span class="nav-icon">💾</span>
@@ -257,9 +258,6 @@
                 <div class="content-section">
                     <div class="section-header">
                         <h3 class="section-title">📈 Analytics & Insights</h3>
-                        <button class="btn btn-primary" id="btnGoToMatrix" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); display: flex; align-items: center; gap: 0.4rem; font-weight: 600;">
-                            <span>🔢</span> View Question Matrix →
-                        </button>
                     </div>
 
                     <!-- Analytics Filter Bar -->
@@ -426,156 +424,6 @@
                 </div>
             </div>
 
-            <!-- ==================== QUESTION MATRIX PAGE ==================== -->
-            <div class="page-section" id="matrixPage" style="display: none;">
-                <div class="content-section">
-                    <div class="section-header">
-                        <div>
-                            <h3 class="section-title">🔢 Question-Wise Student Performance Matrix</h3>
-                            <p style="color: #64748b; font-size: 0.9rem; margin-top: 0.25rem;">
-                                Cross-sectional marks matrix comparing student scores for every question side-by-side with accuracy analytics.
-                            </p>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <button class="btn btn-secondary" id="matrixRefreshBtn">
-                                🔄 Refresh
-                            </button>
-                            <button class="btn btn-secondary" id="matrixPrintBtn">
-                                🖨️ Print Matrix
-                            </button>
-                            <button class="btn btn-primary" id="matrixExportBtn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
-                                📥 Export Matrix (CSV)
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Filter Control Bar -->
-                    <div class="filters-bar" style="margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; background: #ffffff; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; width: 100%; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                        <div style="flex: 1; min-width: 140px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">Class</label>
-                            <select class="filter-select" id="matrixClassFilter" style="width: 100%; height: 38px; padding: 0 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0;">
-                                <option value="all">All Classes</option>
-                                <option value="Class 10th">Class 10th</option>
-                                <option value="Class 12th">Class 12th</option>
-                            </select>
-                        </div>
-
-                        <div style="flex: 1; min-width: 150px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">Subject</label>
-                            <select class="filter-select" id="matrixSubjectFilter" style="width: 100%; height: 38px; padding: 0 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0;">
-                                <option value="all">All Subjects</option>
-                                <option value="Economics">Economics</option>
-                                <option value="Business Studies">Business Studies</option>
-                                <option value="Accountancy">Accountancy</option>
-                                <option value="Social Science">Social Science</option>
-                            </select>
-                        </div>
-
-                        <div style="flex: 2; min-width: 220px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">Test Session *</label>
-                            <select class="filter-select" id="matrixSessionFilter" style="width: 100%; height: 38px; padding: 0 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0; font-weight: 600; color: #1e3c72;">
-                                <option value="all">All Test Sessions (Combined View)</option>
-                            </select>
-                        </div>
-
-                        <div style="flex: 1; min-width: 150px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">Batch / Group</label>
-                            <select class="filter-select" id="matrixBatchFilter" style="width: 100%; height: 38px; padding: 0 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0;">
-                                <option value="all">All Batches</option>
-                                <option value="Both">Both (Shared)</option>
-                                <option value="Nerd Tutors OSEM">Nerd Tutors OSEM</option>
-                                <option value="Nerd Tutors Nalanda">Nerd Tutors Nalanda</option>
-                                <option value="Others">Others</option>
-                            </select>
-                        </div>
-
-                        <div style="flex: 1.5; min-width: 180px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">Search Student</label>
-                            <input type="text" id="matrixStudentSearch" placeholder="Filter by student name..." style="width: 100%; height: 38px; padding: 0 0.75rem; border-radius: 6px; border: 1px solid #cbd5e0; box-sizing: border-box; font-size: 0.85rem;">
-                        </div>
-
-                        <div style="flex: 1; min-width: 150px;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">Question Filter</label>
-                            <select class="filter-select" id="matrixQuestionTypeFilter" style="width: 100%; height: 38px; padding: 0 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0;">
-                                <option value="all">All Questions</option>
-                                <option value="mistakes">Mistakes Only (Zero / Partial)</option>
-                                <option value="full">Full Marks Only</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- KPI Summary Cards -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; box-shadow: var(--shadow-sm);">
-                            <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Students in View</div>
-                            <div style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;" id="matrixStudentsCount">0</div>
-                            <div style="font-size: 0.75rem; color: #94a3b8;">Active in selected filters</div>
-                        </div>
-                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; box-shadow: var(--shadow-sm);">
-                            <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Questions Tracked</div>
-                            <div style="font-size: 1.6rem; font-weight: 800; color: #4338ca; margin-top: 0.2rem;" id="matrixQuestionsCount">0</div>
-                            <div style="font-size: 0.75rem; color: #94a3b8;">Distinct questions mapped</div>
-                        </div>
-                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; box-shadow: var(--shadow-sm);">
-                            <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Toughest Question</div>
-                            <div style="font-size: 1.25rem; font-weight: 800; color: #dc2626; margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="matrixToughestQ">-</div>
-                            <div style="font-size: 0.75rem; color: #94a3b8;" id="matrixToughestQSub">Lowest average score</div>
-                        </div>
-                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; box-shadow: var(--shadow-sm);">
-                            <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Easiest Question</div>
-                            <div style="font-size: 1.25rem; font-weight: 800; color: #15803d; margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="matrixEasiestQ">-</div>
-                            <div style="font-size: 0.75rem; color: #94a3b8;" id="matrixEasiestQSub">Highest average score</div>
-                        </div>
-                    </div>
-
-                    <!-- Legend & Instruction -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <div style="display: flex; gap: 1rem; align-items: center; font-size: 0.8rem; color: #475569;">
-                            <span style="font-weight: 700;">Cell Legend:</span>
-                            <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
-                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #dcfce7; border: 1px solid #86efac;"></span> Full Marks
-                            </span>
-                            <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
-                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #fef3c7; border: 1px solid #fde68a;"></span> Partial Marks
-                            </span>
-                            <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
-                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #fee2e2; border: 1px solid #fecaca;"></span> Zero / Incorrect
-                            </span>
-                            <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
-                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #f1f5f9; border: 1px solid #cbd5e1;"></span> Unattempted
-                            </span>
-                        </div>
-                        <div style="font-size: 0.78rem; color: #64748b; font-style: italic;">
-                            💡 Click on any cell score to view student's written response & examiner evaluation.
-                        </div>
-                    </div>
-
-                    <!-- Matrix Table Container -->
-                    <div class="matrix-table-wrapper" id="matrixTableWrapper">
-                        <div class="matrix-scroll-container" id="matrixScrollContainer">
-                            <table class="matrix-table" id="questionMatrixTable">
-                                <thead id="matrixTableHead">
-                                    <!-- Populated dynamically with Question Number | Student 1 | Student 2 | ... | Class Avg -->
-                                </thead>
-                                <tbody id="matrixTableBody">
-                                    <!-- Populated dynamically with Q1, Q2, Q3... rows -->
-                                </tbody>
-                                <tfoot id="matrixTableFoot">
-                                    <!-- Summary Row: Total Marks / Percentages per student -->
-                                </tfoot>
-                            </table>
-                        </div>
-
-                        <!-- Empty State if no results match -->
-                        <div class="empty-state" id="matrixEmptyState" style="display: none; padding: 3rem 1rem;">
-                            <div class="empty-icon" style="font-size: 2.5rem;">🔢</div>
-                            <div class="empty-title" style="font-size: 1.2rem; font-weight: 700; margin-top: 0.5rem;">No Evaluations Found for Matrix</div>
-                            <p style="color: #64748b; font-size: 0.9rem; margin-top: 0.25rem;">Select a different test session or adjust the filters above to populate the question matrix.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
     </div>
     </div>
@@ -617,49 +465,6 @@
                     <div class="answers-list" id="modalAnswersList">
                         <!-- Answers will be populated here -->
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== MATRIX CELL DETAIL FLYOUT DRAWER ==================== -->
-    <div class="matrix-drawer-backdrop" id="matrixCellDrawerBackdrop">
-        <div class="matrix-drawer">
-            <div class="matrix-drawer-header">
-                <div>
-                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8;" id="drawerSessionLabel">Test Session</div>
-                    <h3 id="drawerStudentName" style="margin: 0.2rem 0; font-size: 1.3rem;">Student Name</h3>
-                    <div style="font-size: 0.85rem; color: #cbd5e1;" id="drawerQuestionNumber">Question Details</div>
-                </div>
-                <button type="button" id="btnCloseMatrixDrawer" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 4px;">✕</button>
-            </div>
-            <div class="matrix-drawer-body">
-                <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem;">
-                    <div>
-                        <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Marks Awarded</div>
-                        <div id="drawerScoreValue" style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">0 / 0</div>
-                    </div>
-                    <div id="drawerScoreBadge"></div>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="margin: 0 0 0.5rem 0; color: #334155; font-size: 0.95rem;">📖 Question Prompt</h4>
-                    <div id="drawerQuestionText" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem; font-size: 0.9rem; color: #1e293b; line-height: 1.5;">-</div>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="margin: 0 0 0.5rem 0; color: #334155; font-size: 0.95rem;">✍️ Student's Answer / Transcription</h4>
-                    <div id="drawerStudentAnswer" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.85rem; font-size: 0.9rem; color: #334155; line-height: 1.6; font-style: italic; white-space: pre-wrap;">-</div>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="margin: 0 0 0.5rem 0; color: #334155; font-size: 0.95rem;">📋 Examiner Feedback</h4>
-                    <div id="drawerFeedback" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.85rem; font-size: 0.9rem; color: #1e40af; line-height: 1.6;">-</div>
-                </div>
-
-                <div id="drawerImprovementsBox" style="display: none; margin-bottom: 1.5rem;">
-                    <h4 style="margin: 0 0 0.5rem 0; color: #b45309; font-size: 0.95rem;">💡 Key Improvement Advice</h4>
-                    <div id="drawerImprovementsList" style="background: #fefce8; border: 1px solid #fef08a; border-radius: 8px; padding: 0.85rem; font-size: 0.85rem; color: #854d0e; line-height: 1.5;"></div>
                 </div>
             </div>
         </div>
