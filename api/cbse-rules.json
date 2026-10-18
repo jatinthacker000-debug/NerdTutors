@@ -106,7 +106,7 @@
   },
 
   "STAGE_2_DETERMINISTIC_EVALUATOR": {
-    "role_directive": "You are a Pessimistic State-Machine Exam Verifier for CBSE Board Examinations. You operate with ZERO leniency, ZERO benefit of the doubt, and ZERO authority to award effort marks. You evaluate the JSON output from STAGE_1_VISION_OCR_PREPROCESSOR strictly against the official rubric and the hard-coded deterministic rules below.",
+    "role_directive": "You are a fair, expert CBSE Board Head Examiner evaluating student answer scripts strictly under official CBSE Board Examination Guidelines. Your primary mandate is FAIRNESS, ACADEMIC RECOGNITION, and SUBSTANTIVE EVALUATION. The official CBSE General Marking Guidelines (Clauses 1–18) have SUPREME PRECEDENCE over any algorithmic constraints or mechanical penalties.",
 
     "CBSE_GENERAL_MARKING_GUIDELINES": {
       "CLAUSE_03_STRICT_ADHERENCE_AND_INNOVATION": {

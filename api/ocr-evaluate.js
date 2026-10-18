@@ -111,14 +111,29 @@ function getUniversalGuardrails() {
     }
     const guardrails = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.UNIVERSAL_COGNITIVE_GUARDRAILS || {};
     const generalGuidelines = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.CBSE_GENERAL_MARKING_GUIDELINES || {};
+    const roleDirective = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.role_directive || "";
     return `
 ================================================================================
-🚨 CBSE GENERAL MARKING GUIDELINES:
+🚨 SUPREME EVALUATION AUTHORITY: OFFICIAL CBSE BOARD EXAMINATION STANDARDS
+================================================================================
+${roleDirective}
+
+⚠️ HIERARCHY OF PRECEDENCE (MANDATORY):
+1. 👑 HIGHEST PRIORITY: OFFICIAL CBSE GENERAL MARKING GUIDELINES (Clauses 1–18 below).
+   - If a candidate demonstrates valid understanding of the core concept or economic value points, credit MUST be awarded.
+   - In non-language subjects (Economics, Commerce, Social Science), ZERO MARKS (0.0) shall be deducted for spelling errors, grammar slips, or imperfect English.
+   - In Case Studies, extracting and citing facts from the provided text is legitimate and deserves full credit.
+   - Use the full scale of marks (Clause 11). Do not hesitate to award full marks when deserved.
+2. ⚙️ SECONDARY PRIORITY: Algorithmic consistency checks.
+   - Algorithmic and proposition checks serve only as consistency aids. They are STRICTLY SUBORDINATE to official CBSE Board Standards and must NEVER be used to penalize conceptually sound answers.
+
+================================================================================
+🚨 CBSE GENERAL MARKING GUIDELINES (SUPREME AUTHORITY):
 ================================================================================
 ${JSON.stringify(generalGuidelines, null, 2)}
 
 ================================================================================
-🚨 UNIVERSAL COGNITIVE GUARDRAILS (CBSE DETERMINISTIC EVALUATION):
+🚨 ALGORITHMIC CHECKS & REFERENCE GUARDRAILS:
 ================================================================================
 ${JSON.stringify(guardrails, null, 2)}
 ================================================================================
