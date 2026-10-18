@@ -58,6 +58,67 @@ function checkIsAdmin(email, gateToken) {
     return false;
 }
 
+// ===== CBSE 2.0.0-PROD Zero-Error Rules Matrix =====
+let cbseRules = null;
+try {
+    const rulesPath = path.join(process.cwd(), 'api', 'cbse-rules.json');
+    if (fs.existsSync(rulesPath)) {
+        cbseRules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+    }
+} catch (e) {
+    console.warn("Could not load cbse-rules.json:", e.message);
+}
+
+function getSubjectDirectives(subject) {
+    const sub = (subject || "").toLowerCase();
+    if (!cbseRules || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.SUBJECT_SPECIFIC_DIRECTIVES) {
+        return "";
+    }
+
+    const directives = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.SUBJECT_SPECIFIC_DIRECTIVES;
+    let selectedRules = null;
+    let subjectHeader = "";
+
+    if (sub.includes("account") || sub.includes("accounting")) {
+        selectedRules = directives.ACCOUNTANCY_055;
+        subjectHeader = "ACCOUNTANCY (CBSE CODE 055)";
+    } else if (sub.includes("business")) {
+        selectedRules = directives.BUSINESS_STUDIES_054;
+        subjectHeader = "BUSINESS STUDIES (CBSE CODE 054)";
+    } else if (sub.includes("economics")) {
+        selectedRules = directives.ECONOMICS_030;
+        subjectHeader = "ECONOMICS (CBSE CODE 030)";
+    } else if (sub.includes("social") || sub.includes("history") || sub.includes("geography") || sub.includes("civics")) {
+        selectedRules = directives.SOCIAL_SCIENCE_087;
+        subjectHeader = "SOCIAL SCIENCE (CBSE CODE 087)";
+    }
+
+    if (!selectedRules) return "";
+
+    return `
+================================================================================
+🚨 MANDATORY SUBJECT-SPECIFIC DETERMINISTIC DIRECTIVES: ${subjectHeader}
+================================================================================
+You MUST strictly execute the following algorithmic rules without exception:
+${JSON.stringify(selectedRules, null, 2)}
+================================================================================
+`;
+}
+
+function getUniversalGuardrails() {
+    if (!cbseRules || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.UNIVERSAL_COGNITIVE_GUARDRAILS) {
+        return "";
+    }
+    const guardrails = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.UNIVERSAL_COGNITIVE_GUARDRAILS;
+    return `
+================================================================================
+🚨 UNIVERSAL COGNITIVE GUARDRAILS (CBSE DETERMINISTIC EVALUATION):
+================================================================================
+${JSON.stringify(guardrails, null, 2)}
+================================================================================
+`;
+}
+
 // ===== Multi-Tier Sliding Window Rate Limiter =====
 // Admin: Unlimited requests
 // Normal Users: Max 4 requests per rolling 60s, Max 25 requests per rolling 24 hours
@@ -307,36 +368,8 @@ export default async function handler(req, res) {
         const mm = maxMarks || 100;
         console.log(`📄 SESSION EVALUATE MODE: Max Marks = ${mm}, Subject = ${subject || 'General'}`);
 
-        let subjectSpecificInstructions = "";
-        const sub = (subject || "").toLowerCase();
-        if (sub.includes("economics")) {
-            subjectSpecificInstructions = `
-⚠️ SUBJECT-SPECIFIC EVALUATION CRITERIA (ECONOMICS):
-- Pay specific focus to correct economic definitions, concepts, and logical relationships (e.g. inflation, nominal vs real GDP, supply/demand elasticity).
-- Grade strictly on the precision of terminology used (e.g., base year vs current year pricing).
-`;
-        } else if (sub.includes("business studies") || sub.includes("business")) {
-            subjectSpecificInstructions = `
-⚠️ SUBJECT-SPECIFIC EVALUATION CRITERIA (BUSINESS STUDIES):
-- Focus on precise business terminology, principles of management (Fayol/Taylor), functions of management (planning, organizing, staffing, directing, controlling).
-- For case studies: Check for correct concept identification, quoting lines where required, and clear logical justification.
-- Marketing & Financial Management: Award marks for specific features, objectives, and distinguishing characteristics.
-`;
-        } else if (sub.includes("accountancy") || sub.includes("accounts") || sub.includes("accounting")) {
-            subjectSpecificInstructions = `
-⚠️ SUBJECT-SPECIFIC EVALUATION CRITERIA (ACCOUNTANCY):
-- Focus on accounting principles, format of ledger accounts, journal entries (debit/credit rules, narrations).
-- Calculations & Working Notes: Ensure step-marks for working notes, formulas, and arithmetic accuracy.
-- Terminology & Standards: Check for correct application of Accounting Standards / Ind AS rules.
-`;
-        } else if (sub.includes("social science") || sub.includes("history") || sub.includes("geography") || sub.includes("civics")) {
-            subjectSpecificInstructions = `
-⚠️ SUBJECT-SPECIFIC EVALUATION CRITERIA (SOCIAL SCIENCE / HISTORY / GEOGRAPHY):
-- History: Grade strictly on accuracy of historical dates, timelines, and associations of events.
-- Geography: Ensure specific focus is given to correct naming of locations, points, classifications, and geographic features.
-- Civics/Government: Look for correct constitutional, legislative, and systemic civic terminology.
-`;
-        }
+        let subjectSpecificInstructions = getSubjectDirectives(subject);
+        let universalGuardrailsPrompt = getUniversalGuardrails();
         let overrideInstructionsPrompt = "";
         if (otherInstructions && typeof otherInstructions === "string" && otherInstructions.trim() !== "") {
             // Sanitize and limit length to 500 characters to prevent prompt injection buffer overflows
@@ -365,6 +398,7 @@ ${body.markingScheme}
 
 3. Several images, PDF pages, or text transcription containing the Student's responses.
 
+${universalGuardrailsPrompt}
 ${subjectSpecificInstructions}
 
 ⚠️ ANTI-PROMPT-INJECTION SAFETY (CRITICAL):

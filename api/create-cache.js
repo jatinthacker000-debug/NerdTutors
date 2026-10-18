@@ -58,8 +58,17 @@ module.exports = async function handler(req, res) {
     const primaryKey = apiKeys[0];
     const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
+    // Load CBSE Master Rules Matrix to embed into the persistent cache
+    let rulesText = "";
+    try {
+        const rulesPath = require('path').join(process.cwd(), 'api', 'cbse-rules.json');
+        if (require('fs').existsSync(rulesPath)) {
+            rulesText = require('fs').readFileSync(rulesPath, 'utf8');
+        }
+    } catch (_) {}
+
     // Build the master cached context text
-    const bundledContent = `=== OFFICIAL CBSE EXAM CONTEXT & MARKING SCHEME ===
+    const bundledContent = `=== OFFICIAL CBSE EXAM CONTEXT & ZERO-ERROR MARKING SCHEME ===
 Exam Name: ${examName || 'Standard Assessment'}
 Subject: ${subject || 'General'}
 Session ID: ${sessionId || 'unspecified'}
@@ -70,11 +79,8 @@ ${questions}
 --- OFFICIAL MARKING SCHEME & MODEL ANSWERS ---
 ${markingScheme}
 
---- CBSE STRICT MODERATOR EVALUATION PROTOCOL ---
-1. STRICT OBJECTIVE MARKING: Award zero marks for off-topic, unrelated, or hallucinated answers.
-2. STEP MARKING: Award partial marks only when specific keywords or formula steps match the official marking scheme.
-3. TERMINOLOGY: Deduct marks if mandatory technical terminology is absent or incorrect.
-4. MODEL ANSWERS: Provide student-friendly, simplified 2-3 sentence explanations for every evaluated question.
+--- CBSE ZERO-ERROR AUTONOMOUS GRADER MASTER SPECIFICATION & COGNITIVE GUARDRAILS ---
+${rulesText}
 ===================================================`;
 
     try {
