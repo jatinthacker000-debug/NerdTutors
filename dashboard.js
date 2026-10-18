@@ -323,7 +323,11 @@ function applyFilters() {
         // Batch filter
         if (batchFilter !== 'all') {
             const studentBatch = result.batch || result.targetGroup || 'Both';
-            if (studentBatch !== batchFilter) return false;
+            if (batchFilter === 'Nerd Tutors Nalanda') {
+                if (studentBatch !== 'Nerd Tutors Nalanda' && studentBatch !== 'Nalanda') return false;
+            } else if (studentBatch !== batchFilter) {
+                return false;
+            }
         }
 
         // Test type filter
@@ -1176,7 +1180,13 @@ function executeFilteredExport() {
     let filtered = [...appState.testResults];
 
     if (batchVal !== 'all') {
-        filtered = filtered.filter(r => (r.batch || r.targetGroup || 'Both') === batchVal);
+        filtered = filtered.filter(r => {
+            const b = r.batch || r.targetGroup || 'Both';
+            if (batchVal === 'Nerd Tutors Nalanda') {
+                return b === 'Nerd Tutors Nalanda' || b === 'Nalanda';
+            }
+            return b === batchVal;
+        });
     }
     if (classVal !== 'all') {
         filtered = filtered.filter(r => r.class === classVal);

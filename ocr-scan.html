@@ -384,7 +384,7 @@
                         <select id="studentBatch" required>
                             <option value="Both">Both (Show All Tests)</option>
                             <option value="Nerd Tutors OSEM">Nerd Tutors OSEM</option>
-                            <option value="Nalanda">Nalanda</option>
+                            <option value="Nerd Tutors Nalanda">Nerd Tutors Nalanda</option>
                             <option value="Others">Others</option>
                         </select>
                     </div>
@@ -583,6 +583,9 @@
             if (!chosenBatch || chosenBatch === 'Both') return true;
             const group = session.targetGroup || 'Both';
             if (group === 'Both') return true;
+            if ((chosenBatch === 'Nerd Tutors Nalanda' || chosenBatch === 'Nalanda') && (group === 'Nerd Tutors Nalanda' || group === 'Nalanda')) {
+                return true;
+            }
             return group === chosenBatch;
         }
 
