@@ -386,8 +386,15 @@ export default async function handler(req, res) {
     let textPrompt = "";
 
     if (mode === "session-evaluate") {
-        const mm = maxMarks || 100;
-        console.log(`📄 SESSION EVALUATE MODE: Max Marks = ${mm}, Subject = ${subject || 'General'}`);
+        let questionsExplicitMax = null;
+        if (typeof questions === "string") {
+            const headerMatch = questions.match(/\((\d+)\s*Marks?\)/i) || questions.match(/Total\s*Marks?[:\s]*(\d+)/i) || questions.match(/Max(?:imum)?\s*Marks?[:\s]*(\d+)/i);
+            if (headerMatch && Number(headerMatch[1]) > 0) {
+                questionsExplicitMax = Number(headerMatch[1]);
+            }
+        }
+        const mm = questionsExplicitMax || maxMarks || 100;
+        console.log(`📄 SESSION EVALUATE MODE: Max Marks = ${mm} (explicit: ${questionsExplicitMax || 'none'}, session: ${maxMarks || 'none'}), Subject = ${subject || 'General'}`);
 
         let subjectSpecificInstructions = getSubjectDirectives(subject);
         let universalGuardrailsPrompt = getUniversalGuardrails();
@@ -879,11 +886,25 @@ Return the response as a strict JSON object.`;
                 resObj.score = s;
             });
 
-            // Use user-specified maxMarks (from session header) if provided and > 0, otherwise sum from questions
+            // Use question paper explicit max if found, or user-specified maxMarks, or calculated sum from questions
+            let paperExplicitMax = null;
+            if (typeof questions === "string") {
+                const headerMatch = questions.match(/\((\d+)\s*Marks?\)/i) || questions.match(/Total\s*Marks?[:\s]*(\d+)/i) || questions.match(/Max(?:imum)?\s*Marks?[:\s]*(\d+)/i);
+                if (headerMatch && Number(headerMatch[1]) > 0) {
+                    paperExplicitMax = Number(headerMatch[1]);
+                }
+            }
+
             const sessionMax = Number(maxMarks);
             const calculatedPaperMax = result.results.reduce((sum, r) => sum + (Number(r.maxMarks) || 0), 0);
 
-            if (Number.isFinite(sessionMax) && sessionMax > 0) {
+            if (paperExplicitMax && paperExplicitMax > 0) {
+                result.maxMarks = paperExplicitMax;
+            } else if (calculatedPaperMax > 0 && Number.isFinite(sessionMax) && sessionMax > 0 && Math.abs(calculatedPaperMax - sessionMax) > 5) {
+                // If question weights sum to e.g. 40, but sessionMax was set to 80 in Firestore, trust the actual questions sum!
+                console.log(`🔧 Auto-Correcting Max Marks: Session metadata said ${sessionMax}, but actual question paper items sum to ${calculatedPaperMax}. Using ${calculatedPaperMax}.`);
+                result.maxMarks = calculatedPaperMax;
+            } else if (Number.isFinite(sessionMax) && sessionMax > 0) {
                 result.maxMarks = sessionMax;
             } else if (calculatedPaperMax > 0) {
                 result.maxMarks = calculatedPaperMax;
