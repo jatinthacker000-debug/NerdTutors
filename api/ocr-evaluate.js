@@ -495,9 +495,17 @@ ${evolvedDirectivesPrompt}
 
 4. For each question or section:
    - Provide the score awarded.
-   - Give comprehensive, detailed feedback explaining why marks were awarded or deducted.
-   - Provide as many concrete, actionable improvement suggestions as needed based on the mistakes made.
-   - If the student made mistakes (e.g. incorrect definition, wrong concept, calculation error), extract the exact incorrect phrase, sentence, or calculation from their answer and populate it in "incorrectPhrases" with a brief explanation of why it is wrong.
+   - ⚡ STREAMLINED EFFICIENCY PROTOCOL:
+     - For FULL-MARK answers (score === maxMarks, including correct MCQs):
+       - Keep "feedback" concise (e.g., "Correct option selected" or "Accurately answered with required value points").
+       - Set "studentAnswerText": "" (do NOT re-transcribe answers that are already 100% correct).
+       - Set "improvements": [] and "incorrectPhrases": [].
+     - For PARTIAL OR ZERO MARKS (score < maxMarks):
+       - Provide comprehensive, detailed feedback explaining why marks were lost and what economic/subject concepts were missing.
+       - Extract the exact mistaken phrase or calculation from their answer into "incorrectPhrases" with a clear explanation of why it is wrong.
+       - Provide concrete, actionable improvement suggestions.
+       - Provide a concise quote of what the student wrote in "studentAnswerText".
+   - "questionText": Leave as empty string "" (the client interface automatically populates question statements from the exam session).
 
 ${overrideInstructionsPrompt}
 
@@ -507,21 +515,21 @@ Return STRICT JSON only (no markdown, no code blocks):
   "maxMarks": ${mm},
   "overallFeedback": "Detailed overall summary of the student's performance, strengths, and weaknesses.",
   "improvements": [
-    "List as many specific improvement suggestions as needed based on the student's mistakes",
+    "List specific improvement suggestions based on the student's mistakes",
     "..."
   ],
   "results": [
     {
       "questionNumber": "Q1 or Section Name",
-      "questionText": "Brief description of the question",
+      "questionText": "",
       "maxMarks": <number>,
-      "studentAnswerText": "Summary/transcription of what the student wrote for this question",
-      "feedback": "Comprehensive and detailed explanation of why marks were given or lost. Write this feedback and evaluate the student's work BEFORE outputting the score field.",
+      "studentAnswerText": "Quote of student text IF marks lost, else \"\"",
+      "feedback": "Concise confirmation if full marks; thorough gap explanation if marks lost.",
       "score": <number>,
-      "improvements": ["List as many suggestions as needed", "..."],
+      "improvements": ["Suggestions if marks deducted; empty array [] if full marks"],
       "incorrectPhrases": [
         {
-          "wrongText": "The exact incorrect phrase or calculation from the student's answer text",
+          "wrongText": "The exact incorrect phrase or calculation (empty array [] if full marks)",
           "explanation": "Why this specific phrase/calculation is incorrect"
         }
       ]
