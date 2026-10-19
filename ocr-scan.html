@@ -1202,6 +1202,8 @@
                 // Call session-evaluate backend endpoint (S1 retry + S2 progress).
                 const payloadString = JSON.stringify({
                     mode: 'session-evaluate',
+                    model: 'gemini-4-argon',
+                    thinkingLevel: 'low',
                     questions: selectedSession.questions,
                     markingScheme: selectedSession.markingScheme,
                     maxMarks: selectedSession.maxMarks,

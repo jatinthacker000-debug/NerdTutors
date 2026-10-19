@@ -378,7 +378,7 @@ export default async function handler(req, res) {
     // ===== Model & Evaluation Configuration =====
     // Primary: Gemini 4 Argon (flagship high-reasoning model)
     // Backup: Gemini 3.8 Flash (fast resilient failover)
-    const PRIMARY_MODEL = body.model || process.env.GEMINI_MODEL || "gemini-4-argon";
+    const PRIMARY_MODEL = body.model || (process.env.GEMINI_MODEL && process.env.GEMINI_MODEL !== "gemini-3.8-flash" ? process.env.GEMINI_MODEL : "gemini-4-argon");
     const BACKUP_MODEL = process.env.GEMINI_BACKUP_MODEL || (PRIMARY_MODEL !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-2.5-flash");
     const activeModel = PRIMARY_MODEL;
     const cachedContentId = body.cachedContent || body.cachedContentId || null;
