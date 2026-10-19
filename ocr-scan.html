@@ -1239,6 +1239,8 @@
                     overallFeedback: report.overallFeedback,
                     improvements: report.improvements,
                     breakdown: report.results || [],
+                    modelUsed: report.modelUsed || 'gemini-4-argon',
+                    tokenUsage: report.tokenUsage || null,
                     createdAt: serverTimestamp()
                 });
 
@@ -1248,7 +1250,7 @@
                 localStorage.removeItem('ocr_scan_testSessionId');
                 clearImagesDraft();          // S3: submission succeeded — drop the resume cache
                 uploadedFiles = [];
-                console.log(`🤖 OCR Evaluation succeeded using model: ${report.modelUsed || 'unknown'}`);
+                logTokenAuditReceipt(report, "Initial Submission");
                 renderReportCard(report);
 
             } catch (error) {
@@ -1620,10 +1622,12 @@
                     overallFeedback: report.overallFeedback,
                     improvements: report.improvements,
                     breakdown: report.results || [],
+                    modelUsed: report.modelUsed || 'gemini-4-argon',
+                    tokenUsage: report.tokenUsage || null,
                     updatedAt: serverTimestamp()
                 });
 
-                console.log(`🤖 Re-evaluation succeeded using model: ${report.modelUsed || 'unknown'}`);
+                logTokenAuditReceipt(report, "Re-evaluation");
                 renderReportCard(report);
             } catch (error) {
                 console.error("Re-evaluation failed:", error);
@@ -1633,6 +1637,26 @@
                 uploadProgressWrap.style.display = 'none';
             }
         });
+
+        // ==================== TOKEN CONSUMPTION & COST AUDIT LOGGING ====================
+        function logTokenAuditReceipt(report, context = "Evaluation") {
+            if (!report) return;
+            const usage = report.tokenUsage || {};
+            const model = report.modelUsed || "gemini-4-argon";
+            const dateStr = new Date().toLocaleString();
+            
+            console.group(`%c📊 NERDTUTORS AI EVALUATION - TOKEN CONSUMPTION & COST RECEIPT [${context.toUpperCase()}]`, "background: #4f46e5; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;");
+            console.log("%c🤖 Model Used:", "font-weight: bold; color: #0284c7;", model);
+            console.log("%c⚙️ Thinking Mode / Level:", "font-weight: bold; color: #8b5cf6;", usage.thinkingLevel || (usage.thinkingBudget ? `Budget: ${usage.thinkingBudget} tokens` : "low"));
+            console.log("%c📥 Prompt (Input) Tokens:", "font-weight: bold;", (usage.promptTokens || 0).toLocaleString());
+            console.log("%c📤 Output Tokens (Grading + Thinking):", "font-weight: bold;", (usage.completionTokens || 0).toLocaleString());
+            console.log("%c🔢 Total Tokens Consumed:", "font-weight: bold; color: #16a34a; font-size: 13px;", (usage.totalTokens || 0).toLocaleString());
+            console.log("%c💵 Estimated Cost (USD):", "font-weight: bold; color: #d97706;", `$${Number(usage.costUsd || 0).toFixed(4)}`);
+            console.log("%c🇮🇳 Estimated Cost (INR):", "font-weight: bold; color: #d97706;", `₹${Number(usage.costInr || 0).toFixed(2)}`);
+            console.log("%c📅 Evaluation Date & Time:", "color: #64748b;", dateStr);
+            console.log("%c🏷️ Pricing Plan:", "color: #64748b;", usage.pricingTier || "Google Cloud PayGo");
+            console.groupEnd();
+        }
 
         document.getElementById('btnPrintCard').addEventListener('click', () => {
             window.print();

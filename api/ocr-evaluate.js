@@ -382,11 +382,12 @@ export default async function handler(req, res) {
     const BACKUP_MODEL = process.env.GEMINI_BACKUP_MODEL || (PRIMARY_MODEL !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-2.5-flash");
     const activeModel = PRIMARY_MODEL;
     const cachedContentId = body.cachedContent || body.cachedContentId || null;
-    const defaultThinkingBudget = Number(process.env.THINKING_BUDGET || 1024);
+    const thinkingLevel = body.thinkingLevel || process.env.THINKING_LEVEL || "low";
+    const defaultThinkingBudget = Number(process.env.THINKING_BUDGET || 256);
     const thinkingBudget = body.thinkingBudget !== undefined ? Number(body.thinkingBudget) : defaultThinkingBudget;
 
-    // Helper: dynamic generationConfig that maps Gemini 4 Argon to qualitative thinkingLevel ("high")
-    // and Gemini 3.8 / 2.5 Flash to numeric thinkingBudget (1024) to prevent HTTP 400 errors
+    // Helper: dynamic generationConfig that maps Gemini 4 Argon to qualitative thinkingLevel ("low", "medium")
+    // and Gemini 3.8 / 2.5 Flash to numeric thinkingBudget (256) to prevent HTTP 400 errors and optimize speed
     function buildGenerationConfigForModel(modelName, options = {}) {
         const isArgon = modelName.includes("argon") || modelName.includes("gemini-4");
         const config = {
@@ -396,10 +397,10 @@ export default async function handler(req, res) {
         };
         if (isArgon) {
             config.thinkingConfig = {
-                thinkingLevel: options.thinkingLevel || "high"
+                thinkingLevel: options.thinkingLevel || thinkingLevel || "low"
             };
         } else {
-            const budget = options.thinkingBudget !== undefined ? Number(options.thinkingBudget) : (thinkingBudget || 1024);
+            const budget = options.thinkingBudget !== undefined ? Number(options.thinkingBudget) : (thinkingBudget || 256);
             if (budget > 0) {
                 config.thinkingConfig = {
                     thinkingBudget: budget
@@ -699,16 +700,16 @@ Return STRICT JSON only (no markdown, no code blocks):
                 if (reqBody.generationConfig.thinkingConfig) {
                     delete reqBody.generationConfig.thinkingConfig.thinkingBudget;
                     if (!reqBody.generationConfig.thinkingConfig.thinkingLevel) {
-                        reqBody.generationConfig.thinkingConfig.thinkingLevel = "high";
+                        reqBody.generationConfig.thinkingConfig.thinkingLevel = thinkingLevel || "low";
                     }
                 } else {
-                    reqBody.generationConfig.thinkingConfig = { thinkingLevel: "high" };
+                    reqBody.generationConfig.thinkingConfig = { thinkingLevel: thinkingLevel || "low" };
                 }
             } else {
                 // Gemini 3.8 / 2.5 Flash expects thinkingBudget
                 if (reqBody.generationConfig.thinkingConfig && reqBody.generationConfig.thinkingConfig.thinkingLevel) {
                     delete reqBody.generationConfig.thinkingConfig.thinkingLevel;
-                    reqBody.generationConfig.thinkingConfig.thinkingBudget = thinkingBudget || 1024;
+                    reqBody.generationConfig.thinkingConfig.thinkingBudget = thinkingBudget || 256;
                 }
             }
         }
@@ -1001,16 +1002,33 @@ Return the response as a strict JSON object.`;
         }
 
         const isArgonUsed = (result.modelUsed || "").toLowerCase().includes("argon");
-        const promptRate = isArgonUsed ? 0.00000125 : 0.000000075;
-        const candidateRate = isArgonUsed ? 0.000005 : 0.0000003;
+        // Google Cloud Vertex AI Pricing Rates:
+        // Gemini 4 Argon: $2.00 per 1M input tokens ($0.000002), $10.00 per 1M output tokens ($0.000010)
+        // Gemini 3.8 Flash: $0.075 per 1M input tokens ($0.000000075), $0.30 per 1M output tokens ($0.0000003)
+        const promptRate = isArgonUsed ? 0.000002 : 0.000000075;
+        const candidateRate = isArgonUsed ? 0.000010 : 0.0000003;
 
         result.tokenUsage = {
             promptTokens: cumulativeUsage.promptTokens,
             completionTokens: cumulativeUsage.candidatesTokens,
             totalTokens: cumulativeUsage.totalTokens || (cumulativeUsage.promptTokens + cumulativeUsage.candidatesTokens),
             costUsd: Number((cumulativeUsage.promptTokens * promptRate + cumulativeUsage.candidatesTokens * candidateRate).toFixed(6)),
-            costInr: Number(((cumulativeUsage.promptTokens * promptRate + cumulativeUsage.candidatesTokens * candidateRate) * 86).toFixed(4))
+            costInr: Number(((cumulativeUsage.promptTokens * promptRate + cumulativeUsage.candidatesTokens * candidateRate) * 86).toFixed(4)),
+            thinkingLevel: isArgonUsed ? (thinkingLevel || "low") : undefined,
+            thinkingBudget: !isArgonUsed ? (thinkingBudget || 256) : undefined,
+            pricingTier: isArgonUsed ? "Gemini 4 Argon Standard" : "Gemini 3.8 Flash Standard"
         };
+
+        console.log("\n================================================================================");
+        console.log("📊 [GEMINI TOKEN USAGE & COST AUDIT REPORT]");
+        console.log(`🤖 Model Executed:       ${result.modelUsed}`);
+        console.log(`⚙️ Thinking Level:       ${isArgonUsed ? (thinkingLevel || 'low') : `budget ${thinkingBudget || 256}`}`);
+        console.log(`📥 Input (Prompt) Tokens: ${cumulativeUsage.promptTokens.toLocaleString()}`);
+        console.log(`📤 Output Tokens:        ${cumulativeUsage.candidatesTokens.toLocaleString()} (Includes Grading + Thinking)`);
+        console.log(`🔢 Total Tokens:         ${(cumulativeUsage.promptTokens + cumulativeUsage.candidatesTokens).toLocaleString()}`);
+        console.log(`💵 Estimated Cost (USD): $${result.tokenUsage.costUsd.toFixed(4)}`);
+        console.log(`🇮🇳 Estimated Cost (INR): ₹${result.tokenUsage.costInr.toFixed(2)}`);
+        console.log("================================================================================\n");
 
         return res.status(200).json(result);
 
