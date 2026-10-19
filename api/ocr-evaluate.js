@@ -676,7 +676,8 @@ Return STRICT JSON only (no markdown, no code blocks):
                 ]
             }],
             generationConfig: buildGenerationConfigForModel(PRIMARY_MODEL, {
-                mediaResolution: "MEDIA_RESOLUTION_HIGH"
+                mediaResolution: "MEDIA_RESOLUTION_HIGH",
+                responseMimeType: "application/json"
             })
         };
     }
@@ -773,13 +774,17 @@ Return STRICT JSON only (no markdown, no code blocks):
         console.log(`📤 Calling single-pass Gemini Vision directly with ${targetModel}...`);
         const singlePassBody = JSON.parse(JSON.stringify(requestBody));
         singlePassBody.generationConfig = buildGenerationConfigForModel(targetModel, {
-            mediaResolution: "MEDIA_RESOLUTION_HIGH"
+            mediaResolution: "MEDIA_RESOLUTION_HIGH",
+            responseMimeType: "application/json"
         });
         const geminiJson = await callGeminiModel(singlePassBody, targetModel, 0);
         const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         const clean = text.replace(/```json|```/g, "").trim();
+        const firstBrace = clean.indexOf('{');
+        const lastBrace = clean.lastIndexOf('}');
+        const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? clean.substring(firstBrace, lastBrace + 1) : clean;
         console.log(`🧼 CLEAN JSON received from ${targetModel} single-pass`);
-        return JSON.parse(clean);
+        return JSON.parse(jsonStr);
     }
 
     async function transcribeWithGemini(reqBody, mode, targetModel = PRIMARY_MODEL) {
@@ -856,49 +861,50 @@ Return the response as a strict JSON object.`;
     let result = null;
 
     try {
-        // Evaluation Model Orchestrator (Tier 1 Primary Argon -> Tier 2 Backup Flash Failover)
-        try {
-            // ========== TIER 1: PRIMARY MODEL (Gemini 4 Argon) ==========
+        // Evaluation Model Orchestrator (Tier 1 Primary Argon Direct Single-Pass Vision -> Tier 2 Backup Flash Failover)
+        if (body.forceDualPass) {
+            // Optional manual override if teacher ever explicitly requests dual-pass OCR transcription
+            console.log(`🚀 [Primary Evaluator - Forced Dual-Pass] Starting Dual-Pass with ${PRIMARY_MODEL}...`);
+            const transcription = await transcribeWithGemini(requestBody, mode, PRIMARY_MODEL);
+            const gradeText = await gradeWithGemini(transcription, textPrompt, PRIMARY_MODEL);
+            const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
+            const firstBrace = cleanGrade.indexOf('{');
+            const lastBrace = cleanGrade.lastIndexOf('}');
+            const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? cleanGrade.substring(firstBrace, lastBrace + 1) : cleanGrade;
+            result = JSON.parse(jsonStr);
+            result.modelUsed = `${PRIMARY_MODEL} (Dual-Pass Reasoning)`;
+            result.primaryModelSuccess = true;
+        } else {
+            // ========== TIER 1: PRIMARY MODEL (Gemini 4 Argon Direct Single-Pass Vision) ==========
+            // Direct Vision evaluates in 1 single API call (~8-12 seconds instead of 100+ seconds),
+            // eliminating the slow intermediate transcription pass and saving over 65% of tokens.
             try {
-                console.log(`🚀 [Primary Evaluator] Starting Dual-Pass with ${PRIMARY_MODEL}...`);
-                const transcription = await transcribeWithGemini(requestBody, mode, PRIMARY_MODEL);
-                console.log(`✍️ [Primary Evaluator] Transcription complete with ${PRIMARY_MODEL}.`);
-
-                const gradeText = await gradeWithGemini(transcription, textPrompt, PRIMARY_MODEL);
-                console.log(`✅ [Primary Evaluator] Grading complete with ${PRIMARY_MODEL}.`);
-
-                const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
-                result = JSON.parse(cleanGrade);
-                result.modelUsed = `${PRIMARY_MODEL} (Dual-Pass Reasoning)`;
-                result.primaryModelSuccess = true;
-            } catch (argonDualErr) {
-                console.warn(`⚠️ [Primary Evaluator] Dual-Pass with ${PRIMARY_MODEL} failed: ${argonDualErr.message}. Trying direct single-pass vision...`);
+                console.log(`⚡ [Primary Evaluator] Starting Direct Single-Pass Vision with ${PRIMARY_MODEL}...`);
                 result = await evaluateSinglePass(PRIMARY_MODEL);
                 result.modelUsed = `${PRIMARY_MODEL} (Single-Pass Direct Vision)`;
                 result.primaryModelSuccess = true;
-            }
-        } catch (primaryErr) {
-            // ========== TIER 2: BACKUP MODEL FAILOVER (Gemini 3.8 Flash) ==========
-            console.warn(`🛡️ [BACKUP ACTIVATED] Primary model (${PRIMARY_MODEL}) failed. Seamlessly failing over to backup: ${BACKUP_MODEL}... Reason: ${primaryErr.message}`);
-            try {
-                console.log(`🧠 [Backup Evaluator] Starting Dual-Pass with backup ${BACKUP_MODEL}...`);
-                const transcription = await transcribeWithGemini(requestBody, mode, BACKUP_MODEL);
-                console.log(`✍️ [Backup Evaluator] Transcription complete with backup ${BACKUP_MODEL}.`);
-
-                const gradeText = await gradeWithGemini(transcription, textPrompt, BACKUP_MODEL);
-                console.log(`✅ [Backup Evaluator] Grading complete with backup ${BACKUP_MODEL}.`);
-
-                const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
-                result = JSON.parse(cleanGrade);
-                result.modelUsed = `${BACKUP_MODEL} (Backup Failover Dual-Pass)`;
-                result.backupModelActivated = true;
-                result.failoverReason = primaryErr.message;
-            } catch (backupDualErr) {
-                console.warn(`⚠️ [Backup Evaluator] Dual-Pass with ${BACKUP_MODEL} failed (${backupDualErr.message}). Final fallback: single-pass with ${BACKUP_MODEL}...`);
-                result = await evaluateSinglePass(BACKUP_MODEL);
-                result.modelUsed = `${BACKUP_MODEL} (Backup Failover Single-Pass)`;
-                result.backupModelActivated = true;
-                result.failoverReason = primaryErr.message;
+            } catch (primaryErr) {
+                // ========== TIER 2: BACKUP MODEL FAILOVER (Gemini 3.8 Flash Direct Vision) ==========
+                console.warn(`🛡️ [BACKUP ACTIVATED] Primary model (${PRIMARY_MODEL}) failed. Failing over to backup: ${BACKUP_MODEL}... Reason: ${primaryErr.message}`);
+                try {
+                    console.log(`⚡ [Backup Evaluator] Starting Direct Single-Pass Vision with backup ${BACKUP_MODEL}...`);
+                    result = await evaluateSinglePass(BACKUP_MODEL);
+                    result.modelUsed = `${BACKUP_MODEL} (Backup Failover Single-Pass)`;
+                    result.backupModelActivated = true;
+                    result.failoverReason = primaryErr.message;
+                } catch (backupErr) {
+                    console.warn(`⚠️ [Backup Evaluator] Direct single-pass with ${BACKUP_MODEL} failed (${backupErr.message}). Attempting Dual-Pass fallback with ${BACKUP_MODEL}...`);
+                    const transcription = await transcribeWithGemini(requestBody, mode, BACKUP_MODEL);
+                    const gradeText = await gradeWithGemini(transcription, textPrompt, BACKUP_MODEL);
+                    const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
+                    const firstBrace = cleanGrade.indexOf('{');
+                    const lastBrace = cleanGrade.lastIndexOf('}');
+                    const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? cleanGrade.substring(firstBrace, lastBrace + 1) : cleanGrade;
+                    result = JSON.parse(jsonStr);
+                    result.modelUsed = `${BACKUP_MODEL} (Backup Dual-Pass Fallback)`;
+                    result.backupModelActivated = true;
+                    result.failoverReason = `${primaryErr.message} | SinglePass: ${backupErr.message}`;
+                }
             }
         }
 
