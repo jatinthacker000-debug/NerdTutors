@@ -62,11 +62,15 @@ This section contains the exact implementations, structures, and business logic 
 
 ---
 
-## 5. Dual-Pass Grading Architecture (Pure Gemini 3.8 Flash)
+## 5. Dual-Pass Grading Architecture (Gemini 4 Argon Primary + Gemini 3.8 Flash Backup)
 * **Strategy**:
-  * **Pass 1 (High-Resolution Visual Transcription)**: Call `gemini-3.8-flash` with `mediaResolution: "MEDIA_RESOLUTION_HIGH"` to transcribe handwritten student sheets into Markdown.
-  * **Pass 2 (Deterministic Evaluator)**: Call `gemini-3.8-flash` with a 1,024-token thinking budget to evaluate transcribed student answers against official questions, model answers, and the CBSE 2.0 deterministic rules matrix ([api/cbse-rules.json](file:///d:/Trinno/NerdTutors/api/cbse-rules.json)).
-  * **Fallback**: Single-pass direct vision evaluation if dual-pass fails.
+  * **Primary Evaluator (`gemini-4-argon`)**: Google's frontier deep-reasoning model.
+    * **Pass 1 (High-Resolution Visual Transcription)**: Call `gemini-4-argon` with `mediaResolution: "MEDIA_RESOLUTION_HIGH"` to transcribe handwritten student sheets into Markdown.
+    * **Pass 2 (Deterministic Evaluator)**: Call `gemini-4-argon` with qualitative `thinkingConfig: { thinkingLevel: "high" }` to evaluate transcribed student answers against official questions, model answers, and the CBSE 2.0 deterministic rules matrix ([api/cbse-rules.json](file:///d:/Trinno/NerdTutors/api/cbse-rules.json)).
+    * **Single-Pass Fallback**: Direct vision evaluation with `gemini-4-argon` if dual-pass transcription encounters formatting issues.
+  * **Resilient Failover Backup (`gemini-3.8-flash`)**:
+    * If `gemini-4-argon` encounters rate limits (429), server errors (503/504), or regional unavailability, the system automatically and seamlessly fails over to `gemini-3.8-flash` (Dual-Pass and Single-Pass).
+    * `result.modelUsed` and `result.backupModelActivated` track the exact model path executed for full observability.
 * **Core File**: [api/ocr-evaluate.js](file:///d:/Trinno/NerdTutors/api/ocr-evaluate.js).
 
 ---

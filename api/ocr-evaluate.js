@@ -376,11 +376,38 @@ export default async function handler(req, res) {
     }
 
     // ===== Model & Evaluation Configuration =====
-    const activeModel = body.model || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+    // Primary: Gemini 4 Argon (flagship high-reasoning model)
+    // Backup: Gemini 3.8 Flash (fast resilient failover)
+    const PRIMARY_MODEL = body.model || process.env.GEMINI_MODEL || "gemini-4-argon";
+    const BACKUP_MODEL = process.env.GEMINI_BACKUP_MODEL || (PRIMARY_MODEL !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-2.5-flash");
+    const activeModel = PRIMARY_MODEL;
     const cachedContentId = body.cachedContent || body.cachedContentId || null;
     const defaultThinkingBudget = Number(process.env.THINKING_BUDGET || 1024);
     const thinkingBudget = body.thinkingBudget !== undefined ? Number(body.thinkingBudget) : defaultThinkingBudget;
-    const MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent`;
+
+    // Helper: dynamic generationConfig that maps Gemini 4 Argon to qualitative thinkingLevel ("high")
+    // and Gemini 3.8 / 2.5 Flash to numeric thinkingBudget (1024) to prevent HTTP 400 errors
+    function buildGenerationConfigForModel(modelName, options = {}) {
+        const isArgon = modelName.includes("argon") || modelName.includes("gemini-4");
+        const config = {
+            temperature: options.temperature !== undefined ? options.temperature : 0.0,
+            ...(options.mediaResolution ? { mediaResolution: options.mediaResolution } : {}),
+            ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {})
+        };
+        if (isArgon) {
+            config.thinkingConfig = {
+                thinkingLevel: options.thinkingLevel || "high"
+            };
+        } else {
+            const budget = options.thinkingBudget !== undefined ? Number(options.thinkingBudget) : (thinkingBudget || 1024);
+            if (budget > 0) {
+                config.thinkingConfig = {
+                    thinkingBudget: budget
+                };
+            }
+        }
+        return config;
+    }
 
     // ===== Build Prompt Based on Mode =====
     let textPrompt = "";
@@ -647,15 +674,9 @@ Return STRICT JSON only (no markdown, no code blocks):
                     }
                 ]
             }],
-            generationConfig: {
-                temperature: 0.0,
-                mediaResolution: "MEDIA_RESOLUTION_HIGH",
-                ...(thinkingBudget > 0 ? {
-                    thinkingConfig: {
-                        thinkingBudget: thinkingBudget
-                    }
-                } : {})
-            }
+            generationConfig: buildGenerationConfigForModel(PRIMARY_MODEL, {
+                mediaResolution: "MEDIA_RESOLUTION_HIGH"
+            })
         };
     }
 
@@ -668,6 +689,30 @@ Return STRICT JSON only (no markdown, no code blocks):
                 if (!c.role) c.role = "user";
             });
         }
+
+        // Sanitize generationConfig to guarantee compatibility with modelName
+        if (reqBody && reqBody.generationConfig) {
+            const isArgon = modelName.includes("argon") || modelName.includes("gemini-4");
+            if (isArgon) {
+                // Gemini 4 Argon rejects numeric thinkingBudget with HTTP 400 INVALID_ARGUMENT
+                delete reqBody.generationConfig.thinkingBudget;
+                if (reqBody.generationConfig.thinkingConfig) {
+                    delete reqBody.generationConfig.thinkingConfig.thinkingBudget;
+                    if (!reqBody.generationConfig.thinkingConfig.thinkingLevel) {
+                        reqBody.generationConfig.thinkingConfig.thinkingLevel = "high";
+                    }
+                } else {
+                    reqBody.generationConfig.thinkingConfig = { thinkingLevel: "high" };
+                }
+            } else {
+                // Gemini 3.8 / 2.5 Flash expects thinkingBudget
+                if (reqBody.generationConfig.thinkingConfig && reqBody.generationConfig.thinkingConfig.thinkingLevel) {
+                    delete reqBody.generationConfig.thinkingConfig.thinkingLevel;
+                    reqBody.generationConfig.thinkingConfig.thinkingBudget = thinkingBudget || 1024;
+                }
+            }
+        }
+
         const projectId = process.env.GCP_PROJECT_ID || "975383880672";
         const location = process.env.GCP_LOCATION || "us-central1";
 
@@ -711,7 +756,7 @@ Return STRICT JSON only (no markdown, no code blocks):
                 return parsed;
             } catch (err) {
                 const sanitizedMsg = err.message ? err.message.replace(/key=[^&\s]+/gi, 'key=REDACTED') : 'Unknown error';
-                console.error(`❌ Error with Key Index ${keyIndex + 1}:`, sanitizedMsg);
+                console.error(`❌ Error with Key Index ${keyIndex + 1} (${modelName}):`, sanitizedMsg);
                 lastError = new Error(sanitizedMsg);
                 const errMsg = sanitizedMsg.toLowerCase();
                 if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("504") || errMsg.includes("limit") || errMsg.includes("demand") || errMsg.includes("quota") || errMsg.includes("unavailable") || errMsg.includes("aborted")) {
@@ -723,16 +768,20 @@ Return STRICT JSON only (no markdown, no code blocks):
         throw lastError || new Error(`All API keys exhausted for model ${modelName}`);
     }
 
-    async function evaluateSinglePassFallback() {
-        console.log(`📤 Calling fallback single-pass Gemini Vision directly with ${activeModel}...`);
-        const geminiJson = await callGeminiModel(requestBody, activeModel, 0);
+    async function evaluateSinglePass(targetModel = PRIMARY_MODEL) {
+        console.log(`📤 Calling single-pass Gemini Vision directly with ${targetModel}...`);
+        const singlePassBody = JSON.parse(JSON.stringify(requestBody));
+        singlePassBody.generationConfig = buildGenerationConfigForModel(targetModel, {
+            mediaResolution: "MEDIA_RESOLUTION_HIGH"
+        });
+        const geminiJson = await callGeminiModel(singlePassBody, targetModel, 0);
         const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         const clean = text.replace(/```json|```/g, "").trim();
-        console.log("🧼 CLEAN JSON received from fallback Gemini Vision");
+        console.log(`🧼 CLEAN JSON received from ${targetModel} single-pass`);
         return JSON.parse(clean);
     }
 
-    async function transcribeWithGemini(reqBody, mode) {
+    async function transcribeWithGemini(reqBody, mode, targetModel = PRIMARY_MODEL) {
         let transcriptionPrompt = "";
         if (mode === "pdf-comparison") {
             transcriptionPrompt = `You are an expert document transcriber. You are provided with two PDF/image files:
@@ -765,17 +814,17 @@ Format your output in clean Markdown, organizing by question numbers or sections
             }
         }
 
-        // Transcription is pure OCR — remove thinkingConfig to run at instant Flash speed
-        if (transcribeRequestBody.generationConfig) {
-            delete transcribeRequestBody.generationConfig.thinkingConfig;
-        }
+        // Transcription is pure OCR — run at high speed without thinking
+        transcribeRequestBody.generationConfig = {
+            temperature: 0.0,
+            mediaResolution: "MEDIA_RESOLUTION_HIGH"
+        };
 
-        // Call Gemini for Transcription using Key Index 0
-        const geminiJson = await callGeminiModel(transcribeRequestBody, activeModel, 0);
+        const geminiJson = await callGeminiModel(transcribeRequestBody, targetModel, 0);
         return geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
-    async function gradeWithGemini(transcription, textPrompt) {
+    async function gradeWithGemini(transcription, textPrompt, targetModel = PRIMARY_MODEL) {
         const geminiSystemPrompt = `You are a high-reasoning exam evaluator.
 Below is the text transcription of the student's answer sheets/files extracted using Gemini Vision:
 <student_transcription>
@@ -792,43 +841,64 @@ Return the response as a strict JSON object.`;
                     { text: geminiSystemPrompt + "\n\n" + textPrompt }
                 ]
             }],
-            generationConfig: {
-                temperature: 0.0,
-                responseMimeType: "application/json",
-                ...(thinkingBudget > 0 ? {
-                    thinkingConfig: {
-                        thinkingBudget: thinkingBudget
-                    }
-                } : {})
-            }
+            generationConfig: buildGenerationConfigForModel(targetModel, {
+                responseMimeType: "application/json"
+            })
         };
 
-        // Call Gemini for Grading using Key Index 1 (if available, else index 0)
         const preferredKey = apiKeys.length >= 2 ? 1 : 0;
-        console.log(`🧠 [Pass 2: Gemini Grading] Starting evaluation using ${activeModel} with preferred Key Index ${preferredKey + 1}...`);
-        const geminiJson = await callGeminiModel(gradeRequestBody, activeModel, preferredKey);
+        console.log(`🧠 [Pass 2: Grading] Starting evaluation using ${targetModel} with preferred Key Index ${preferredKey + 1}...`);
+        const geminiJson = await callGeminiModel(gradeRequestBody, targetModel, preferredKey);
         return geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
     let result = null;
 
     try {
+        // Evaluation Model Orchestrator (Tier 1 Primary Argon -> Tier 2 Backup Flash Failover)
         try {
-            console.log(`🧠 Starting Dual-Pass Gemini-Only Grading Flow (${activeModel})...`);
-            // Pass 1: Transcribe via Gemini (using Key 0)
-            const transcription = await transcribeWithGemini(requestBody, mode);
-            console.log("✍️ Gemini Transcription complete.");
+            // ========== TIER 1: PRIMARY MODEL (Gemini 4 Argon) ==========
+            try {
+                console.log(`🚀 [Primary Evaluator] Starting Dual-Pass with ${PRIMARY_MODEL}...`);
+                const transcription = await transcribeWithGemini(requestBody, mode, PRIMARY_MODEL);
+                console.log(`✍️ [Primary Evaluator] Transcription complete with ${PRIMARY_MODEL}.`);
 
-            // Pass 2: Grade via Gemini activeModel
-            const gradeText = await gradeWithGemini(transcription, textPrompt);
-            console.log("✅ Gemini evaluation complete.");
+                const gradeText = await gradeWithGemini(transcription, textPrompt, PRIMARY_MODEL);
+                console.log(`✅ [Primary Evaluator] Grading complete with ${PRIMARY_MODEL}.`);
 
-            const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
-            result = JSON.parse(cleanGrade);
-            result.modelUsed = `gemini-transcription + ${activeModel}`;
-        } catch (dualGeminiErr) {
-            console.error("⚠️ Dual-Pass Gemini Grading failed, falling back to single-pass:", dualGeminiErr.message);
-            result = await evaluateSinglePassFallback();
+                const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
+                result = JSON.parse(cleanGrade);
+                result.modelUsed = `${PRIMARY_MODEL} (Dual-Pass Reasoning)`;
+                result.primaryModelSuccess = true;
+            } catch (argonDualErr) {
+                console.warn(`⚠️ [Primary Evaluator] Dual-Pass with ${PRIMARY_MODEL} failed: ${argonDualErr.message}. Trying direct single-pass vision...`);
+                result = await evaluateSinglePass(PRIMARY_MODEL);
+                result.modelUsed = `${PRIMARY_MODEL} (Single-Pass Direct Vision)`;
+                result.primaryModelSuccess = true;
+            }
+        } catch (primaryErr) {
+            // ========== TIER 2: BACKUP MODEL FAILOVER (Gemini 3.8 Flash) ==========
+            console.warn(`🛡️ [BACKUP ACTIVATED] Primary model (${PRIMARY_MODEL}) failed. Seamlessly failing over to backup: ${BACKUP_MODEL}... Reason: ${primaryErr.message}`);
+            try {
+                console.log(`🧠 [Backup Evaluator] Starting Dual-Pass with backup ${BACKUP_MODEL}...`);
+                const transcription = await transcribeWithGemini(requestBody, mode, BACKUP_MODEL);
+                console.log(`✍️ [Backup Evaluator] Transcription complete with backup ${BACKUP_MODEL}.`);
+
+                const gradeText = await gradeWithGemini(transcription, textPrompt, BACKUP_MODEL);
+                console.log(`✅ [Backup Evaluator] Grading complete with backup ${BACKUP_MODEL}.`);
+
+                const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
+                result = JSON.parse(cleanGrade);
+                result.modelUsed = `${BACKUP_MODEL} (Backup Failover Dual-Pass)`;
+                result.backupModelActivated = true;
+                result.failoverReason = primaryErr.message;
+            } catch (backupDualErr) {
+                console.warn(`⚠️ [Backup Evaluator] Dual-Pass with ${BACKUP_MODEL} failed (${backupDualErr.message}). Final fallback: single-pass with ${BACKUP_MODEL}...`);
+                result = await evaluateSinglePass(BACKUP_MODEL);
+                result.modelUsed = `${BACKUP_MODEL} (Backup Failover Single-Pass)`;
+                result.backupModelActivated = true;
+                result.failoverReason = primaryErr.message;
+            }
         }
 
         // Programmatic score check to override MCQ scores if feedback explicitly says student's choice was wrong
@@ -930,12 +1000,16 @@ Return the response as a strict JSON object.`;
             result.modelUsed = activeModel;
         }
 
+        const isArgonUsed = (result.modelUsed || "").toLowerCase().includes("argon");
+        const promptRate = isArgonUsed ? 0.00000125 : 0.000000075;
+        const candidateRate = isArgonUsed ? 0.000005 : 0.0000003;
+
         result.tokenUsage = {
             promptTokens: cumulativeUsage.promptTokens,
             completionTokens: cumulativeUsage.candidatesTokens,
             totalTokens: cumulativeUsage.totalTokens || (cumulativeUsage.promptTokens + cumulativeUsage.candidatesTokens),
-            costUsd: Number((cumulativeUsage.promptTokens * 0.000000075 + cumulativeUsage.candidatesTokens * 0.0000003).toFixed(6)),
-            costInr: Number(((cumulativeUsage.promptTokens * 0.000000075 + cumulativeUsage.candidatesTokens * 0.0000003) * 86).toFixed(4))
+            costUsd: Number((cumulativeUsage.promptTokens * promptRate + cumulativeUsage.candidatesTokens * candidateRate).toFixed(6)),
+            costInr: Number(((cumulativeUsage.promptTokens * promptRate + cumulativeUsage.candidatesTokens * candidateRate) * 86).toFixed(4))
         };
 
         return res.status(200).json(result);

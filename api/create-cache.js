@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
 
     const apiKeys = rawKeys.split(",").map(k => k.trim()).filter(Boolean);
     const primaryKey = apiKeys[0];
-    const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+    const model = process.env.GEMINI_MODEL || "gemini-4-argon";
 
     // Load CBSE Master Rules Matrix to embed into the persistent cache
     let rulesText = "";
@@ -120,7 +120,7 @@ ${rulesText}
             cachedContentId: data.name,
             model: model,
             expireTime: data.expireTime,
-            message: "Context cache successfully created on Gemini 3.8 Flash."
+            message: `Context cache successfully created on ${model}.`
         });
 
     } catch (err) {
