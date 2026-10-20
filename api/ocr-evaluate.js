@@ -305,6 +305,7 @@ export default async function handler(req, res) {
         const isArgon = modelName.includes("argon") || modelName.includes("gemini-4");
         const config = {
             temperature: options.temperature !== undefined ? options.temperature : 0.0,
+            seed: options.seed !== undefined ? Number(options.seed) : 42,
             ...(options.mediaResolution ? { mediaResolution: options.mediaResolution } : {}),
             ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {})
         };
@@ -383,11 +384,16 @@ For every question, evaluate the concepts, explanations, and key value points pr
 - Award full marks when the student demonstrates understanding of the core concept.
 
 ⚠️ STRICT CONSTRAINTS FOR MARK ALLOCATION (BOARD STANDARD):
-- 🔴 EXACT QUESTION WEIGHTS (CRITICAL): Read the exact mark weight specified for each question or section header in the Exam Questions list. For every question object in the "results" array, set "maxMarks" to the EXACT numerical weight specified in the question paper for that question. Do NOT default all MCQs to 1 mark if the question paper specifies 0.5 marks or anything else.
+- 🔴 EXACT QUESTION WEIGHTS (CRITICAL): Read the exact mark weight specified for each question or section header in the Exam Questions list and Marking Scheme.
+  - Standard MCQs are strictly 1.0 mark each (maxMarks: 1). NEVER assign 0.5 marks to an MCQ.
+  - Descriptive questions in Section B/C (e.g. Q7 to Q12) must retain their full section weight (e.g. maxMarks: 4). NEVER set "maxMarks" to a fraction (like 1.5) or change maxMarks based on student performance. "maxMarks" is the constant total weight of the question, while "score" is what the student earned.
 - 🔴 MANDATORY SUB-PARTS SPLIT: If any question contains distinct sub-parts (e.g., part a, part b, sub-part i, ii, iii), you MUST evaluate each sub-part separately as an individual entry in the "results" array (e.g., "Q31a", "Q31b") with its corresponding fraction of marks. NEVER bundle multi-part questions into a single composite block.
-- 🔴 POINT-TO-MARK RATIO & BREVITY CAP: For descriptive answers, each mark requires at least one distinct, well-reasoned point or explanation. For questions worth 3 or more marks, if a student provides only 1 single brief point or sentence, cap the score at a maximum of 40% to 50% of maxMarks (e.g., maximum 1.5 out of 4). Never award full marks for single-point answers on high-mark questions.
+- 🔴 POINT-TO-MARK RATIO & PARTIAL MARKING: For descriptive answers, each mark requires one distinct, well-reasoned value point. Award partial marks strictly in discrete half-mark or full-mark increments (0.5, 1.0, 1.5, 2.0, etc.) mapped directly to points present in the student's answer. Keep "maxMarks" intact at its full weight.
 - 🔴 VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using their own expression or alternative valid subject reasoning (e.g., tax evasion culture or informal sector for tax revenue stagnation), award due marks.
-- MCQ questions: MCQ validation is strictly BINARY. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they match exactly, award maxMarks (1/1). If they do not match, score = 0.
+- 🔴 STRICT BINARY MCQ EVALUATION (0 OR 1 ONLY): MCQ validation is strictly BINARY. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme.
+  - If the option matches: score = 1, maxMarks = 1.
+  - If the option does not match: score = 0, maxMarks = 1.
+  - No fractional marks (0.5, 0.25) are EVER permitted for MCQs.
 - 🔴 STRICT MCQ BREVITY CAP (CRITICAL): For 1-mark MCQs (e.g. Q1-Q10, Q18-Q27), keep "feedback" strictly to 1 short sentence (e.g. "Option (D) is correct." or "Incorrect option chosen; correct is (D)."). For MCQs, NEVER write paragraphs of theory, history, or background notes. Maximum 1 short sentence (under 15 words). Set "improvements": [].
 - 🔴 ZERO DEDUCTIONS FOR LANGUAGE OR GRAMMAR: In non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing (e.g. 'did not returned', 'it does not pushes', 'liseness') as long as the subject concept is intelligible.
 - 🔴 OFF-TOPIC RULE: If a student's answer contains completely off-topic or irrelevant statements that do not address the prompt at all, award 0 marks.
@@ -572,7 +578,8 @@ Return STRICT JSON only (no markdown, no code blocks):
                 ]
             }],
             generationConfig: {
-                temperature: 0.0
+                temperature: 0.0,
+                seed: 42
             }
         };
     } else {
@@ -791,6 +798,7 @@ Format your output in clean Markdown, organizing by question numbers or sections
         // Transcription is pure OCR — run at high speed without thinking
         transcribeRequestBody.generationConfig = {
             temperature: 0.0,
+            seed: 42,
             mediaResolution: "MEDIA_RESOLUTION_LOW"
         };
 
@@ -899,19 +907,47 @@ Return the response as a strict JSON object.`;
                     (feedbackText.includes("incorrect") && !feedbackText.includes("statement") && !feedbackText.includes("reason"))
                 );
 
-                const isMCQ = Number(resObj.maxMarks) <= 1 && (
-                    resObj.questionNumber?.toLowerCase().includes("q") ||
-                    resObj.questionNumber?.toLowerCase().includes("mcq") ||
-                    !isNaN(Number(resObj.questionNumber))
+                const qNumStr = String(resObj.questionNumber || "").trim().toLowerCase();
+                const isMCQ = (Number(resObj.maxMarks) <= 1 || /^q\s*[1-6]\b/i.test(qNumStr)) && (
+                    qNumStr.includes("mcq") ||
+                    /^q\s*[1-6]\b/i.test(qNumStr) ||
+                    feedbackText.includes("option") ||
+                    feedbackText.includes("choice") ||
+                    /^[a-d]\b/i.test(String(resObj.studentAnswerText || "").trim())
                 );
 
-                if (isMCQ && isExplicitlyWrong && !isCorrectOption) {
-                    console.log(`🔧 Programmatic Override: Overriding MCQ score of ${resObj.questionNumber} to 0.`);
-                    resObj.score = 0;
+                if (isMCQ) {
+                    // 🔒 HARD-LOCK 1: Force MCQ maxMarks to exactly 1.0 (never 0.5)
+                    resObj.maxMarks = 1.0;
+
+                    // 🔒 HARD-LOCK 2: Strictly BINARY score (0 or 1 ONLY, never 0.5)
+                    if (isExplicitlyWrong) {
+                        resObj.score = 0;
+                    } else if (isCorrectOption) {
+                        resObj.score = 1.0;
+                    } else if (Number(resObj.score) >= 0.5) {
+                        resObj.score = 1.0;
+                    } else {
+                        resObj.score = 0;
+                    }
+                    console.log(`🔒 Programmatic Binary MCQ Hard-Lock: ${resObj.questionNumber} -> maxMarks: 1.0, score: ${resObj.score}`);
+                }
+
+                // 🔧 Safeguard: Fix potential hallucination where AI sets maxMarks to 1.5 for 4-mark descriptive questions
+                const qNumMatch = qNumStr.match(/^q\s*(\d+)/i);
+                if (qNumMatch) {
+                    const qIdx = parseInt(qNumMatch[1], 10);
+                    if (qIdx >= 7 && qIdx <= 12 && Number(resObj.maxMarks) < 3) {
+                        const msText = String(body.markingScheme || questions || "");
+                        if (msText.includes("4 marks") || msText.includes("[4]")) {
+                            console.log(`🔧 Correcting maxMarks for ${resObj.questionNumber}: ${resObj.maxMarks} → 4.0`);
+                            resObj.maxMarks = 4.0;
+                        }
+                    }
                 }
 
                 // Check if feedback specifies the answer is off-topic or irrelevant (only for single items, maxMarks <= 3)
-                const isOffTopic = Number(resObj.maxMarks) <= 3 && (
+                const isOffTopic = Number(resObj.maxMarks) <= 3 && !isMCQ && (
                     feedbackText.includes("off-topic") ||
                     feedbackText.includes("off topic") ||
                     feedbackText.includes("does not address") ||

@@ -99,5 +99,13 @@ This section contains the exact implementations, structures, and business logic 
 * **No Gate Redirects:** `gate-guard.js` is a permanent no-op and `login-gate.html` immediately auto-redirects to `ocr-scan.html`. No user or student will ever be redirected to a gate login screen.
 * **Preservation of User Work:** If any network anomaly occurs on the frontend, the UI must NEVER discard uploaded files, student details, or cached state. Everything must be safely preserved in memory.
 
+---
+
+## 9. Deterministic Evaluation, Seed Pinning & Binary MCQ Hard-Lock
+* **Deterministic Seed Pinning:** `generationConfig` in `api/ocr-evaluate.js` and `api/evaluate.js` is hard-locked with `seed: 42` and `temperature: 0.0` to eliminate non-deterministic variance across repeated evaluations of identical student papers.
+* **Strict Binary MCQ Gate:** MCQs (Q1–Q6 or option-based questions) are programmatically hard-locked to `maxMarks: 1.0` with binary scoring (`score = 1.0` if correct, `score = 0.0` if wrong). Under NO circumstance can an MCQ receive fractional marks (e.g. 0.5) or have its weight reduced.
+* **Question Weight Safeguard:** Removed all fractional prompt examples (such as `0.5 marks` or `1.5 out of 4`) that previously misled the model into shrinking `maxMarks`. Added a programmatic safeguard restoring descriptive questions (e.g. Q7–Q12 in 4-mark sections) to full `maxMarks: 4.0` if the vision model erroneously attempts to clamp the total weight.
+
+
 
 

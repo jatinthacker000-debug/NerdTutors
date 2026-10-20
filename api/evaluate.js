@@ -174,7 +174,10 @@ You MUST prioritize and obey the following custom instruction over all other sco
 
   const requestBody = {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.3 } // Removed maxOutputTokens to allow variable length for batch
+    generationConfig: {
+      temperature: 0.0,
+      seed: 42
+    }
   };
 
   async function callGemini() {
