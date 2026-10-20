@@ -384,16 +384,27 @@ For every question, evaluate the concepts, explanations, and key value points pr
 - Award full marks when the student demonstrates understanding of the core concept.
 
 ⚠️ STRICT CONSTRAINTS FOR MARK ALLOCATION (BOARD STANDARD):
-- 🔴 EXACT QUESTION WEIGHTS (CRITICAL): Read the exact mark weight specified for each question or section header in the Exam Questions list and Marking Scheme.
-  - Standard MCQs are strictly 1.0 mark each (maxMarks: 1). NEVER assign 0.5 marks to an MCQ.
-  - Descriptive questions in Section B/C (e.g. Q7 to Q12) must retain their full section weight (e.g. maxMarks: 4). NEVER set "maxMarks" to a fraction (like 1.5) or change maxMarks based on student performance. "maxMarks" is the constant total weight of the question, while "score" is what the student earned.
+- 🔴 EXACT QUESTION WEIGHTS & MCQ CEILING (CRITICAL): Read the exact mark weight specified for each question or section header in the Exam Questions list and Marking Scheme.
+  - Standard MCQs are strictly 1.0 mark each (or 0.5 marks ONLY IF the exam header explicitly states "0.5 marks each" or "½ mark"). MCQs can NEVER be awarded 2, 3, 4, or 5 marks under any circumstance.
+  - Descriptive questions in Section B/C (e.g. Q7 to Q12) must retain their full section weight (e.g. maxMarks: 4.0 or 3.0). NEVER set "maxMarks" to a fraction (like 1.5) or change maxMarks based on student brevity. "maxMarks" is the CONSTANT total weight of the question, while "score" is what the student earned.
+- 🔴 MATHEMATICAL SUM INVARIANT & SECTION AUDIT (CRITICAL):
+  The sum of "maxMarks" across all individual questions in your "results" array MUST EXACTLY EQUAL the exam's total maxMarks (${mm}).
+  ⚠️ HOW TO RESOLVE SUM DISCREPANCIES (AUDIT EXAMPLE):
+  - MCQs are strictly capped: they stay at 1.0 mark (or 0.5 if explicitly labeled). You can NEVER inflate MCQs to 2, 3, or 4 marks to make up a difference.
+  - If your individual question maxMarks sum to only 12 or 15 when the paper is worth ${mm} marks (e.g. 30 marks):
+    - DO NOT increase MCQ marks. Keep MCQs strictly at 1.0 (or 0.5).
+    - The missing marks belong to the Descriptive Questions in Section B/C! Restore each descriptive question to its full 4-mark (or 3-mark) section weight.
+    - Example check for a 30-mark exam (${mm} = 30):
+      - 6 MCQs in Section A = 6 × 1.0 mark = 6.0 marks.
+      - 6 Descriptive Questions in Section B = 6 × 4.0 marks = 24.0 marks.
+      - Mathematical Total = 6.0 + 24.0 = 30.0 marks exact.
 - 🔴 MANDATORY SUB-PARTS SPLIT: If any question contains distinct sub-parts (e.g., part a, part b, sub-part i, ii, iii), you MUST evaluate each sub-part separately as an individual entry in the "results" array (e.g., "Q31a", "Q31b") with its corresponding fraction of marks. NEVER bundle multi-part questions into a single composite block.
 - 🔴 POINT-TO-MARK RATIO & PARTIAL MARKING: For descriptive answers, each mark requires one distinct, well-reasoned value point. Award partial marks strictly in discrete half-mark or full-mark increments (0.5, 1.0, 1.5, 2.0, etc.) mapped directly to points present in the student's answer. Keep "maxMarks" intact at its full weight.
 - 🔴 VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using their own expression or alternative valid subject reasoning (e.g., tax evasion culture or informal sector for tax revenue stagnation), award due marks.
-- 🔴 STRICT BINARY MCQ EVALUATION (0 OR 1 ONLY): MCQ validation is strictly BINARY. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme.
-  - If the option matches: score = 1, maxMarks = 1.
-  - If the option does not match: score = 0, maxMarks = 1.
-  - No fractional marks (0.5, 0.25) are EVER permitted for MCQs.
+- 🔴 STRICT BINARY MCQ EVALUATION (ALL-OR-NOTHING): MCQ validation is strictly ALL-OR-NOTHING. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme.
+  - If the option matches: score = maxMarks (full credit: 1.0 or 0.5).
+  - If the option does not match: score = 0.0.
+  - No fractional partial marks (e.g. 0.25 on 0.5, 0.5 on 1.0) are EVER permitted for MCQs.
 - 🔴 STRICT MCQ BREVITY CAP (CRITICAL): For 1-mark MCQs (e.g. Q1-Q10, Q18-Q27), keep "feedback" strictly to 1 short sentence (e.g. "Option (D) is correct." or "Incorrect option chosen; correct is (D)."). For MCQs, NEVER write paragraphs of theory, history, or background notes. Maximum 1 short sentence (under 15 words). Set "improvements": [].
 - 🔴 ZERO DEDUCTIONS FOR LANGUAGE OR GRAMMAR: In non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing (e.g. 'did not returned', 'it does not pushes', 'liseness') as long as the subject concept is intelligible.
 - 🔴 OFF-TOPIC RULE: If a student's answer contains completely off-topic or irrelevant statements that do not address the prompt at all, award 0 marks.
@@ -439,10 +450,10 @@ Return STRICT JSON only (no markdown, no code blocks):
     {
       "questionNumber": "Q1 or Section Name",
       "questionText": "",
-      "maxMarks": <number>,
+      "maxMarks": <number - the immutable question weight from the question paper (e.g. 1.0 or 4.0), NEVER a student's partial score>,
       "studentAnswerText": "Brief quote IF marks lost, else \"\"",
       "feedback": "Concise 1-2 sentence feedback.",
-      "score": <number>,
+      "score": <number - actual marks awarded to student, between 0 and maxMarks>,
       "improvements": ["1 tip IF marks deducted, else []"],
       "incorrectPhrases": [
         {
