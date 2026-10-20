@@ -86,10 +86,10 @@ function getCredentials() {
 }
 
 function createSignedGateToken(username) {
-    const expiresAt = Date.now() + (12 * 60 * 60 * 1000); // Valid for 12 hours
-    const payload = `${username}:${expiresAt}`;
+    // Generate permanent, infinite-lifetime token so teachers/students are never abruptly locked out
+    const payload = `${username}:permanent`;
     const signature = crypto.createHmac('sha256', GATE_SECRET).update(payload).digest('hex');
-    return Buffer.from(JSON.stringify({ u: username, exp: expiresAt, sig: signature })).toString('base64');
+    return Buffer.from(JSON.stringify({ u: username, permanent: true, sig: signature })).toString('base64');
 }
 
 export default async function handler(req, res) {

@@ -365,9 +365,14 @@
         <a href="index.html" class="logo">
             <span>🎓</span> NerdTutors
         </a>
-        <a href="index.html" class="back-btn">
-            ← Home
-        </a>
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <button id="btnSwitchGate" title="Switch or re-enter Gate access key" style="background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); color: white; padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.82rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; transition: background 0.2s;">
+                🔑 Gate Key
+            </button>
+            <a href="index.html" class="back-btn">
+                ← Home
+            </a>
+        </div>
     </header>
 
     <div class="container">
@@ -1507,6 +1512,19 @@
 
             } catch (error) {
                 console.error("Evaluation failed:", error);
+                const isAuthError = error.status === 401 || (error.message && error.message.toLowerCase().includes("unauthorized"));
+                if (isAuthError) {
+                    localStorage.removeItem('gate_authenticated');
+                    localStorage.removeItem('gate_token');
+                    alert(
+                        "🔒 Gate Access Required\n\n" +
+                        "Your Gate access credentials need to be re-entered.\n" +
+                        "Your uploaded files have been safely preserved. Click OK to log in, and you will be returned right back!"
+                    );
+                    const currentPath = window.location.pathname + window.location.search;
+                    window.location.href = 'login-gate.html?redirect=' + encodeURIComponent(currentPath);
+                    return;
+                }
                 alert(
                     "Failed to evaluate: " + error.message +
                     "\n\nYour uploaded files have been saved. You can press Submit again to retry " +
@@ -1915,6 +1933,18 @@
         document.getElementById('btnPrintCard').addEventListener('click', () => {
             window.print();
         });
+
+        const btnSwitchGate = document.getElementById('btnSwitchGate');
+        if (btnSwitchGate) {
+            btnSwitchGate.addEventListener('click', () => {
+                if (confirm("Would you like to switch or re-enter your Gate access key?")) {
+                    localStorage.removeItem('gate_authenticated');
+                    localStorage.removeItem('gate_token');
+                    const currentPath = window.location.pathname + window.location.search;
+                    window.location.href = 'login-gate.html?redirect=' + encodeURIComponent(currentPath);
+                }
+            });
+        }
 
         // Init load
         fetchSessions();

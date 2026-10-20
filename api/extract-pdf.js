@@ -1,5 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+
+const GATE_SECRET = process.env.GATE_SECRET || 'nt_gate_hmac_secret_2026_super_secure';
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -72,13 +75,34 @@ export default async function handler(req, res) {
         return res.status(401).json({ error: "Unauthorized: Missing Gate Authentication Token" });
     }
 
-    const creds = getCredentials();
-    const isValidGateToken = creds.some(c => {
-        const expectedToken = Buffer.from(`${c.username}:${c.password}`).toString('base64');
-        return expectedToken === gateToken;
-    });
+    function isValidGateAuth(token) {
+        if (!token) return false;
+        try {
+            const raw = Buffer.from(token, 'base64').toString('utf8');
+            const data = JSON.parse(raw);
+            if (data && data.u && data.sig) {
+                if (data.permanent) {
+                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:permanent`).digest('hex');
+                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
+                        return true;
+                    }
+                }
+                if (data.exp) {
+                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:${data.exp}`).digest('hex');
+                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
+                        return true;
+                    }
+                }
+            }
+        } catch (_) {}
 
-    if (!isValidGateToken) {
+        return creds.some(c => {
+            const expectedToken = Buffer.from(`${c.username}:${c.password}`).toString('base64');
+            return expectedToken === token;
+        });
+    }
+
+    if (!isValidGateAuth(gateToken)) {
         return res.status(401).json({ error: "Unauthorized: Invalid Gate Authentication Token" });
     }
 

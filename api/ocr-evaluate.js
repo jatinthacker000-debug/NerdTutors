@@ -219,18 +219,24 @@ export default async function handler(req, res) {
 
     function isValidGateAuth(token) {
         if (!token) return false;
-        // 1. Verify signed HMAC token with expiration
+        // 1. Verify signed HMAC token (permanent, legacy, or timestamped)
         try {
             const raw = Buffer.from(token, 'base64').toString('utf8');
             const data = JSON.parse(raw);
-            if (data && data.u && data.exp && data.sig) {
-                if (Date.now() > Number(data.exp)) {
-                    console.warn(`⚠️ Gate token for ${data.u} has expired.`);
-                    return false;
+            if (data && data.u && data.sig) {
+                // If it's a permanent token
+                if (data.permanent) {
+                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:permanent`).digest('hex');
+                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
+                        return true;
+                    }
                 }
-                const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:${data.exp}`).digest('hex');
-                if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
-                    return true;
+                // If it's a timestamped token, verify signature without expiration lockout
+                if (data.exp) {
+                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:${data.exp}`).digest('hex');
+                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
+                        return true;
+                    }
                 }
             }
         } catch (_) {
