@@ -603,9 +603,59 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function cleanModelAnswer(raw, isMcq = false) {
+            if (!raw) return 'Refer to marking scheme guidelines.';
+            let clean = String(raw).trim();
+            // Remove markdown horizontal rules (---, ___, ***)
+            clean = clean.replace(/^-{3,}|^\*{3,}|^_{3,}/gm, '');
+            // Remove trailing markdown delimiters or stray hashtags
+            clean = clean.replace(/(?:^|\n)\s*#{1,6}\s*$/gm, '');
+            clean = clean.replace(/#{1,6}\s*$/g, '');
+            // Strip leading mark tags like [1 Mark], [3 Marks], (1 Mark)
+            clean = clean.replace(/^\s*\[\s*\d+\s*(?:\+\s*\d+)?\s*(?:=\s*\d+)?\s*Marks?\s*\]\s*/i, '');
+
+            if (isMcq) {
+                // For MCQs, keep only the Option line and at most 1 short sentence
+                const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
+                let optionLine = '';
+                let explanationLine = '';
+
+                for (const line of lines) {
+                    const cleanLine = line.replace(/^[-*•]\s*/, '').replace(/^-{3,}/, '').replace(/^#+/, '').trim();
+                    if (!cleanLine || cleanLine === '---' || cleanLine === '#') continue;
+
+                    if (!optionLine && (/^(?:correct\s*option|option|ans|\([a-d]\)|[a-d]\))/i.test(cleanLine) || /^[A-D]\b/i.test(cleanLine))) {
+                        optionLine = cleanLine;
+                    } else if (optionLine && !explanationLine && /explanation/i.test(cleanLine)) {
+                        explanationLine = cleanLine.replace(/^explanation\s*[:\-]\s*/i, '').trim();
+                    } else if (optionLine && !explanationLine && cleanLine && !cleanLine.startsWith('(') && !cleanLine.startsWith('[')) {
+                        explanationLine = cleanLine;
+                    }
+                }
+
+                if (optionLine) {
+                    if (explanationLine) {
+                        const firstSentence = explanationLine.split(/(?<=[.?!])\s+/)[0] || explanationLine;
+                        return `${optionLine}\nExplanation: ${firstSentence}`;
+                    }
+                    return optionLine;
+                }
+            }
+
+            // Clean up any remaining trailing separators
+            clean = clean.replace(/[\s\n\r]*---[\s\n\r]*#?$/g, '').trim();
+            return clean;
+        }
+
         function formatDisplayText(raw) {
             if (!raw) return '';
-            let safe = escapeHtml(String(raw));
+            let text = String(raw);
+            // Strip standalone markdown HR lines and stray hashtags
+            text = text.replace(/(?:^|\n)\s*[-*_]{3,}\s*(?=\n|$)/g, '');
+            text = text.replace(/(?:^|\n)\s*#+\s*(?=\n|$)/g, '');
+            text = text.replace(/#{1,6}\s*$/g, '');
+
+            let safe = escapeHtml(text.trim());
             // Convert bold markdown **text** to <strong>text</strong>
             safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
             // Convert markdown headers ### Title to <strong>Title</strong>
@@ -1331,8 +1381,10 @@
                             })
                         });
                         if (cacheRes.ok) {
-                            const cacheData = await cacheRes.json();
-                            if (cacheData.cachedContentId) {
+                            const raw = await cacheRes.text();
+                            let cacheData = {};
+                            try { cacheData = JSON.parse(raw); } catch (_) {}
+                            if (cacheData && cacheData.cachedContentId) {
                                 activeCacheId = cacheData.cachedContentId;
                                 selectedSession.cachedContentId = activeCacheId;
                                 updateDoc(doc(db, 'testSessions', selectedSession.id), {
@@ -1671,8 +1723,9 @@
                             const eM = q.score !== undefined ? q.score : 0;
                             const mM = q.maxMarks !== undefined ? q.maxMarks : 1;
                             const qText = q.questionText || (originalIndex !== -1 && questionsArr[originalIndex] ? (questionsArr[originalIndex].text || questionsArr[originalIndex].question || '') : '') || q.questionNumber || 'Question';
-                            const studentAns = q.studentAnswerText || '';
-                            const correctAns = q.modelAnswer || (originalIndex !== -1 ? getCorrectAnswer(markingSchemeText, originalIndex) : 'Refer to marking scheme guidelines.');
+                            const rawAns = q.modelAnswer || (originalIndex !== -1 ? getCorrectAnswer(markingSchemeText, originalIndex) : 'Refer to marking scheme guidelines.');
+                            const isMcq = (mM === 1) || /mcq/i.test(q.questionNumber || '') || /option/i.test(rawAns);
+                            const correctAns = cleanModelAnswer(rawAns, isMcq);
 
                             return `
                                 <div class="report-block" style="background: #fffdfd; border: 1px solid #feb2b2; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">

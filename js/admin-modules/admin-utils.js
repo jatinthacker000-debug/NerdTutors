@@ -27,6 +27,8 @@ export function switchTab(tabName) {
         loadTestSessionsForDropdown();
     } else if (tabName === 'create-session') {
         loadTestSessionsForManagement();
+    } else if (tabName === 'bundle-eval' && window.reloadBundleSessions) {
+        window.reloadBundleSessions();
     } else if (tabName === 'gate-keys' && window.reloadGateCredentials) {
         window.reloadGateCredentials();
     }

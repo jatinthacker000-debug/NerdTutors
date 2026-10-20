@@ -1278,9 +1278,12 @@ async function cacheTestSession(id) {
             })
         });
 
-        const result = await res.json();
+        const rawText = await res.text();
+        let result = {};
+        try { result = JSON.parse(rawText); } catch (_) {}
+
         if (!res.ok) {
-            throw new Error(result.error || result.details?.error?.message || "Failed to create context cache");
+            throw new Error(result.error || result.details || rawText || "Failed to create context cache");
         }
 
         await updateDoc(docRef, {

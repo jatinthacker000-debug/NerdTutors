@@ -7,7 +7,6 @@
  * and CBSE rubrics across hundreds of student evaluations with up to 75% cost savings!
  */
 
-const axios = require('axios');
 const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
@@ -157,8 +156,24 @@ ${rulesText}
             ttl: `${ttlSeconds}s`
         };
 
-        const response = await axios.post(endpoint, payload, { headers });
-        const data = response.data;
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload)
+        });
+
+        const rawText = await response.text();
+        let data = {};
+        try { data = JSON.parse(rawText); } catch (_) {}
+
+        if (!response.ok) {
+            console.error("❌ Context Cache API rejected:", response.status, rawText);
+            return res.status(response.status).json({
+                error: "Google API rejected context cache creation",
+                status: response.status,
+                details: data?.error?.message || rawText
+            });
+        }
 
         return res.status(200).json({
             success: true,
@@ -169,10 +184,10 @@ ${rulesText}
         });
 
     } catch (err) {
-        console.error("❌ Context Cache Creation Error:", err?.response?.data || err.message);
-        return res.status(err?.response?.status || 500).json({
+        console.error("❌ Context Cache Creation Error:", err.message);
+        return res.status(500).json({
             error: "Failed to create context cache",
-            details: err?.response?.data || err.message
+            details: err.message
         });
     }
 };

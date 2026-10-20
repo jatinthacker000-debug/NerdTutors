@@ -77,6 +77,7 @@
                 <button class="tab-btn active" data-tab="create-session">➕ Create Test Session</button>
                 <button class="tab-btn" data-tab="view-results">📋 View Results</button>
                 <button class="tab-btn" data-tab="evaluate-answers">📝 Manual PDF Evaluation</button>
+                <button class="tab-btn" data-tab="bundle-eval">📦 Bundle Evaluation</button>
                 <button class="tab-btn" data-tab="gate-keys">🔑 Gate Access Keys</button>
             </div>
 
@@ -470,6 +471,111 @@
                         <h4 style="color: #2d3748; margin-bottom: 1rem; border-bottom: 1px solid #edf2f7; padding-bottom: 0.5rem; font-weight: 600;">🔍 Detailed Breakdown</h4>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Bundle Evaluation Tab Panel -->
+            <div class="tab-panel" id="bundle-evalTab">
+                <div class="question-form" style="padding: 2rem;">
+                    <!-- Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                <h2 style="margin: 0; color: #0f172a; font-size: 1.6rem; font-family: 'Poppins', sans-serif;">📦 Paper Bundle Evaluator (Batch Mode)</h2>
+                                <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">⚡ 75% Cached Context Savings</span>
+                            </div>
+                            <p style="margin: 0; color: #64748b; font-size: 0.95rem;">
+                                Upload student papers into a single batch queue. Trigger immediate evaluation or schedule automated grading with Gemini 4 Argon.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Session Selection -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.75rem;">
+                        <label for="bundleSessionSelect" style="display: block; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; font-size: 0.95rem;">
+                            1. Select Target Exam Session *
+                        </label>
+                        <select id="bundleSessionSelect" class="form-select" style="width: 100%; padding: 0.65rem 1rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.95rem; font-weight: 600;">
+                            <option value="">Loading active exam sessions...</option>
+                        </select>
+                        <div id="bundleCacheStatusWrap"></div>
+                    </div>
+
+                    <!-- Step 2: Add Student Papers -->
+                    <div style="background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 14px; padding: 2rem; text-align: center; margin-bottom: 1.75rem; cursor: pointer; transition: all 0.2s;" id="bundleDropZone">
+                        <input type="file" id="bundleFileInput" multiple accept="image/*,application/pdf" style="display: none;">
+                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📁</div>
+                        <h3 style="margin: 0 0 0.35rem 0; color: #1e293b; font-size: 1.15rem;">Click or Drag & Drop Student Papers to Add to Bundle</h3>
+                        <p style="margin: 0; color: #64748b; font-size: 0.85rem;">Accepts multiple JPG, PNG images or PDF answer sheets. Each file will be queued as an individual student paper.</p>
+                    </div>
+
+                    <!-- Step 3: Bundle Queue & Scheduling -->
+                    <div id="bundleQueueCard" style="display: none; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 1.75rem; box-shadow: 0 2px 8px rgba(0,0,0,0.02); overflow: hidden;">
+                        <div style="padding: 1rem 1.5rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <h3 style="margin: 0; color: #1e293b; font-size: 1.05rem; font-weight: 700;">📑 Papers in Active Bundle</h3>
+                                <span id="bundleQueueCountBadge" style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">0 Papers</span>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button type="button" id="btnClearBundle" style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
+                                    🗑️ Clear Queue
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead>
+                                    <tr style="background: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">#</th>
+                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">Student Name</th>
+                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">Uploaded File</th>
+                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">Status</th>
+                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase; text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bundleQueueTbody"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Schedule Controls & Trigger Bar -->
+                        <div style="padding: 1.25rem 1.5rem; background: #fafafa; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 600; color: #334155; cursor: pointer;">
+                                    <input type="checkbox" id="bundleScheduleToggle" style="width: 16px; height: 16px;">
+                                    ⏰ Schedule bulk evaluation
+                                </label>
+                                <div id="bundleScheduleControls" style="display: none; align-items: center; gap: 0.5rem;">
+                                    <input type="time" id="bundleScheduleTime" style="padding: 0.4rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">
+                                    <button type="button" id="btnSetBundleSchedule" style="background: #4f46e5; color: white; border: none; padding: 0.4rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer;">
+                                        Set Time
+                                    </button>
+                                    <button type="button" id="btnCancelBundleSchedule" style="background: #e2e8f0; color: #475569; border: none; padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+                                        Cancel
+                                    </button>
+                                </div>
+                                <span id="bundleScheduleCountdown" style="display: none; background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 700;"></span>
+                            </div>
+
+                            <div>
+                                <button type="button" id="btnEvaluateBundleNow" class="btn" style="background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); color: white; border: none; padding: 0.75rem 1.6rem; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
+                                    🚀 Evaluate Bundle Now (0 Papers)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Progress Card -->
+                    <div id="bundleProgressCard" style="display: none; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <strong style="color: #1e293b; font-size: 1rem;" id="bundleProgressStatus">Preparing bundle evaluation...</strong>
+                            <span id="bundleProgressCount" style="font-weight: 700; color: #4f46e5; font-size: 0.95rem;">0 / 0</span>
+                        </div>
+                        <div style="width: 100%; height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
+                            <div id="bundleProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4f46e5, #06b6d4); transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 

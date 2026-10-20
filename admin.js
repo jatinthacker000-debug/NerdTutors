@@ -32,6 +32,7 @@ import {
     setupPdfExtractionHub
 } from './js/admin-modules/session-manager.js';
 import { setupGateManager } from './js/admin-modules/gate-manager.js';
+import { setupBundleEvaluator, loadBundleSessions } from './js/admin-modules/bundle-evaluator.js';
 
 // Initialize
 function init() {
@@ -41,6 +42,7 @@ function init() {
     setupNewFeatures();
     setupMcqFields(); // NEW: Setup MCQ toggle
     setupPdfExtractionHub(); // Direct PDF Ingestion & Diagnostic Self-Test Hub
+    setupBundleEvaluator(); // NEW: Batch / Bundle Paper Evaluator
     loadDraft();
 }
 
@@ -74,7 +76,9 @@ function showAdminPanel(user) {
 
     loadTestSessionsForDropdown();
     loadTestSessionsForManagement();
+    loadBundleSessions();
     setupGateManager();
+    window.reloadBundleSessions = loadBundleSessions;
 }
 
 // Show Access Denied
