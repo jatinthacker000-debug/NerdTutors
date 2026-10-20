@@ -469,14 +469,14 @@ ${evolvedDirectivesPrompt}
    - Provide the score awarded.
    - ⚡ STREAMLINED EFFICIENCY PROTOCOL:
      - For FULL-MARK answers (score === maxMarks, including correct MCQs):
-       - Keep "feedback" concise (e.g., "Correct option selected" or "Accurately answered with required value points").
+       - Keep "feedback" ultra-concise (3-5 words, e.g. "Correct option selected" or "Accurately answered with key points").
        - Set "studentAnswerText": "" (do NOT re-transcribe answers that are already 100% correct).
        - Set "improvements": [] and "incorrectPhrases": [].
      - For PARTIAL OR ZERO MARKS (score < maxMarks):
-       - Provide comprehensive, detailed feedback explaining why marks were lost and what subject concepts were missing.
-       - Extract the exact mistaken phrase or calculation from their answer into "incorrectPhrases" with a clear explanation of why it is wrong.
-       - Provide concrete, actionable improvement suggestions.
-       - Provide a concise quote of what the student wrote in "studentAnswerText".
+       - Keep "feedback" direct and concise (max 1-2 punchy sentences explaining the specific concept or step missed).
+       - In "incorrectPhrases", extract only the single key error or wrong calculation (max 1 item; [] if none).
+       - In "improvements", provide at most 1 concise actionable tip (max 1 item; [] if none).
+       - In "studentAnswerText", provide a brief quote of the student's answer (max 15 words).
    - "questionText": Leave as empty string "" (the client interface automatically populates question statements from the exam session).
 
 ${overrideInstructionsPrompt}
@@ -485,24 +485,23 @@ Return STRICT JSON only (no markdown, no code blocks):
 {
   "totalScore": <number>,
   "maxMarks": ${mm},
-  "overallFeedback": "Detailed overall summary of the student's performance, strengths, and weaknesses.",
+  "overallFeedback": "Concise 2-sentence executive summary of student strengths and core areas to improve.",
   "improvements": [
-    "List specific improvement suggestions based on the student's mistakes",
-    "..."
+    "1-2 high-impact bullet points"
   ],
   "results": [
     {
       "questionNumber": "Q1 or Section Name",
       "questionText": "",
       "maxMarks": <number>,
-      "studentAnswerText": "Quote of student text IF marks lost, else \"\"",
-      "feedback": "Concise confirmation if full marks; thorough gap explanation if marks lost.",
+      "studentAnswerText": "Brief quote IF marks lost, else \"\"",
+      "feedback": "Concise 1-2 sentence feedback.",
       "score": <number>,
-      "improvements": ["Suggestions if marks deducted; empty array [] if full marks"],
+      "improvements": ["1 tip IF marks deducted, else []"],
       "incorrectPhrases": [
         {
-          "wrongText": "The exact incorrect phrase or calculation (empty array [] if full marks)",
-          "explanation": "Why this specific phrase/calculation is incorrect"
+          "wrongText": "The key mistaken phrase/calculation",
+          "explanation": "Brief explanation of error"
         }
       ]
     }
@@ -656,7 +655,7 @@ Return STRICT JSON only (no markdown, no code blocks):
                 ]
             }],
             generationConfig: buildGenerationConfigForModel(PRIMARY_MODEL, {
-                mediaResolution: "MEDIA_RESOLUTION_MEDIUM",
+                mediaResolution: "MEDIA_RESOLUTION_LOW",
                 responseMimeType: "application/json"
             })
         };
@@ -791,7 +790,7 @@ Return STRICT JSON only (no markdown, no code blocks):
         console.log(`📤 Calling single-pass Gemini Vision directly with ${targetModel}...`);
         const singlePassBody = JSON.parse(JSON.stringify(requestBody));
         singlePassBody.generationConfig = buildGenerationConfigForModel(targetModel, {
-            mediaResolution: "MEDIA_RESOLUTION_MEDIUM",
+            mediaResolution: "MEDIA_RESOLUTION_LOW",
             responseMimeType: "application/json"
         });
         const geminiJson = await callGeminiModel(singlePassBody, targetModel, 0);
@@ -841,7 +840,7 @@ Format your output in clean Markdown, organizing by question numbers or sections
         // Transcription is pure OCR — run at high speed without thinking
         transcribeRequestBody.generationConfig = {
             temperature: 0.0,
-            mediaResolution: "MEDIA_RESOLUTION_MEDIUM"
+            mediaResolution: "MEDIA_RESOLUTION_LOW"
         };
 
         const geminiJson = await callGeminiModel(transcribeRequestBody, targetModel, 0);
