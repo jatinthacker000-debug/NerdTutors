@@ -464,23 +464,8 @@
                     <div class="file-list" id="fileList"></div>
                 </div>
 
-                <!-- 🧪 Zero-Cost Simulation Mode Toggle -->
-                <div style="margin: 1.25rem 0; padding: 0.85rem 1.15rem; background: #f5f3ff; border: 1.5px dashed #c4b5fd; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <span style="font-size: 1.35rem;">🧪</span>
-                        <div>
-                            <strong style="color: #6b21a8; font-size: 0.92rem; display: block;">Simulation Mode (Zero Tokens · ₹0.00 Cost)</strong>
-                            <span style="color: #7e22ce; font-size: 0.78rem;">Test grading logic, layout & report cards without consuming Vertex AI tokens.</span>
-                        </div>
-                    </div>
-                    <label style="position: relative; display: inline-flex; align-items: center; cursor: pointer; gap: 0.5rem; background: white; padding: 0.35rem 0.75rem; border-radius: 8px; border: 1px solid #ddd6fe;">
-                        <input type="checkbox" id="simulationModeToggle" checked style="width: 18px; height: 18px; accent-color: #7c3aed; cursor: pointer;">
-                        <span style="font-weight: 700; font-size: 0.85rem; color: #581c87;">Enable Simulation</span>
-                    </label>
-                </div>
-
-                <button type="submit" class="btn-submit" id="btnSubmitGrading" disabled style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);">
-                    🧪 Run Simulated Evaluation (₹0.00 Cost)
+                <button type="submit" class="btn-submit" id="btnSubmitGrading" disabled>
+                    🚀 Submit for Evaluation
                 </button>
             </form>
         </div>
@@ -1274,25 +1259,11 @@
             });
         }
 
-        const simulationModeToggle = document.getElementById('simulationModeToggle');
-        function updateSubmitButtonState() {
-            const isSim = simulationModeToggle ? simulationModeToggle.checked : true;
-            if (isSim) {
-                btnSubmitGrading.textContent = '🧪 Run Simulated Evaluation (₹0.00 Cost)';
-                btnSubmitGrading.style.background = 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)';
-            } else {
-                btnSubmitGrading.textContent = '🚀 Submit for Evaluation';
-                btnSubmitGrading.style.background = '';
-            }
-        }
-        simulationModeToggle?.addEventListener('change', updateSubmitButtonState);
-
         function validateForm() {
             const hasName = studentNameInput.value.trim().length > 0;
             const hasSession = selectedSession !== null;
             const hasFiles = uploadedFiles.length > 0;
             btnSubmitGrading.disabled = !(hasName && hasSession && hasFiles);
-            updateSubmitButtonState();
         }
 
         studentNameInput.addEventListener('input', validateForm);
@@ -1382,18 +1353,15 @@
             startEvaluationProgress(loadingStatus, evaluationTimer);
 
             try {
-                const isSimMode = simulationModeToggle ? simulationModeToggle.checked : true;
-
                 console.log("📝 SUBMITTING OCR EVALUATION TO BACKEND:");
                 console.log("- Build:", OCR_BUILD_TAG);
-                console.log("- Mode:", isSimMode ? "🧪 SIMULATION (₹0.00 Tokens)" : "🚀 LIVE AI (Gemini 4 Argon)");
                 console.log("- Selected Session:", selectedSession?.name);
                 console.log("- Files:", uploadedFiles.length, "· ~" + currentPayloadMB().toFixed(2) + " MB payload");
                 console.log("- Override Instructions:", selectedSession?.otherInstructions || "(None)");
 
-                // Auto-provision Gemini Context Cache if not in simulation and not already set (75% savings)
+                // Auto-provision Gemini Context Cache if not already set (75% savings)
                 let activeCacheId = selectedSession.cachedContentId || null;
-                if (!isSimMode && !activeCacheId && selectedSession.questions && selectedSession.markingScheme) {
+                if (!activeCacheId && selectedSession.questions && selectedSession.markingScheme) {
                     try {
                         loadingStatus.textContent = "⚡ Initializing exam context cache (75% token discount)...";
                         const cacheRes = await fetch('/api/create-cache', {
@@ -1435,7 +1403,6 @@
                 const payloadString = JSON.stringify({
                     mode: 'session-evaluate',
                     model: 'gemini-4-argon',
-                    simulate: isSimMode,
                     thinkingLevel: 'low',
                     questions: selectedSession.questions,
                     markingScheme: selectedSession.markingScheme,
@@ -1619,11 +1586,6 @@
             });
 
             reportCardContainer.innerHTML = `
-                ${report.isSimulation ? `
-                    <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 0.6rem 1.25rem; border-radius: 8px; text-align: center; font-weight: 700; font-size: 0.88rem; margin-bottom: 1.5rem; letter-spacing: 0.5px; box-shadow: 0 4px 10px rgba(124, 58, 237, 0.2);">
-                        🧪 SIMULATION TEST EVALUATION · ZERO TOKENS BURNED (₹0.00 COST)
-                    </div>
-                ` : ''}
                 <div style="text-align: center; border-bottom: 4px solid #1e3c72; padding-bottom: 1.5rem; margin-bottom: 2rem;">
                     <h1 style="font-family: 'Poppins', sans-serif; color: #1e3c72; margin: 0; font-size: 2.2rem; font-weight: 800; letter-spacing: 1px;">NERD TUTORS</h1>
                     <p style="margin: 5px 0 0 0; color: #2a5298; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 2px; font-weight: 600;">📝 Student Error Correction Report</p>

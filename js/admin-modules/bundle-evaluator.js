@@ -86,10 +86,6 @@ export function setupBundleEvaluator() {
         startBundleEvaluation();
     });
 
-    document.getElementById('bundleSimulateToggle')?.addEventListener('change', () => {
-        renderBundleQueue();
-    });
-
     // 5. Scheduling
     scheduleToggle?.addEventListener('change', (e) => {
         const scheduleControls = document.getElementById('bundleScheduleControls');
@@ -250,18 +246,11 @@ function renderBundleQueue() {
     }
 
     if (queueCard) queueCard.style.display = 'block';
-    const bundleSimToggle = document.getElementById('bundleSimulateToggle');
-    const isSimMode = bundleSimToggle ? bundleSimToggle.checked : true;
 
     if (btnEvaluateNow) {
         btnEvaluateNow.disabled = isEvaluatingBundle;
-        if (isSimMode) {
-            btnEvaluateNow.innerHTML = `🧪 Simulate Bundle (${queuedBundlePapers.length} Papers - Free)`;
-            btnEvaluateNow.style.background = 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)';
-        } else {
-            btnEvaluateNow.innerHTML = `🚀 Evaluate Bundle Now (${queuedBundlePapers.length} Papers)`;
-            btnEvaluateNow.style.background = 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)';
-        }
+        btnEvaluateNow.innerHTML = `🚀 Evaluate Bundle Now (${queuedBundlePapers.length} Papers)`;
+        btnEvaluateNow.style.background = 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)';
     }
     if (queueCountBadge) queueCountBadge.textContent = `${queuedBundlePapers.length} Papers`;
 
@@ -271,8 +260,7 @@ function renderBundleQueue() {
         if (paper.status === 'evaluating') {
             statusBadge = `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">⚙️ GRADING...</span>`;
         } else if (paper.status === 'completed') {
-            const isSimResult = paper.result?.isSimulation;
-            statusBadge = `<span style="background: ${isSimResult ? '#f3e8ff' : '#dcfce7'}; color: ${isSimResult ? '#7e22ce' : '#166534'}; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">✓ DONE (${paper.result?.totalScore}/${paper.result?.maxMarks})</span>`;
+            statusBadge = `<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">✓ DONE (${paper.result?.totalScore}/${paper.result?.maxMarks})</span>`;
         } else if (paper.status === 'error') {
             statusBadge = `<span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">❌ FAILED</span>`;
         }
@@ -343,11 +331,10 @@ async function startBundleEvaluation() {
     const gateToken = localStorage.getItem('gate_token') || '';
     let completedCount = 0;
     const totalToProcess = pendingPapers.length;
-    const isSimMode = document.getElementById('bundleSimulateToggle')?.checked ?? true;
 
-    // Auto-create context cache if missing before starting bulk execution (only in live mode)
+    // Auto-create context cache if missing before starting bulk execution
     let activeCacheId = selectedBundleSession.cachedContentId || null;
-    if (!isSimMode && !activeCacheId && selectedBundleSession.questions && selectedBundleSession.markingScheme) {
+    if (!activeCacheId && selectedBundleSession.questions && selectedBundleSession.markingScheme) {
         try {
             if (progressStatus) progressStatus.textContent = "⚡ Building shared Gemini Context Cache for bundle (75% savings)...";
             const cacheRes = await fetch('/api/create-cache', {
@@ -387,7 +374,7 @@ async function startBundleEvaluation() {
         paper.status = 'evaluating';
         renderBundleQueue();
 
-        if (progressStatus) progressStatus.textContent = `${isSimMode ? '🧪 Simulating' : 'Grading'} paper ${i + 1} of ${totalToProcess}: ${paper.studentName}...`;
+        if (progressStatus) progressStatus.textContent = `Grading paper ${i + 1} of ${totalToProcess}: ${paper.studentName}...`;
         if (progressCount) progressCount.textContent = `${i + 1} / ${totalToProcess}`;
         if (progressBar) progressBar.style.width = `${Math.round(((i) / totalToProcess) * 100)}%`;
 
@@ -395,7 +382,6 @@ async function startBundleEvaluation() {
             const payload = {
                 mode: 'session-evaluate',
                 model: 'gemini-4-argon',
-                simulate: isSimMode,
                 thinkingLevel: 'low',
                 questions: selectedBundleSession.questions,
                 markingScheme: selectedBundleSession.markingScheme,
