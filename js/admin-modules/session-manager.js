@@ -969,7 +969,7 @@ export async function loadTestSessionsForManagement() {
         if (querySnapshot.empty) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="9" style="padding: 1.5rem; text-align: center; color: #666; font-style: italic;">
+                    <td colspan="8" style="padding: 2.5rem; text-align: center; color: #64748b; font-style: italic;">
                         No published test sessions found. Create one above!
                     </td>
                 </tr>
@@ -985,38 +985,62 @@ export async function loadTestSessionsForManagement() {
             
             const examYear = data.examYear || (data.name ? data.name.match(/\b(202\d)\b/)?.[1] : '') || 'Standard';
             html += `
-                <tr style="border-bottom: 1px solid #edf2f7;">
-                    <td style="padding: 0.75rem; font-weight: 600; color: #2d3748;">${escapeHtml(data.name)}</td>
-                    <td style="padding: 0.75rem;">
-                        <span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.55rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(examYear)}</span>
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: background-color 0.15s ease;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='transparent'">
+                    <td style="padding: 0.85rem 1rem; vertical-align: middle;">
+                        <div style="font-weight: 700; color: #1e293b; font-size: 0.92rem; line-height: 1.35;">${escapeHtml(data.name)}</div>
                     </td>
-                    <td style="padding: 0.75rem;">
-                        <span class="badge-set">${escapeHtml(data.examSet || 'Standard')}</span>
+                    <td style="padding: 0.85rem 0.75rem; vertical-align: middle; white-space: nowrap;">
+                        <span style="display: inline-block; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 0.2rem 0.55rem; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">
+                            ${escapeHtml(examYear)}
+                        </span>
                     </td>
-                    <td style="padding: 0.75rem;">
-                        <span style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 0.2rem 0.55rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(data.targetGroup || 'Both')}</span>
+                    <td style="padding: 0.85rem 0.75rem; vertical-align: middle; white-space: nowrap;">
+                        <span style="display: inline-block; background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; padding: 0.2rem 0.55rem; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">
+                            ${escapeHtml(data.examSet || 'Standard')}
+                        </span>
                     </td>
-                    <td style="padding: 0.75rem; color: #4a5568;">${escapeHtml(data.class)}</td>
-                    <td style="padding: 0.75rem; color: #4a5568;">${escapeHtml(data.subject)}</td>
-                    <td style="padding: 0.75rem; color: #4a5568;">${data.maxMarks}</td>
-                    <td style="padding: 0.75rem;">
-                        <span style="background: ${isActive ? '#c6f6d5' : '#fed7d7'}; color: ${isActive ? '#22543d' : '#742a2a'}; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">
+                    <td style="padding: 0.85rem 0.75rem; vertical-align: middle; white-space: nowrap;">
+                        <span style="display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.78rem; white-space: nowrap;" title="${escapeHtml(data.targetGroup || 'Both')}">
+                            ${escapeHtml(data.targetGroup || 'Both')}
+                        </span>
+                    </td>
+                    <td style="padding: 0.85rem 0.75rem; vertical-align: middle; white-space: nowrap; color: #475569; font-weight: 600; font-size: 0.85rem;">
+                        ${escapeHtml(data.class)} <span style="color: #cbd5e1; margin: 0 4px;">&bull;</span> ${escapeHtml(data.subject)}
+                    </td>
+                    <td style="padding: 0.85rem 0.75rem; vertical-align: middle; text-align: center; white-space: nowrap;">
+                        <span style="font-weight: 700; color: #334155; font-size: 0.9rem;">${data.maxMarks}</span>
+                    </td>
+                    <td style="padding: 0.85rem 0.75rem; vertical-align: middle; text-align: center; white-space: nowrap;">
+                        <span style="display: inline-flex; align-items: center; gap: 0.35rem; background: ${isActive ? '#ecfdf5' : '#f1f5f9'}; color: ${isActive ? '#047857' : '#64748b'}; border: 1px solid ${isActive ? '#a7f3d0' : '#cbd5e1'}; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">
+                            <span style="width: 6px; height: 6px; border-radius: 50%; background: ${isActive ? '#10b981' : '#94a3b8'};"></span>
                             ${status}
                         </span>
                     </td>
-                    <td style="padding: 0.75rem; text-align: right;">
-                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
-                            <button style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid #86efac; background: ${data.cachedContentId ? '#dcfce7' : '#f0fdf4'}; color: #166534; cursor: pointer; font-weight: 600; white-space: nowrap;" onclick="window.cacheTestSession('${id}')" title="${data.cachedContentId ? 'Gemini context cache active (75% token discount)' : 'Generate Gemini context cache for 75% token discount'}">
-                                ${data.cachedContentId ? '⚡ Cached (75% Off)' : '⚡ Cache (75% Off)'}
+                    <td style="padding: 0.85rem 1rem; vertical-align: middle; text-align: right; white-space: nowrap;">
+                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end; align-items: center; white-space: nowrap;">
+                            <button type="button" 
+                                style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid ${data.cachedContentId ? '#86efac' : '#cbd5e1'}; background: ${data.cachedContentId ? '#dcfce7' : '#ffffff'}; color: ${data.cachedContentId ? '#15803d' : '#475569'}; cursor: pointer; font-weight: 700; white-space: nowrap; transition: all 0.15s ease;" 
+                                onclick="window.cacheTestSession('${id}')" 
+                                title="${data.cachedContentId ? 'Gemini context cache active (75% token discount)' : 'Generate Gemini context cache for 75% token discount'}">
+                                ${data.cachedContentId ? '⚡ 75% Cached' : '⚡ Cache (75% Off)'}
                             </button>
-                            <button style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid #cbd5e0; background: #e0f2fe; color: #0369a1; cursor: pointer; font-weight: 600; white-space: nowrap;" onclick="window.editSession('${id}')">
+                            <button type="button" 
+                                style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
+                                onclick="window.editSession('${id}')" 
+                                title="Edit Session">
                                 ✏️ Edit
                             </button>
-                            <button style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid #cbd5e0; background: white; cursor: pointer; font-weight: 600; white-space: nowrap;" onclick="window.toggleSessionStatus('${id}', '${status}')">
+                            <button type="button" 
+                                style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
+                                onclick="window.toggleSessionStatus('${id}', '${status}')" 
+                                title="${isActive ? 'Deactivate Session' : 'Activate Session'}">
                                 ${isActive ? '⏸️ Deactivate' : '▶️ Activate'}
                             </button>
-                            <button style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 4px; border: none; background: #e53e3e; color: white; cursor: pointer; font-weight: 600; white-space: nowrap;" onclick="window.deleteSession('${id}')">
-                                🗑️ Delete
+                            <button type="button" 
+                                style="display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 0.55rem; font-size: 0.8rem; border-radius: 6px; border: 1px solid #fecaca; background: #fff1f2; color: #e11d48; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
+                                onclick="window.deleteSession('${id}')" 
+                                title="Delete Session">
+                                🗑️
                             </button>
                         </div>
                     </td>
@@ -1029,7 +1053,7 @@ export async function loadTestSessionsForManagement() {
         console.error('Error loading sessions for management:', error);
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" style="padding: 1.5rem; text-align: center; color: #e53e3e; font-weight: 600;">
+                <td colspan="8" style="padding: 2rem; text-align: center; color: #e53e3e; font-weight: 600;">
                     Error loading test sessions.
                 </td>
             </tr>
