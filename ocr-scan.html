@@ -347,6 +347,10 @@
                 box-shadow: none;
                 border: none;
             }
+            .no-print, .no-print * {
+                display: none !important;
+                visibility: hidden !important;
+            }
             @page {
                 size: auto;
                 margin: 0;
@@ -480,14 +484,18 @@
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner"></div>
-        <div class="loading-title">AI Scanner grading in progress</div>
-        <div class="loading-status" id="loadingStatus">Transcribing handwritten answers...</div>
+        <div class="loading-title">AI Scanner Grading in Progress</div>
+        <div id="evaluationTimer" style="font-family: monospace; font-size: 1.15rem; font-weight: 700; color: #2563eb; margin-top: 0.25rem;">⏱️ 0s elapsed</div>
+        <div class="loading-status" id="loadingStatus" style="font-size: 0.95rem; font-weight: 500; margin-top: 0.5rem; max-width: 440px; text-align: center; line-height: 1.4;">Connecting to Gemini 4 Argon...</div>
         <!-- S2: real upload progress bar (shown during the upload phase) -->
         <div id="uploadProgressWrap" style="display:none;width:min(320px,80vw);margin-top:1.25rem;">
             <div style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
                 <div id="uploadProgressBar" style="height:100%;width:0%;background:var(--bg-gradient);transition:width 0.2s ease;"></div>
             </div>
             <div id="uploadProgressText" style="text-align:center;font-size:0.8rem;color:#718096;margin-top:0.5rem;">0%</div>
+        </div>
+        <div id="evaluationTip" style="margin-top: 1.25rem; padding: 0.6rem 1.2rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; font-size: 0.82rem; color: #1d4ed8; max-width: 400px; text-align: center;">
+            💡 Gemini 4 Argon is evaluating all questions in depth. Please keep this tab active.
         </div>
     </div>
 
@@ -542,10 +550,48 @@
         const uploadProgressWrap = document.getElementById('uploadProgressWrap');
         const uploadProgressBar = document.getElementById('uploadProgressBar');
         const uploadProgressText = document.getElementById('uploadProgressText');
+        const evaluationTimer = document.getElementById('evaluationTimer');
+        const evaluationTip = document.getElementById('evaluationTip');
         const inputCard = document.getElementById('inputCard');
         const reportCardContainer = document.getElementById('reportCardContainer');
         const printActions = document.getElementById('printActions');
         const btnReevaluate = document.getElementById('btnReevaluate');
+
+        // Dynamic Evaluation Progress Stepper & Live Clock
+        let evaluationInterval = null;
+        let evaluationSeconds = 0;
+
+        function startEvaluationProgress(statusElem, timerElem) {
+            clearInterval(evaluationInterval);
+            evaluationSeconds = 0;
+            if (timerElem) timerElem.textContent = "⏱️ 0s elapsed";
+
+            const stages = [
+                { afterSec: 0, text: "📤 Uploading answer sheet photos..." },
+                { afterSec: 3, text: "🧠 Connecting to Gemini 4 Argon Frontier AI..." },
+                { afterSec: 7, text: "📖 Reading handwritten answers & mapping question identifiers..." },
+                { afterSec: 13, text: "⚖️ Evaluating concepts against CBSE Board Marking Scheme..." },
+                { afterSec: 19, text: "🔍 Auditing question scores, verifying MCQ binary options..." },
+                { afterSec: 25, text: "✨ Drafting comprehensive student feedback and report card..." }
+            ];
+
+            evaluationInterval = setInterval(() => {
+                evaluationSeconds++;
+                if (timerElem) timerElem.textContent = `⏱️ ${evaluationSeconds}s elapsed`;
+
+                for (let i = stages.length - 1; i >= 0; i--) {
+                    if (evaluationSeconds >= stages[i].afterSec) {
+                        if (statusElem) statusElem.textContent = stages[i].text;
+                        break;
+                    }
+                }
+            }, 1000);
+        }
+
+        function stopEvaluationProgress() {
+            clearInterval(evaluationInterval);
+            evaluationInterval = null;
+        }
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -1237,10 +1283,10 @@
             if (uploadedFiles.length === 0 || !selectedSession) return;
 
             loadingOverlay.classList.add('show');
-            loadingStatus.textContent = "Uploading sheets & evaluating with Gemini 4 Argon...";
             uploadProgressWrap.style.display = 'block';
             uploadProgressBar.style.width = '0%';
             uploadProgressText.textContent = '0%';
+            startEvaluationProgress(loadingStatus, evaluationTimer);
 
             try {
                 console.log("📝 SUBMITTING OCR EVALUATION TO BACKEND:");
@@ -1315,6 +1361,7 @@
                     "without re-uploading."
                 );
             } finally {
+                stopEvaluationProgress();
                 loadingOverlay.classList.remove('show');
                 uploadProgressWrap.style.display = 'none';   // S2: reset progress UI
             }
@@ -1462,6 +1509,40 @@
                         <span style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">📅 ${escapeHtml(extractYear(selectedSession) || 'Standard')} · 🔖 ${escapeHtml(extractSet(selectedSession) || 'Set 1')}</span>
                     </div>
                 </div>
+
+                <!-- AI Evaluation Token & Real Cost Audit Receipt (Screen-only, hidden in print) -->
+                ${report.tokenUsage ? `
+                <div class="no-print" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 0.9rem 1.25rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+                    <div style="display: flex; align-items: center; gap: 0.65rem;">
+                        <span style="font-size: 1.4rem;">🤖</span>
+                        <div>
+                            <div style="font-weight: 700; color: #0f172a; font-size: 0.95rem;">${escapeHtml(report.modelUsed || 'Gemini 4 Argon')}</div>
+                            <div style="font-size: 0.76rem; color: #64748b;">${report.tokenUsage.apiCallsCount || 1} API Call(s) · Single-Pass Direct Vision</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; font-size: 0.85rem;">
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Input Tokens</span>
+                            <strong style="color: #1e293b; font-size: 0.95rem;">
+                                ${(report.tokenUsage.promptTokens || 0).toLocaleString()}
+                                ${report.tokenUsage.cachedTokens > 0 ? `<span style="font-size: 0.72rem; color: #16a34a; background: #dcfce7; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 4px;">⚡ ${(report.tokenUsage.cachedTokens).toLocaleString()} cached</span>` : ''}
+                            </strong>
+                        </div>
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Output Tokens</span>
+                            <strong style="color: #1e293b; font-size: 0.95rem;">${(report.tokenUsage.completionTokens || 0).toLocaleString()}</strong>
+                        </div>
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Total Tokens</span>
+                            <strong style="color: #2563eb; font-size: 0.95rem;">${(report.tokenUsage.totalTokens || 0).toLocaleString()}</strong>
+                        </div>
+                        <div style="display: flex; flex-direction: column; background: #fef3c7; border: 1px solid #fde68a; padding: 0.35rem 0.85rem; border-radius: 8px;">
+                            <span style="color: #92400e; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">Real Cost (GCP)</span>
+                            <strong style="color: #b45309; font-size: 1.05rem;">₹${Number(report.tokenUsage.costInr || 0).toFixed(2)}</strong>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
 
                 <!-- Split Layout Panel -->
                 <div style="display: flex; gap: 1.5rem; margin-bottom: 2.5rem; align-items: stretch; flex-wrap: wrap;">
@@ -1649,10 +1730,10 @@
             if (!lastPayloadString || !currentSavedResultId) return;
 
             loadingOverlay.classList.add('show');
-            loadingStatus.textContent = "Re-evaluating answers...";
             uploadProgressWrap.style.display = 'block';
-            uploadProgressBar.style.width = '0%';
-            uploadProgressText.textContent = '0%';
+            uploadProgressBar.style.width = '100%';
+            uploadProgressText.textContent = '100%';
+            startEvaluationProgress(loadingStatus, evaluationTimer);
 
             try {
                 console.log("🔄 RE-EVALUATING TEST:", currentSavedResultId);
@@ -1685,6 +1766,7 @@
                 console.error("Re-evaluation failed:", error);
                 alert("Failed to re-evaluate: " + error.message);
             } finally {
+                stopEvaluationProgress();
                 loadingOverlay.classList.remove('show');
                 uploadProgressWrap.style.display = 'none';
             }

@@ -662,7 +662,17 @@ Return STRICT JSON only (no markdown, no code blocks):
         };
     }
 
-    const cumulativeUsage = { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 };
+    // Official Google Cloud Vertex AI Pricing Rates (INR list price per 1,000,000 tokens):
+    // Gemini 4 Argon:
+    // - Text Output: ₹1,919.775 / 1M tokens (SKU: 1E84-F91D-8B95) => ₹0.001919775 / token
+    // - Text / Image Input: ₹383.955 / 1M tokens => ₹0.000383955 / token
+    // - Cached Input: ₹95.988 / 1M tokens (75% cache discount) => ₹0.000095988 / token
+    // Gemini 3.8 Flash:
+    // - Text Input: ₹143.983 / 1M tokens (SKU: 2A35-AC68-14D6) => ₹0.000143983 / token
+    // - Cached Input: ₹14.398 / 1M tokens (SKU: 298F-1B35-42DA) => ₹0.000014398 / token
+    // - Text Output: ₹575.932 / 1M tokens => ₹0.000575932 / token
+    const cumulativeUsage = { promptTokens: 0, candidatesTokens: 0, totalTokens: 0, cachedTokens: 0 };
+    const apiCallLedger = [];
 
     async function callGeminiModel(reqBody, modelName = activeModel, preferredKeyIndex = 0) {
         let lastError = null;
@@ -731,9 +741,36 @@ Return STRICT JSON only (no markdown, no code blocks):
                 }
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.usageMetadata) {
-                    cumulativeUsage.promptTokens += (parsed.usageMetadata.promptTokenCount || 0);
-                    cumulativeUsage.candidatesTokens += (parsed.usageMetadata.candidatesTokenCount || 0);
-                    cumulativeUsage.totalTokens += (parsed.usageMetadata.totalTokenCount || 0);
+                    const pTokens = parsed.usageMetadata.promptTokenCount || 0;
+                    const cTokens = parsed.usageMetadata.candidatesTokenCount || 0;
+                    const cachedTokens = parsed.usageMetadata.cachedContentTokenCount || 0;
+                    const totTokens = parsed.usageMetadata.totalTokenCount || (pTokens + cTokens);
+
+                    cumulativeUsage.promptTokens += pTokens;
+                    cumulativeUsage.candidatesTokens += cTokens;
+                    cumulativeUsage.cachedTokens += cachedTokens;
+                    cumulativeUsage.totalTokens += totTokens;
+
+                    const isCallArgon = modelName.includes("argon") || modelName.includes("gemini-4");
+                    const inrPromptRate = isCallArgon ? 0.000383955 : 0.000143983;
+                    const inrCachedRate = isCallArgon ? 0.000095988 : 0.000014398;
+                    const inrCandidateRate = isCallArgon ? 0.001919775 : 0.000575932;
+
+                    const nonCachedPrompt = Math.max(0, pTokens - cachedTokens);
+                    const callCostInr = (nonCachedPrompt * inrPromptRate) + (cachedTokens * inrCachedRate) + (cTokens * inrCandidateRate);
+                    const callCostUsd = callCostInr / 86;
+
+                    apiCallLedger.push({
+                        callIndex: apiCallLedger.length + 1,
+                        model: modelName,
+                        promptTokens: pTokens,
+                        nonCachedPromptTokens: nonCachedPrompt,
+                        cachedTokens: cachedTokens,
+                        candidatesTokens: cTokens,
+                        totalTokens: totTokens,
+                        costInr: Number(callCostInr.toFixed(4)),
+                        costUsd: Number(callCostUsd.toFixed(6))
+                    });
                 }
                 return parsed;
             } catch (err) {
@@ -856,57 +893,38 @@ Return the response as a strict JSON object.`;
             result.modelUsed = `${PRIMARY_MODEL} (Dual-Pass Reasoning)`;
             result.primaryModelSuccess = true;
         } else {
-            // ========== TIER 1: HYBRID PIPELINE (Flash Vision + Argon Grading) ==========
-            // Gemini 3.8 Flash processes images at 26x lower token rate (~₹0.10 image cost).
-            // Gemini 4 Argon evaluates the student's answers with deep reasoning (Argon image cost = ₹0.00!).
-            // Falls back seamlessly to Direct Single-Pass Argon Vision (with medium resolution) if needed.
+            // ========== TIER 1: PRIMARY MODEL (Gemini 4 Argon Direct Single-Pass Vision) ==========
+            // Direct Single-Pass Vision processes the downscaled answer sheets in 1 single API call (~10-14 seconds).
+            // Uses Argon's frontier multimodal deep reasoning against CBSE rubrics with thinkingLevel: "low".
             try {
-                if (body.directVision) {
-                    console.log(`⚡ [Tier 1: Direct Vision] Starting Direct Single-Pass Vision with ${PRIMARY_MODEL}...`);
-                    result = await evaluateSinglePass(PRIMARY_MODEL);
-                    result.modelUsed = `${PRIMARY_MODEL} (Single-Pass Direct Vision)`;
-                    result.primaryModelSuccess = true;
-                } else {
-                    console.log(`⚡ [Tier 1: Hybrid] Step 1: Processing images with ${BACKUP_MODEL} (Vision)...`);
+                const targetEngine = (body.evalEngine || body.model || PRIMARY_MODEL).toLowerCase();
+                const primaryToRun = targetEngine.includes("flash") ? BACKUP_MODEL : PRIMARY_MODEL;
+
+                console.log(`⚡ [Tier 1: Primary Evaluator] Starting Direct Single-Pass Vision with ${primaryToRun}...`);
+                result = await evaluateSinglePass(primaryToRun);
+                result.modelUsed = `${primaryToRun} (Direct Single-Pass Vision)`;
+                result.primaryModelSuccess = true;
+            } catch (primaryErr) {
+                // ========== TIER 2: BACKUP MODEL FAILOVER (Gemini 3.8 Flash Direct Vision) ==========
+                console.warn(`🛡️ [BACKUP ACTIVATED] Primary model failed (${primaryErr.message}). Failing over to backup: ${BACKUP_MODEL}...`);
+                try {
+                    console.log(`⚡ [Backup Evaluator] Starting Direct Single-Pass Vision with backup ${BACKUP_MODEL}...`);
+                    result = await evaluateSinglePass(BACKUP_MODEL);
+                    result.modelUsed = `${BACKUP_MODEL} (Backup Failover Single-Pass)`;
+                    result.backupModelActivated = true;
+                    result.failoverReason = primaryErr.message;
+                } catch (backupErr) {
+                    console.warn(`⚠️ [Backup Evaluator] Direct single-pass with ${BACKUP_MODEL} failed (${backupErr.message}). Attempting Dual-Pass fallback with ${BACKUP_MODEL}...`);
                     const transcription = await transcribeWithGemini(requestBody, mode, BACKUP_MODEL);
-                    console.log(`🧠 [Tier 1: Hybrid] Step 2: Evaluating student answers with ${PRIMARY_MODEL} (Deep Reasoning)...`);
-                    const gradeText = await gradeWithGemini(transcription, textPrompt, PRIMARY_MODEL);
+                    const gradeText = await gradeWithGemini(transcription, textPrompt, BACKUP_MODEL);
                     const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
                     const firstBrace = cleanGrade.indexOf('{');
                     const lastBrace = cleanGrade.lastIndexOf('}');
                     const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? cleanGrade.substring(firstBrace, lastBrace + 1) : cleanGrade;
                     result = JSON.parse(jsonStr);
-                    result.modelUsed = `Hybrid: ${BACKUP_MODEL} (Vision) + ${PRIMARY_MODEL} (Grading)`;
-                    result.primaryModelSuccess = true;
-                }
-            } catch (primaryErr) {
-                console.warn(`⚠️ [Tier 1: Hybrid] Failed (${primaryErr.message}). Falling back to Direct Single-Pass Vision with ${PRIMARY_MODEL}...`);
-                try {
-                    result = await evaluateSinglePass(PRIMARY_MODEL);
-                    result.modelUsed = `${PRIMARY_MODEL} (Single-Pass Direct Vision)`;
-                    result.primaryModelSuccess = true;
-                } catch (argonDirectErr) {
-                    // ========== TIER 2: BACKUP MODEL FAILOVER (Gemini 3.8 Flash Direct Vision) ==========
-                    console.warn(`🛡️ [BACKUP ACTIVATED] Primary model (${PRIMARY_MODEL}) failed. Failing over to backup: ${BACKUP_MODEL}... Reason: ${primaryErr.message}`);
-                    try {
-                        console.log(`⚡ [Backup Evaluator] Starting Direct Single-Pass Vision with backup ${BACKUP_MODEL}...`);
-                        result = await evaluateSinglePass(BACKUP_MODEL);
-                        result.modelUsed = `${BACKUP_MODEL} (Backup Failover Single-Pass)`;
-                        result.backupModelActivated = true;
-                        result.failoverReason = primaryErr.message;
-                    } catch (backupErr) {
-                        console.warn(`⚠️ [Backup Evaluator] Direct single-pass with ${BACKUP_MODEL} failed (${backupErr.message}). Attempting Dual-Pass fallback with ${BACKUP_MODEL}...`);
-                        const transcription = await transcribeWithGemini(requestBody, mode, BACKUP_MODEL);
-                        const gradeText = await gradeWithGemini(transcription, textPrompt, BACKUP_MODEL);
-                        const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
-                        const firstBrace = cleanGrade.indexOf('{');
-                        const lastBrace = cleanGrade.lastIndexOf('}');
-                        const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? cleanGrade.substring(firstBrace, lastBrace + 1) : cleanGrade;
-                        result = JSON.parse(jsonStr);
-                        result.modelUsed = `${BACKUP_MODEL} (Backup Dual-Pass Fallback)`;
-                        result.backupModelActivated = true;
-                        result.failoverReason = `${primaryErr.message} | SinglePass: ${backupErr.message}`;
-                    }
+                    result.modelUsed = `${BACKUP_MODEL} (Backup Dual-Pass Fallback)`;
+                    result.backupModelActivated = true;
+                    result.failoverReason = `${primaryErr.message} | SinglePass: ${backupErr.message}`;
                 }
             }
         }
@@ -1011,21 +1029,22 @@ Return the response as a strict JSON object.`;
         }
 
         const isArgonUsed = (result.modelUsed || "").toLowerCase().includes("argon");
-        // Google Cloud Vertex AI Pricing Rates:
-        // Gemini 4 Argon: $2.00 per 1M input tokens ($0.000002), $10.00 per 1M output tokens ($0.000010)
-        // Gemini 3.8 Flash: $0.075 per 1M input tokens ($0.000000075), $0.30 per 1M output tokens ($0.0000003)
-        const promptRate = isArgonUsed ? 0.000002 : 0.000000075;
-        const candidateRate = isArgonUsed ? 0.000010 : 0.0000003;
+        const totalCostInr = apiCallLedger.reduce((sum, c) => sum + (c.costInr || 0), 0);
+        const totalCostUsd = apiCallLedger.reduce((sum, c) => sum + (c.costUsd || 0), 0);
 
         result.tokenUsage = {
             promptTokens: cumulativeUsage.promptTokens,
+            cachedTokens: cumulativeUsage.cachedTokens,
+            nonCachedPromptTokens: Math.max(0, cumulativeUsage.promptTokens - cumulativeUsage.cachedTokens),
             completionTokens: cumulativeUsage.candidatesTokens,
             totalTokens: cumulativeUsage.totalTokens || (cumulativeUsage.promptTokens + cumulativeUsage.candidatesTokens),
-            costUsd: Number((cumulativeUsage.promptTokens * promptRate + cumulativeUsage.candidatesTokens * candidateRate).toFixed(6)),
-            costInr: Number(((cumulativeUsage.promptTokens * promptRate + cumulativeUsage.candidatesTokens * candidateRate) * 86).toFixed(4)),
+            costInr: Number(totalCostInr.toFixed(2)),
+            costUsd: Number(totalCostUsd.toFixed(4)),
             thinkingLevel: isArgonUsed ? (thinkingLevel || "low") : undefined,
             thinkingBudget: !isArgonUsed ? (thinkingBudget || 256) : undefined,
-            pricingTier: isArgonUsed ? "Gemini 4 Argon Standard" : "Gemini 3.8 Flash Standard"
+            pricingTier: isArgonUsed ? "Gemini 4 Argon Direct Vision (Official GCP List Price)" : "Gemini 3.8 Flash Standard",
+            apiCallsCount: apiCallLedger.length,
+            calls: apiCallLedger
         };
 
         console.log("\n================================================================================");
