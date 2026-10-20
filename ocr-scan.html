@@ -1507,19 +1507,6 @@
 
             } catch (error) {
                 console.error("Evaluation failed:", error);
-                const isAuthError = error.status === 401 || (error.message && error.message.toLowerCase().includes("unauthorized"));
-                if (isAuthError) {
-                    localStorage.removeItem('gate_authenticated');
-                    localStorage.removeItem('gate_token');
-                    alert(
-                        "🔒 Gate Access Required\n\n" +
-                        "Your Gate access credentials need to be re-entered.\n" +
-                        "Your uploaded files have been safely preserved. Click OK to log in, and you will be returned right back!"
-                    );
-                    const currentPath = window.location.pathname + window.location.search;
-                    window.location.href = 'login-gate.html?redirect=' + encodeURIComponent(currentPath);
-                    return;
-                }
                 alert(
                     "Failed to evaluate: " + error.message +
                     "\n\nYour uploaded files have been saved. You can press Submit again to retry " +

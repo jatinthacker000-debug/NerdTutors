@@ -316,61 +316,10 @@
 
     <script>
         (function() {
-            const form = document.getElementById('gateLoginForm');
-            const submitBtn = document.getElementById('submitBtn');
-            const btnSpinner = document.getElementById('btnSpinner');
-            const btnText = document.getElementById('btnText');
-            const errorAlert = document.getElementById('errorAlert');
-            const errorText = document.getElementById('errorText');
-
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                // Reset alert
-                errorAlert.style.display = 'none';
-                
-                // Show loading
-                submitBtn.disabled = true;
-                btnSpinner.style.display = 'inline-block';
-                btnText.textContent = 'Verifying...';
-
-                const username = document.getElementById('username').value.trim();
-                const password = document.getElementById('password').value.trim();
-
-                try {
-                    const response = await fetch('/api/verify-gate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ username, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok && data.success) {
-                        // Store authentication in localStorage
-                        localStorage.setItem('gate_authenticated', 'true');
-                        localStorage.setItem('gate_token', data.token);
-
-                        // Redirect back to original page
-                        const urlParams = new URLSearchParams(window.location.search);
-                        const redirectUrl = urlParams.get('redirect') || 'ocr-scan.html';
-                        window.location.href = decodeURIComponent(redirectUrl);
-                    } else {
-                        throw new Error(data.error || 'Authentication failed');
-                    }
-                } catch (err) {
-                    console.error("Gate auth error:", err);
-                    errorText.textContent = err.message || 'Server error. Please try again.';
-                    errorAlert.style.display = 'flex';
-                    
-                    // Reset button
-                    submitBtn.disabled = false;
-                    btnSpinner.style.display = 'none';
-                    btnText.textContent = 'Authenticate';
-                }
-            });
+            // Gate disabled: automatically redirect immediately to target page
+            const urlParams = new URLSearchParams(window.location.search);
+            const redirectUrl = urlParams.get('redirect') || 'ocr-scan.html';
+            window.location.replace(decodeURIComponent(redirectUrl));
         })();
     </script>
 </body>

@@ -47,68 +47,8 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: "Method not allowed. Use POST." });
     }
 
-    // Gate security check
-    const clientToken = req.headers['x-gate-token'];
-    const GATE_SECRET = process.env.GATE_SECRET || 'nt_gate_hmac_secret_2026_super_secure';
-
-    const defaultGateCreds = [
-        { username: 'nerd_tutor_alpha', password: 'nt_pass_alpha2026' },
-        { username: 'nerd_tutor_beta', password: 'nt_pass_beta2026' },
-        { username: 'nerd_tutor_gamma', password: 'nt_pass_gamma2026' },
-        { username: 'nerd_tutor_delta', password: 'nt_pass_delta2026' },
-        { username: 'nerd_tutor_epsilon', password: 'nt_pass_epsilon2026' }
-    ];
-
-    let gateCreds = defaultGateCreds;
-    if (process.env.GATE_CREDENTIALS) {
-        try {
-            gateCreds = process.env.GATE_CREDENTIALS.split(',').map(pair => {
-                const parts = pair.split(':');
-                return {
-                    username: parts[0]?.trim(),
-                    password: parts[1]?.trim()
-                };
-            }).filter(c => c.username && c.password);
-        } catch (e) {
-            console.error("Failed to parse GATE_CREDENTIALS env var, using defaults:", e);
-        }
-    }
-
-    function isValidGateAuth(token) {
-        if (!token) return false;
-        // 1. Verify signed HMAC token (permanent, legacy, or timestamped)
-        try {
-            const raw = Buffer.from(token, 'base64').toString('utf8');
-            const data = JSON.parse(raw);
-            if (data && data.u && data.sig) {
-                // If it's a permanent token
-                if (data.permanent) {
-                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:permanent`).digest('hex');
-                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
-                        return true;
-                    }
-                }
-                // If it's a timestamped token, verify signature without expiration lockout
-                if (data.exp) {
-                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:${data.exp}`).digest('hex');
-                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
-                        return true;
-                    }
-                }
-            }
-        } catch (_) {
-            // Fallback to legacy base64
-        }
-
-        return gateCreds.some(c => {
-            const expectedToken = Buffer.from(`${c.username}:${c.password}`).toString('base64');
-            return expectedToken === token;
-        });
-    }
-
-    if (!isValidGateAuth(clientToken)) {
-        return res.status(401).json({ error: "Unauthorized access: Invalid or missing Gate token." });
-    }
+    // Gate security check disabled (direct access enabled)
+    const clientToken = req.headers['x-gate-token'] || "";
 
     let body = req.body;
     if (typeof body === 'string') {

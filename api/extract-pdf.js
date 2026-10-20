@@ -69,42 +69,8 @@ export default async function handler(req, res) {
 
     if (req.method === "OPTIONS") return res.status(200).end();
 
-    // ===== Validate Gate Authentication Token =====
-    const gateToken = req.headers['x-gate-token'];
-    if (!gateToken) {
-        return res.status(401).json({ error: "Unauthorized: Missing Gate Authentication Token" });
-    }
-
-    function isValidGateAuth(token) {
-        if (!token) return false;
-        try {
-            const raw = Buffer.from(token, 'base64').toString('utf8');
-            const data = JSON.parse(raw);
-            if (data && data.u && data.sig) {
-                if (data.permanent) {
-                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:permanent`).digest('hex');
-                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
-                        return true;
-                    }
-                }
-                if (data.exp) {
-                    const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:${data.exp}`).digest('hex');
-                    if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
-                        return true;
-                    }
-                }
-            }
-        } catch (_) {}
-
-        return creds.some(c => {
-            const expectedToken = Buffer.from(`${c.username}:${c.password}`).toString('base64');
-            return expectedToken === token;
-        });
-    }
-
-    if (!isValidGateAuth(gateToken)) {
-        return res.status(401).json({ error: "Unauthorized: Invalid Gate Authentication Token" });
-    }
+    // ===== Gate Security Check Disabled (Direct Access) =====
+    const gateToken = req.headers['x-gate-token'] || "";
 
     // ===== Parse Body =====
     let body = req.body || {};

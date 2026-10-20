@@ -94,10 +94,10 @@ This section contains the exact implementations, structures, and business logic 
 
 ---
 
-## 8. Gate Authentication, Permanent Lifetime & Zero-Lockout Invariant
-* **Strict Permanent Lifetime (Infinite):** Gate authentication tokens MUST ALWAYS have permanent lifetime (`permanent: true`). Under NO circumstances should any agent introduce artificial expiration timestamps (like 12-hour, 24-hour, or session expiries) to gate tokens. Once a user logs into a device, that token MUST remain valid permanently.
-* **Zero Client Demo Lockouts:** All serverless API handlers (`api/ocr-evaluate.js`, `api/create-cache.js`, `api/extract-pdf.js`, `api/verify-gate.js`) must maintain dual support for permanent signed HMAC tokens, legacy base64 credentials, and timestamped tokens without rejecting on `data.exp` clock checks.
-* **Preservation of User Work:** If any network or authentication anomaly occurs on the frontend, the UI must NEVER discard uploaded files, student details, or cached state. Everything must be safely preserved in memory to prevent data loss or disruption during live demonstrations.
+## 8. Gate Access Completely Removed (Direct Unrestricted Access)
+* **Total Removal of Gate Restrictions:** Per user directive, the secondary gate access and token requirements have been completely removed from all endpoints (`api/ocr-evaluate.js`, `api/create-cache.js`, `api/extract-pdf.js`). Anyone can now evaluate papers directly without passwords or tokens.
+* **No Gate Redirects:** `gate-guard.js` is a permanent no-op and `login-gate.html` immediately auto-redirects to `ocr-scan.html`. No user or student will ever be redirected to a gate login screen.
+* **Preservation of User Work:** If any network anomaly occurs on the frontend, the UI must NEVER discard uploaded files, student details, or cached state. Everything must be safely preserved in memory.
 
 
 
