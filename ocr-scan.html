@@ -505,6 +505,7 @@
         import { 
             collection, 
             getDocs, 
+            getDoc,
             addDoc,
             doc,
             updateDoc,
@@ -784,6 +785,40 @@
         });
 
         // Load sessions based on class & subject
+        async function loadResultFromQuery() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const resultIdParam = urlParams.get('resultId');
+            if (!resultIdParam) return;
+
+            try {
+                console.log("📥 Loading existing test result from Firestore:", resultIdParam);
+                const docSnap = await getDoc(doc(db, 'testResults', resultIdParam));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    currentSavedResultId = resultIdParam;
+                    if (data.sessionId && allSessions.length > 0) {
+                        selectedSession = allSessions.find(s => s.id === data.sessionId) || selectedSession;
+                    }
+                    if (data.studentName && studentNameInput) {
+                        studentNameInput.value = data.studentName;
+                    }
+                    const report = {
+                        totalScore: data.score !== undefined ? data.score : 0,
+                        maxMarks: data.maxMarks || (selectedSession?.maxMarks || 100),
+                        overallFeedback: data.overallFeedback || '',
+                        improvements: data.improvements || [],
+                        results: data.breakdown || [],
+                        modelUsed: data.modelUsed || 'gemini-4-argon',
+                        tokenUsage: data.tokenUsage || null
+                    };
+                    renderReportCard(report);
+                    console.log("✅ Existing report card rendered successfully without burning tokens!");
+                }
+            } catch (err) {
+                console.warn("Could not auto-load result from query:", err);
+            }
+        }
+
         async function fetchSessions() {
             try {
                 const querySnapshot = await getDocs(collection(db, 'testSessions'));
@@ -812,6 +847,7 @@
                         }
                     }
                 }
+                await loadResultFromQuery();
             } catch (error) {
                 console.error("Error loading test sessions:", error);
             }
@@ -1449,16 +1485,28 @@
                 currentSavedResultId = docRef.id;
                 lastPayloadString = payloadString;
 
+                // Sync result ID to URL query without page reload so refreshing immediately shows report
+                try {
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set('resultId', docRef.id);
+                    window.history.replaceState({ resultId: docRef.id }, '', newUrl.toString());
+                } catch (_) {}
+
+                window.lastEvaluatedReport = report;
+                try { sessionStorage.setItem('nt_last_report', JSON.stringify(report)); } catch (_) {}
+
                 localStorage.removeItem('ocr_scan_testSessionId');
                 clearImagesDraft();          // S3: submission succeeded — drop the resume cache
                 uploadedFiles = [];
                 logTokenAuditReceipt(report, "Initial Submission");
-                renderReportCard(report);
+                try {
+                    renderReportCard(report);
+                } catch (renderErr) {
+                    console.error("Report card rendering error:", renderErr);
+                }
 
             } catch (error) {
                 console.error("Evaluation failed:", error);
-                // S3: files are still cached — the student can just hit submit again
-                // without re-selecting their files.
                 alert(
                     "Failed to evaluate: " + error.message +
                     "\n\nYour uploaded files have been saved. You can press Submit again to retry " +
@@ -1726,6 +1774,7 @@
                             const rawAns = q.modelAnswer || (originalIndex !== -1 ? getCorrectAnswer(markingSchemeText, originalIndex) : 'Refer to marking scheme guidelines.');
                             const isMcq = (mM === 1) || /mcq/i.test(q.questionNumber || '') || /option/i.test(rawAns);
                             const correctAns = cleanModelAnswer(rawAns, isMcq);
+                            const studentAns = q.studentAnswer || q.extractedAnswer || q.studentAnswerText || '';
 
                             return `
                                 <div class="report-block" style="background: #fffdfd; border: 1px solid #feb2b2; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
