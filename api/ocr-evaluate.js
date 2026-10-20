@@ -908,39 +908,73 @@ Return the response as a strict JSON object.`;
                 );
 
                 const qNumStr = String(resObj.questionNumber || "").trim().toLowerCase();
+                const combinedSchemeText = String(body.markingScheme || questions || "");
+                const combinedQuestionsText = String(questions || "");
+
                 const isMCQ = (Number(resObj.maxMarks) <= 1 || /^q\s*[1-6]\b/i.test(qNumStr)) && (
                     qNumStr.includes("mcq") ||
-                    /^q\s*[1-6]\b/i.test(qNumStr) ||
                     feedbackText.includes("option") ||
                     feedbackText.includes("choice") ||
-                    /^[a-d]\b/i.test(String(resObj.studentAnswerText || "").trim())
+                    /^[a-d]\b/i.test(String(resObj.studentAnswerText || "").trim()) ||
+                    new RegExp(`(?:q\\.?|question\\s*)${qNumStr.replace(/\\D/g, '')}\\s*\\([a-d]\\)`, 'i').test(combinedSchemeText)
                 );
 
                 if (isMCQ) {
-                    // 🔒 HARD-LOCK 1: Force MCQ maxMarks to exactly 1.0 (never 0.5)
-                    resObj.maxMarks = 1.0;
+                    // 🔍 DYNAMIC WEIGHT DETECTION:
+                    // Check if teacher specified 0.5 marks or 1.0 mark for this MCQ / Section
+                    const qRawNum = qNumStr.replace(/\D/g, '');
+                    const specificWeightMatch = qRawNum ? combinedSchemeText.match(new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n\\[\\(]*[\\[\\(]\\s*(0\\.5|½|1)\\s*(?:mark|m)?[\\]\\)]`, 'i')) : null;
 
-                    // 🔒 HARD-LOCK 2: Strictly BINARY score (0 or 1 ONLY, never 0.5)
+                    const hasSectionHalfMark = (
+                        /(?:section\s*a|mcq[s]?|multiple\s*choice)[^\n]*?(?:0\.5|½|half)\s*mark/i.test(combinedSchemeText) ||
+                        /(?:section\s*a|mcq[s]?|multiple\s*choice)[^\n]*?(?:0\.5|½|half)\s*mark/i.test(combinedQuestionsText)
+                    );
+
+                    let expectedMcqWeight = 1.0;
+                    if (specificWeightMatch && (specificWeightMatch[1] === '0.5' || specificWeightMatch[1] === '½')) {
+                        expectedMcqWeight = 0.5;
+                    } else if (hasSectionHalfMark) {
+                        expectedMcqWeight = 0.5;
+                    } else if (Number(resObj.maxMarks) === 0.5 && !combinedSchemeText.includes("Total = 30") && !combinedSchemeText.includes("(3 marks)") && !combinedSchemeText.includes("(3)")) {
+                        expectedMcqWeight = 0.5;
+                    } else {
+                        expectedMcqWeight = 1.0;
+                    }
+
+                    // 🔒 HARD-LOCK 1: Set maxMarks dynamically (0.5 or 1.0)
+                    resObj.maxMarks = expectedMcqWeight;
+
+                    // 🔒 HARD-LOCK 2: Strictly ALL-OR-NOTHING (BINARY) score
+                    // If correct: gets full maxMarks (0.5 or 1.0)
+                    // If incorrect: gets exactly 0.0
+                    // No fractional partial marks (e.g. no 0.25 on 0.5, no 0.5 on 1.0)
                     if (isExplicitlyWrong) {
                         resObj.score = 0;
                     } else if (isCorrectOption) {
-                        resObj.score = 1.0;
-                    } else if (Number(resObj.score) >= 0.5) {
-                        resObj.score = 1.0;
+                        resObj.score = expectedMcqWeight;
+                    } else if (Number(resObj.score) >= (expectedMcqWeight * 0.75)) {
+                        resObj.score = expectedMcqWeight;
                     } else {
                         resObj.score = 0;
                     }
-                    console.log(`🔒 Programmatic Binary MCQ Hard-Lock: ${resObj.questionNumber} -> maxMarks: 1.0, score: ${resObj.score}`);
+                    console.log(`🔒 Dynamic Binary MCQ: ${resObj.questionNumber} -> maxMarks: ${resObj.maxMarks}, score: ${resObj.score}`);
                 }
 
-                // 🔧 Safeguard: Fix potential hallucination where AI sets maxMarks to 1.5 for 4-mark descriptive questions
+                // 🔧 Safeguard: Fix potential hallucination where AI sets maxMarks to 1.5 for 3/4/5/6-mark descriptive questions
                 const qNumMatch = qNumStr.match(/^q\s*(\d+)/i);
-                if (qNumMatch) {
+                if (qNumMatch && !isMCQ) {
                     const qIdx = parseInt(qNumMatch[1], 10);
-                    if (qIdx >= 7 && qIdx <= 12 && Number(resObj.maxMarks) < 3) {
-                        const msText = String(body.markingScheme || questions || "");
-                        if (msText.includes("4 marks") || msText.includes("[4]")) {
-                            console.log(`🔧 Correcting maxMarks for ${resObj.questionNumber}: ${resObj.maxMarks} → 4.0`);
+                    // Match explicit weights like Q.7 ... [4] or Q7 [4 marks] in the marking scheme
+                    const qSpecificMatch = combinedSchemeText.match(new RegExp(`(?:q\\.?|question\\s*)${qIdx}[^\\n\\[\\(]*[\\[\\(]\\s*(\\d+)\\s*(?:mark|m)?[\\]\\)]`, 'i'));
+                    if (qSpecificMatch && Number(qSpecificMatch[1]) > 0) {
+                        const trueWeight = Number(qSpecificMatch[1]);
+                        if (Number(resObj.maxMarks) !== trueWeight) {
+                            console.log(`🔧 Restoring explicit maxMarks for ${resObj.questionNumber}: ${resObj.maxMarks} → ${trueWeight}`);
+                            resObj.maxMarks = trueWeight;
+                        }
+                    } else if (qIdx >= 7 && qIdx <= 12 && Number(resObj.maxMarks) < 3) {
+                        if (combinedSchemeText.includes("4 marks") || combinedSchemeText.includes("[4]")) {
+                            console.log(`🔧 Restoring maxMarks for ${resObj.questionNumber}: ${resObj.maxMarks} → 4.0`);
                             resObj.maxMarks = 4.0;
                         }
                     }
