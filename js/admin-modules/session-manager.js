@@ -443,6 +443,60 @@ window.viewReportCard = function(resultId) {
     modal.style.display = 'flex';
 };
 
+function cleanModelAnswer(raw, isMcq = false) {
+    if (!raw) return 'Refer to marking scheme guidelines.';
+    let clean = String(raw).trim();
+    clean = clean.replace(/^-{3,}|^\*{3,}|^_{3,}/gm, '');
+    clean = clean.replace(/(?:^|\n)\s*#{1,6}\s*$/gm, '');
+    clean = clean.replace(/#{1,6}\s*$/g, '');
+    clean = clean.replace(/^\s*\[\s*\d+\s*(?:\+\s*\d+)?\s*(?:=\s*\d+)?\s*Marks?\s*\]\s*/i, '');
+
+    if (isMcq) {
+        const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
+        let optionLine = '';
+        let explanationLine = '';
+
+        for (const line of lines) {
+            const cleanLine = line.replace(/^[-*•]\s*/, '').replace(/^-{3,}/, '').replace(/^#+/, '').trim();
+            if (!cleanLine || cleanLine === '---' || cleanLine === '#') continue;
+
+            if (!optionLine && (/^(?:correct\s*option|option|ans|\([a-d]\)|[a-d]\))/i.test(cleanLine) || /^[A-D]\b/i.test(cleanLine))) {
+                optionLine = cleanLine;
+            } else if (optionLine && !explanationLine && /explanation/i.test(cleanLine)) {
+                explanationLine = cleanLine.replace(/^explanation\s*[:\-]\s*/i, '').trim();
+            } else if (optionLine && !explanationLine && cleanLine && !cleanLine.startsWith('(') && !cleanLine.startsWith('[')) {
+                explanationLine = cleanLine;
+            }
+        }
+
+        if (optionLine) {
+            if (explanationLine) {
+                const firstSentence = explanationLine.split(/(?<=[.?!])\s+/)[0] || explanationLine;
+                return `${optionLine}\nExplanation: ${firstSentence}`;
+            }
+            return optionLine;
+        }
+    }
+
+    clean = clean.replace(/[\s\n\r]*---[\s\n\r]*#?$/g, '').trim();
+    return clean;
+}
+
+function formatDisplayText(raw) {
+    if (!raw) return '';
+    let text = String(raw);
+    text = text.replace(/(?:^|\n)\s*[-*_]{3,}\s*(?=\n|$)/g, '');
+    text = text.replace(/(?:^|\n)\s*#+\s*(?=\n|$)/g, '');
+    text = text.replace(/#{1,6}\s*$/g, '');
+
+    let safe = (typeof escapeHtml === 'function') ? escapeHtml(text.trim()) : text.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    safe = safe.replace(/^#{1,6}\s*(.+?)$/gm, '<strong>$1</strong>');
+    safe = safe.replace(/(?:^|\n)\s*[-*]\s+/g, '<br>&bull; ');
+    safe = safe.replace(/\n\n+/g, '<br><br>').replace(/\n/g, '<br>');
+    return safe;
+}
+
 window.printReportCard = function(resultId) {
     const res = window.currentResults?.find(r => r.id === resultId);
     if (!res) return;
@@ -707,32 +761,34 @@ window.printReportCard = function(resultId) {
                             const max = q.marks !== undefined ? q.marks : (q.maxMarks || 1);
                             const studentAns = q.studentAnswer || q.extractedAnswer || q.studentAnswerText || '';
                             const qText = q.questionText || q.questionNumber || `Question ${originalIndex + 1}`;
-                            const correctAns = q.modelAnswer || getCorrectAnswer(markingSchemeText, originalIndex);
+                            const rawAns = q.modelAnswer || getCorrectAnswer(markingSchemeText, originalIndex);
+                            const isMcq = (max === 1) || /mcq/i.test(q.questionNumber || '') || /option/i.test(rawAns);
+                            const correctAns = cleanModelAnswer(rawAns, isMcq);
                             
                             return `
                             <div class="report-block" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: inline-block; width: 100%; break-inside: avoid; page-break-inside: avoid;">
                                 <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #edf2f7; padding-bottom: 0.5rem; margin-bottom: 0.5rem; gap: 1rem; align-items: flex-start;">
-                                    <strong>${qText}</strong>
+                                    <strong>${formatDisplayText(qText)}</strong>
                                     <span style="font-weight: bold; background: #fed7d7; color: #9b2c2c; padding: 0.25rem 0.75rem; border-radius: 12px; white-space: nowrap; flex-shrink: 0;">${earned} / ${max}</span>
                                 </div>
-                                ${studentAns ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem;"><strong>Student Answer:</strong> <em>"${studentAns}"</em></p>` : ''}
+                                ${studentAns ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem;"><strong>Student Answer:</strong> <em>"${escapeHtml(studentAns)}"</em></p>` : ''}
                                 ${q.incorrectPhrases && q.incorrectPhrases.length > 0 ? `
                                     <div style="margin: 0.5rem 0; background: #fff5f5; border: 1px solid #fed7d7; padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; break-inside: avoid;">
                                         <strong style="color: #c53030; display: block; margin-bottom: 0.25rem;">❌ Identified Mistakes in Student Text:</strong>
                                         <ul style="margin: 0; padding-left: 1.25rem; color: #9b2c2c;">
                                             ${q.incorrectPhrases.map(phrase => `
                                                 <li>
-                                                    <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${phrase.wrongText}"</span> 
-                                                    &mdash; <span style="font-style: italic; color: #4a5568;">${phrase.explanation}</span>
+                                                    <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${escapeHtml(phrase.wrongText)}"</span> 
+                                                    &mdash; <span style="font-style: italic; color: #4a5568;">${escapeHtml(phrase.explanation)}</span>
                                                 </li>
                                             `).join('')}
                                         </ul>
                                     </div>
                                 ` : ''}
-                                ${q.feedback ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #c53030;"><strong>Feedback:</strong> ${q.feedback}</p>` : ''}
+                                ${q.feedback ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #c53030;"><strong>Feedback:</strong> ${formatDisplayText(q.feedback)}</p>` : ''}
                                 <div style="margin-top: 0.5rem; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; color: #15803d; line-height: 1.5;">
                                     <strong>🔑 Correct Answer:</strong>
-                                    <div style="margin-top: 0.25rem;">${correctAns}</div>
+                                    <div style="margin-top: 0.25rem;">${formatDisplayText(correctAns)}</div>
                                 </div>
                                 ${q.improvements && q.improvements.length > 0 ? `
                                     <div style="font-size: 0.9rem; color: #dd6b20; margin-top: 0.5rem;">
