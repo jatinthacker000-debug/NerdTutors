@@ -950,6 +950,9 @@ export async function loadTestSessionsForManagement() {
                     </td>
                     <td style="padding: 0.75rem; text-align: right;">
                         <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                            <button style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid #86efac; background: ${data.cachedContentId ? '#dcfce7' : '#f0fdf4'}; color: #166534; cursor: pointer; font-weight: 600; white-space: nowrap;" onclick="window.cacheTestSession('${id}')" title="${data.cachedContentId ? 'Gemini context cache active (75% token discount)' : 'Generate Gemini context cache for 75% token discount'}">
+                                ${data.cachedContentId ? '⚡ Cached (75% Off)' : '⚡ Cache (75% Off)'}
+                            </button>
                             <button style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid #cbd5e0; background: #e0f2fe; color: #0369a1; cursor: pointer; font-weight: 600; white-space: nowrap;" onclick="window.editSession('${id}')">
                                 ✏️ Edit
                             </button>
@@ -1241,6 +1244,58 @@ document.getElementById('editSessionForm')?.addEventListener('submit', async (e)
     }
 });
 
+async function cacheTestSession(id) {
+    try {
+        const docRef = doc(db, 'testSessions', id);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            showToast("Test session not found", "error");
+            return;
+        }
+        const data = docSnap.data();
+        if (!data.questions || !data.markingScheme) {
+            showToast("Cannot cache: Missing questions or marking scheme", "warning");
+            return;
+        }
+
+        showToast("⚡ Building Gemini Context Cache for 75% savings...", "info");
+        const gateToken = localStorage.getItem('gate_token') || '';
+
+        const res = await fetch('/api/create-cache', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Gate-Token': gateToken
+            },
+            body: JSON.stringify({
+                sessionId: id,
+                examName: data.name,
+                subject: data.subject,
+                questions: data.questions,
+                markingScheme: data.markingScheme,
+                model: 'gemini-4-argon',
+                ttlHours: 72
+            })
+        });
+
+        const result = await res.json();
+        if (!res.ok) {
+            throw new Error(result.error || result.details?.error?.message || "Failed to create context cache");
+        }
+
+        await updateDoc(docRef, {
+            cachedContentId: result.cachedContentId,
+            cacheExpiresAt: result.expireTime || null
+        });
+
+        showToast("⚡ Context Cache created! Future evaluations get 75% token discount.", "success");
+        loadTestSessionsForManagement();
+    } catch (err) {
+        console.error("Cache creation error:", err);
+        showToast("Cache error: " + err.message, "error");
+    }
+}
+
 // Bind to window for HTML click calls
 window.toggleSessionStatus = toggleSessionStatus;
 window.deleteSession = deleteSession;
@@ -1248,6 +1303,7 @@ window.deleteResult = deleteResult;
 window.editStudentScore = editStudentScore;
 window.editQuestionScore = editQuestionScore;
 window.editSession = editSession;
+window.cacheTestSession = cacheTestSession;
 
 /**
  * Setup PDF Extraction Hub & Diagnostic Self-Test Listeners

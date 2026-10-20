@@ -8,6 +8,7 @@
  */
 
 const axios = require('axios');
+const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -24,15 +25,52 @@ module.exports = async function handler(req, res) {
 
     // Gate security check
     const clientToken = req.headers['x-gate-token'];
-    const validTokens = [
-        "bmVyZF90dXRvcl9hbHBoYTpudF9wYXNzX2FscGhhMjAyNg==",
-        "bmVyZF90dXRvcl9iZXRhOm50X3Bhc3NfYmV0YTIwMjY=",
-        "bmVyZF90dXRvcl9nYW1tYTpudF9wYXNzX2dhbW1hMjAyNg==",
-        "bmVyZF90dXRvcl9kZWx0YTpudF9wYXNzX2RlbHRhMjAyNg==",
-        "bmVyZF90dXRvcl9lcHNpbG9uOm50X3Bhc3NfZXBzaWxvbjIwMjY="
+    const GATE_SECRET = process.env.GATE_SECRET || 'nt_gate_hmac_secret_2026_super_secure';
+
+    const defaultGateCreds = [
+        { username: 'nerd_tutor_alpha', password: 'nt_pass_alpha2026' },
+        { username: 'nerd_tutor_beta', password: 'nt_pass_beta2026' },
+        { username: 'nerd_tutor_gamma', password: 'nt_pass_gamma2026' },
+        { username: 'nerd_tutor_delta', password: 'nt_pass_delta2026' },
+        { username: 'nerd_tutor_epsilon', password: 'nt_pass_epsilon2026' }
     ];
 
-    if (!clientToken || !validTokens.includes(clientToken)) {
+    let gateCreds = defaultGateCreds;
+    if (process.env.GATE_CREDENTIALS) {
+        try {
+            gateCreds = process.env.GATE_CREDENTIALS.split(',').map(pair => {
+                const parts = pair.split(':');
+                return {
+                    username: parts[0]?.trim(),
+                    password: parts[1]?.trim()
+                };
+            }).filter(c => c.username && c.password);
+        } catch (e) {
+            console.error("Failed to parse GATE_CREDENTIALS env var, using defaults:", e);
+        }
+    }
+
+    function isValidGateAuth(token) {
+        if (!token) return false;
+        try {
+            const raw = Buffer.from(token, 'base64').toString('utf8');
+            const data = JSON.parse(raw);
+            if (data && data.u && data.exp && data.sig) {
+                if (Date.now() > Number(data.exp)) return false;
+                const expectedSig = crypto.createHmac('sha256', GATE_SECRET).update(`${data.u}:${data.exp}`).digest('hex');
+                if (data.sig.length === expectedSig.length && crypto.timingSafeEqual(Buffer.from(data.sig), Buffer.from(expectedSig))) {
+                    return true;
+                }
+            }
+        } catch (_) {}
+
+        return gateCreds.some(c => {
+            const expectedToken = Buffer.from(`${c.username}:${c.password}`).toString('base64');
+            return expectedToken === token;
+        });
+    }
+
+    if (!isValidGateAuth(clientToken)) {
         return res.status(401).json({ error: "Unauthorized access: Invalid or missing Gate token." });
     }
 
@@ -56,7 +94,7 @@ module.exports = async function handler(req, res) {
 
     const apiKeys = rawKeys.split(",").map(k => k.trim()).filter(Boolean);
     const primaryKey = apiKeys[0];
-    const model = process.env.GEMINI_MODEL || "gemini-4-argon";
+    const model = req.body?.model || process.env.GEMINI_MODEL || "gemini-4-argon";
 
     // Load CBSE Master Rules Matrix to embed into the persistent cache
     let rulesText = "";
@@ -92,15 +130,22 @@ ${rulesText}
         let headers = { "Content-Type": "application/json" };
 
         if (isVertex) {
-            endpoint = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/cachedContents`;
-            headers["Authorization"] = `Bearer ${primaryKey}`;
+            endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/cachedContents?key=${primaryKey}`;
+            // If primaryKey is an OAuth Bearer token rather than an API key
+            if (!primaryKey.startsWith("AQ.") && primaryKey.length > 80) {
+                headers["Authorization"] = `Bearer ${primaryKey}`;
+                endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/cachedContents`;
+            }
         }
 
         const ttlSeconds = Math.max(3600, Math.min(ttlHours * 3600, 259200)); // 1 hour to 3 days
+        const modelResource = isVertex
+            ? `projects/${projectId}/locations/${location}/publishers/google/models/${model}`
+            : `models/${model}`;
 
         const payload = {
-            model: `models/${model}`,
-            displayName: `cache_${sessionId || Date.now()}`,
+            model: modelResource,
+            displayName: `cache_${(sessionId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)}`,
             contents: [
                 {
                     role: "user",

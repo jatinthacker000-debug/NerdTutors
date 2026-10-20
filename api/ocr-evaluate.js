@@ -478,8 +478,7 @@ ${evolvedDirectivesPrompt}
        - In "improvements", provide at most 1 concise actionable tip (max 1 item; [] if none).
        - In "studentAnswerText", provide a brief quote of the student's answer (max 15 words).
    - "questionText": Leave as empty string "" (the client interface automatically populates question statements from the exam session).
-
-${overrideInstructionsPrompt}
+   - 🔴 PLAIN-TEXT FORMATTING MANDATE: Output clean plain text only. NEVER use markdown bold asterisks (**text**), italics (*text*), or heading hashes (###) in your feedback, overallFeedback, or improvement tips. Write clean sentences without markdown syntax tokens.
 
 Return STRICT JSON only (no markdown, no code blocks):
 {
@@ -731,6 +730,11 @@ Return STRICT JSON only (no markdown, no code blocks):
 
                 const raw = await response.text();
                 if (!response.ok) {
+                    if (reqBody.cachedContent && (response.status === 404 || (response.status === 400 && raw.toLowerCase().includes('cache')))) {
+                        console.warn(`⚠️ Cache ${reqBody.cachedContent} expired or invalid (${response.status}). Retrying without cache...`);
+                        delete reqBody.cachedContent;
+                        return await callGeminiModel(reqBody, modelName, keyIndex);
+                    }
                     if (response.status === 429 || response.status === 503 || response.status === 504) {
                         console.warn(`⚠️ Temporary error (${response.status}) on Key Index ${keyIndex + 1}. Retrying...`);
                         lastError = new Error(`Temporary server error (${response.status}): ${raw.replace(/key=[^&\s]+/gi, 'key=REDACTED')}`);

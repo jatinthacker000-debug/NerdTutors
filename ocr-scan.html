@@ -603,6 +603,20 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function formatDisplayText(raw) {
+            if (!raw) return '';
+            let safe = escapeHtml(String(raw));
+            // Convert bold markdown **text** to <strong>text</strong>
+            safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            // Convert markdown headers ### Title to <strong>Title</strong>
+            safe = safe.replace(/^#{1,6}\s*(.+?)$/gm, '<strong>$1</strong>');
+            // Clean up list bullets
+            safe = safe.replace(/(?:^|\n)\s*[-*]\s+/g, '<br>&bull; ');
+            // Preserve line breaks
+            safe = safe.replace(/\n\n+/g, '<br><br>').replace(/\n/g, '<br>');
+            return safe;
+        }
+
         function extractYear(session) {
             if (!session) return '';
             if (session.examYear && session.examYear !== 'other' && session.examYear !== 'Standard') return String(session.examYear);
@@ -1295,6 +1309,44 @@
                 console.log("- Files:", uploadedFiles.length, "· ~" + currentPayloadMB().toFixed(2) + " MB payload");
                 console.log("- Override Instructions:", selectedSession?.otherInstructions || "(None)");
 
+                // Auto-provision Gemini Context Cache if not already set (75% savings)
+                let activeCacheId = selectedSession.cachedContentId || null;
+                if (!activeCacheId && selectedSession.questions && selectedSession.markingScheme) {
+                    try {
+                        loadingStatus.textContent = "⚡ Initializing exam context cache (75% token discount)...";
+                        const cacheRes = await fetch('/api/create-cache', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Gate-Token': localStorage.getItem('gate_token') || ''
+                            },
+                            body: JSON.stringify({
+                                sessionId: selectedSession.id,
+                                examName: selectedSession.name,
+                                subject: selectedSession.subject,
+                                questions: selectedSession.questions,
+                                markingScheme: selectedSession.markingScheme,
+                                model: 'gemini-4-argon',
+                                ttlHours: 72
+                            })
+                        });
+                        if (cacheRes.ok) {
+                            const cacheData = await cacheRes.json();
+                            if (cacheData.cachedContentId) {
+                                activeCacheId = cacheData.cachedContentId;
+                                selectedSession.cachedContentId = activeCacheId;
+                                updateDoc(doc(db, 'testSessions', selectedSession.id), {
+                                    cachedContentId: activeCacheId,
+                                    cacheExpiresAt: cacheData.expireTime || null
+                                }).catch(e => console.warn("Could not save cache ID to session:", e));
+                                console.log("⚡ Context cache initialized successfully:", activeCacheId);
+                            }
+                        }
+                    } catch (cacheErr) {
+                        console.warn("Auto-cache creation notice:", cacheErr.message);
+                    }
+                }
+
                 // Call session-evaluate backend endpoint (S1 retry + S2 progress).
                 const payloadString = JSON.stringify({
                     mode: 'session-evaluate',
@@ -1306,7 +1358,7 @@
                     images: uploadedFiles,
                     subject: selectedSession.subject,
                     otherInstructions: selectedSession.otherInstructions || "",
-                    cachedContentId: selectedSession.cachedContentId || null
+                    cachedContentId: activeCacheId
                 });
 
                 const report = await submitWithRetry(payloadString);
@@ -1510,40 +1562,6 @@
                     </div>
                 </div>
 
-                <!-- AI Evaluation Token & Real Cost Audit Receipt (Screen-only, hidden in print) -->
-                ${report.tokenUsage ? `
-                <div class="no-print" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 0.9rem 1.25rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
-                    <div style="display: flex; align-items: center; gap: 0.65rem;">
-                        <span style="font-size: 1.4rem;">🤖</span>
-                        <div>
-                            <div style="font-weight: 700; color: #0f172a; font-size: 0.95rem;">${escapeHtml(report.modelUsed || 'Gemini 4 Argon')}</div>
-                            <div style="font-size: 0.76rem; color: #64748b;">${report.tokenUsage.apiCallsCount || 1} API Call(s) · Single-Pass Direct Vision</div>
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; font-size: 0.85rem;">
-                        <div style="display: flex; flex-direction: column;">
-                            <span style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Input Tokens</span>
-                            <strong style="color: #1e293b; font-size: 0.95rem;">
-                                ${(report.tokenUsage.promptTokens || 0).toLocaleString()}
-                                ${report.tokenUsage.cachedTokens > 0 ? `<span style="font-size: 0.72rem; color: #16a34a; background: #dcfce7; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 4px;">⚡ ${(report.tokenUsage.cachedTokens).toLocaleString()} cached</span>` : ''}
-                            </strong>
-                        </div>
-                        <div style="display: flex; flex-direction: column;">
-                            <span style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Output Tokens</span>
-                            <strong style="color: #1e293b; font-size: 0.95rem;">${(report.tokenUsage.completionTokens || 0).toLocaleString()}</strong>
-                        </div>
-                        <div style="display: flex; flex-direction: column;">
-                            <span style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Total Tokens</span>
-                            <strong style="color: #2563eb; font-size: 0.95rem;">${(report.tokenUsage.totalTokens || 0).toLocaleString()}</strong>
-                        </div>
-                        <div style="display: flex; flex-direction: column; background: #fef3c7; border: 1px solid #fde68a; padding: 0.35rem 0.85rem; border-radius: 8px;">
-                            <span style="color: #92400e; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">Real Cost (GCP)</span>
-                            <strong style="color: #b45309; font-size: 1.05rem;">₹${Number(report.tokenUsage.costInr || 0).toFixed(2)}</strong>
-                        </div>
-                    </div>
-                </div>
-                ` : ''}
-
                 <!-- Split Layout Panel -->
                 <div style="display: flex; gap: 1.5rem; margin-bottom: 2.5rem; align-items: stretch; flex-wrap: wrap;">
                     
@@ -1640,7 +1658,7 @@
 
                 <h3 style="color: #c53030; border-bottom: 2px solid #fed7d7; padding-bottom: 0.5rem; font-family: 'Poppins', sans-serif; font-size: 1.3rem;">🚀 Target Areas to Improve</h3>
                 <ul style="padding-left: 1.5rem; line-height: 1.6; color: #4a5568; font-size: 1.05rem; margin-bottom: 2rem;">
-                    ${report.improvements.map(imp => `<li>${escapeHtml(imp)}</li>`).join('')}
+                    ${report.improvements.map(imp => `<li>${formatDisplayText(imp)}</li>`).join('')}
                 </ul>
 
                 <h3 style="color: #c53030; border-bottom: 2px solid #fed7d7; padding-bottom: 0.5rem; font-family: 'Poppins', sans-serif; font-size: 1.3rem;">🔍 Question-by-Question Mistakes & Corrections</h3>
@@ -1661,7 +1679,7 @@
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #fed7d7; padding-bottom: 0.75rem; margin-bottom: 0.75rem; gap: 1rem;">
                                         <div>
                                             <h4 style="margin: 0; color: #9b2c2c; font-size: 1.1rem;">${escapeHtml(q.questionNumber || 'Question')}</h4>
-                                            <p style="margin: 0.25rem 0 0 0; color: #718096; font-size: 0.9rem;">${escapeHtml(qText)}</p>
+                                            <p style="margin: 0.25rem 0 0 0; color: #718096; font-size: 0.9rem;">${formatDisplayText(qText)}</p>
                                         </div>
                                         <div style="background: #fed7d7; color: #9b2c2c; padding: 0.5rem 1rem; border-radius: 999px; font-weight: 700; font-size: 1rem; white-space: nowrap; text-align: center; min-width: 60px; flex-shrink: 0;">
                                             ${eM} / ${mM}
@@ -1682,16 +1700,16 @@
                                                  </ul>
                                              </div>
                                          ` : ''}
-                                        <p style="margin: 0; color: #9b2c2c; font-size: 0.95rem; line-height: 1.5;"><strong>❌ Your Mistake & Feedback:</strong> ${escapeHtml(q.feedback || 'Marks were lost on this question.')}</p>
+                                        <p style="margin: 0; color: #9b2c2c; font-size: 0.95rem; line-height: 1.5;"><strong>❌ Your Mistake & Feedback:</strong> ${formatDisplayText(q.feedback || 'Marks were lost on this question.')}</p>
                                         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1rem; border-radius: 8px; font-size: 0.95rem; color: #15803d; line-height: 1.5;">
                                             <strong>🔑 Correct Answer according to Marking Scheme:</strong>
-                                            <div style="margin-top: 0.25rem;">${escapeHtml(correctAns)}</div>
+                                            <div style="margin-top: 0.25rem;">${formatDisplayText(correctAns)}</div>
                                         </div>
                                         ${q.improvements && q.improvements.length > 0 ? `
                                         <div style="margin-top: 0.25rem;">
                                             <strong style="color: #dd6b20; font-size: 0.9rem;">💡 Required Answer / Corrective Steps:</strong>
                                             <ul style="margin: 0.25rem 0 0 0; padding-left: 1.2rem; color: #4a5568; font-size: 0.9rem;">
-                                                ${q.improvements.map(imp => `<li>${escapeHtml(imp)}</li>`).join('')}
+                                                ${q.improvements.map(imp => `<li>${formatDisplayText(imp)}</li>`).join('')}
                                             </ul>
                                         </div>
                                         ` : ''}
