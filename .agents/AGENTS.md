@@ -106,6 +106,13 @@ This section contains the exact implementations, structures, and business logic 
 * **Strict Binary MCQ Gate & Dynamic Detection:** MCQs are dynamically detected for either `0.5` or `1.0` marks from the question paper/marking scheme. Scoring is strictly all-or-nothing binary (`score = maxMarks` if correct, `score = 0.0` if wrong). MCQs can NEVER be inflated to 2+ marks or given fractional partial marks.
 * **Mathematical Sum Invariant & Question Weight Safeguard:** Prompt contains an explicit pre-flight audit example teaching the model that sum discrepancies must be reconciled by restoring Section B/C descriptive questions (e.g. 4 marks each), never inflating MCQs. In addition, regex safeguards in JavaScript programmatically restore descriptive question weights (e.g. Q7–Q12 restoring to `maxMarks = 4.0`).
 
+---
+
+## 10. Defend/Refute Stance Governance & Feedback Token Optimization
+* **Defend vs Refute Stance Enforcement:** When an exam question requires students to Defend or Refute a statement, choosing the incorrect stance is a fatal premise error. It is capped to a maximum of 1.0 mark in both the system prompt and programmatically via `wrongStance` detection in `api/ocr-evaluate.js`.
+* **Strict Objective Marking (No Leniency):** Eliminates unwarranted full marks on subjective questions; answers missing core technical keywords or value points receive immediate 0.5 to 1.0 mark deductions, aligning with strict human board moderators.
+* **Feedback Token Budget:** Individual question feedback is strictly capped at 15 words, and improvement recommendations are limited to a maximum of 2 concise items (max 15 words each).
+
 
 
 

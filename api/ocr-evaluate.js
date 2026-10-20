@@ -408,6 +408,14 @@ For every question, evaluate the concepts, explanations, and key value points pr
 - 🔴 STRICT MCQ BREVITY CAP (CRITICAL): For 1-mark MCQs (e.g. Q1-Q10, Q18-Q27), keep "feedback" strictly to 1 short sentence (e.g. "Option (D) is correct." or "Incorrect option chosen; correct is (D)."). For MCQs, NEVER write paragraphs of theory, history, or background notes. Maximum 1 short sentence (under 15 words). Set "improvements": [].
 - 🔴 ZERO DEDUCTIONS FOR LANGUAGE OR GRAMMAR: In non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing (e.g. 'did not returned', 'it does not pushes', 'liseness') as long as the subject concept is intelligible.
 - 🔴 OFF-TOPIC RULE: If a student's answer contains completely off-topic or irrelevant statements that do not address the prompt at all, award 0 marks.
+- 🔴 DEFEND VS REFUTE STANCE RULE (CRITICAL CBSE STANDARD):
+  For questions asking the student to "Defend or Refute" a given statement:
+  - Taking the correct stance is the mandatory foundation of the answer.
+  - If the student takes the WRONG stance (e.g. defending a statement that must be refuted, such as defending that British rule made Indian agriculture prosperous, or vice versa):
+    - Award 0 marks for the stance.
+    - CAP THE ENTIRE QUESTION SCORE at a MAXIMUM OF 1.0 mark (out of 3 or 4). NEVER award 2, 3, or full marks when the student argued the wrong stance, even if their background explanation is detailed.
+- 🔴 STRICT BOARD EVALUATION (ZERO UNWARRANTED LENIENCY):
+  Human examiners and board moderators do not award free full marks. Award full marks (e.g. 3/3, 4/4) ONLY when all mandatory value points, correct economic mechanisms, and textbook keywords from the marking scheme are present. If an explanation is generic, missing key terminology, or incomplete, deduct 0.5 to 1.0 marks immediately.
 
 ⚠️ STRICT QUESTION MAPPING & SKIPPED DETECTOR (CRITICAL):
 1. Students often skip questions or answer them out of order. Do NOT map responses sequentially.
@@ -431,10 +439,10 @@ ${evolvedDirectivesPrompt}
        - Set "studentAnswerText": "" (do NOT re-transcribe answers that are already 100% correct).
        - Set "improvements": [] and "incorrectPhrases": [].
      - For PARTIAL OR ZERO MARKS (score < maxMarks):
-       - Keep "feedback" direct and concise (max 1-2 punchy sentences explaining the specific concept or step missed).
-       - In "incorrectPhrases", extract only the single key error or wrong calculation (max 1 item; [] if none).
-       - In "improvements", provide at most 1 concise actionable tip (max 1 item; [] if none).
-       - In "studentAnswerText", provide a brief quote of the student's answer (max 15 words).
+       - "feedback": Keep strictly to 1 punchy direct sentence (MAX 15 WORDS) identifying the exact missed point or mistake.
+       - "improvements": Provide at most 1 to 2 short actionable tips (MAX 2 ITEMS, under 15 words each). Never generate long essays or repeat the model answer.
+       - "incorrectPhrases": Extract only the single key error or wrong calculation (max 1 item; [] if none).
+       - "studentAnswerText": Brief quote of student's mistake (max 15 words).
    - "questionText": Leave as empty string "" (the client interface automatically populates question statements from the exam session).
    - 🔴 PLAIN-TEXT FORMATTING MANDATE: Output clean plain text only. NEVER use markdown bold asterisks (**text**), italics (*text*), or heading hashes (###) in your feedback, overallFeedback, or improvement tips. Write clean sentences without markdown syntax tokens.
 
@@ -444,7 +452,7 @@ Return STRICT JSON only (no markdown, no code blocks):
   "maxMarks": ${mm},
   "overallFeedback": "Concise 2-sentence executive summary of student strengths and core areas to improve.",
   "improvements": [
-    "1-2 high-impact bullet points"
+    "1-2 high-impact bullet points (max 2 items)"
   ],
   "results": [
     {
@@ -1005,6 +1013,27 @@ Return the response as a strict JSON object.`;
                 if (isOffTopic) {
                     console.log(`🔧 Programmatic Override: Overriding score of ${resObj.questionNumber} to 0 due to 'Off-Topic' feedback.`);
                     resObj.score = 0;
+                }
+
+                // Check if feedback mentions wrong stance in a Defend or Refute question
+                const wrongStance = feedbackText.includes("defended instead of refut") || 
+                                    feedbackText.includes("refuted instead of defend") ||
+                                    feedbackText.includes("defended the statement instead of refuting") ||
+                                    feedbackText.includes("refuted the statement instead of defending") ||
+                                    feedbackText.includes("defend instead of refute") ||
+                                    feedbackText.includes("refute instead of defend") ||
+                                    feedbackText.includes("wrong stance") ||
+                                    feedbackText.includes("should have refuted") ||
+                                    feedbackText.includes("should have defended");
+
+                if (wrongStance && Number(resObj.maxMarks) >= 3 && Number(resObj.score) > 1.0) {
+                    console.log(`🔧 Programmatic Override: Capping ${resObj.questionNumber} from ${resObj.score} to 1.0 due to incorrect Defend/Refute stance.`);
+                    resObj.score = 1.0;
+                }
+
+                // Ensure improvements array has at most 2 items
+                if (Array.isArray(resObj.improvements) && resObj.improvements.length > 2) {
+                    resObj.improvements = resObj.improvements.slice(0, 2);
                 }
 
                 // C1: clamp each score into [0, maxMarks] so the AI can never award
