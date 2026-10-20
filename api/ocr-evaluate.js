@@ -96,47 +96,19 @@ function getSubjectDirectives(subject) {
     if (!selectedRules) return "";
 
     return `
-================================================================================
-🚨 MANDATORY SUBJECT-SPECIFIC DETERMINISTIC DIRECTIVES: ${subjectHeader}
-================================================================================
-You MUST strictly execute the following algorithmic rules without exception:
-${JSON.stringify(selectedRules, null, 2)}
-================================================================================
+=== SUBJECT-SPECIFIC BOARD DIRECTIVES: ${subjectHeader} ===
+${JSON.stringify(selectedRules)}
 `;
 }
 
 function getUniversalGuardrails() {
-    if (!cbseRules || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR) {
-        return "";
-    }
-    const guardrails = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.UNIVERSAL_COGNITIVE_GUARDRAILS || {};
-    const generalGuidelines = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.CBSE_GENERAL_MARKING_GUIDELINES || {};
-    const roleDirective = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.role_directive || "";
     return `
-================================================================================
-🚨 SUPREME EVALUATION AUTHORITY: OFFICIAL CBSE BOARD EXAMINATION STANDARDS
-================================================================================
-${roleDirective}
-
-⚠️ HIERARCHY OF PRECEDENCE (MANDATORY):
-1. 👑 HIGHEST PRIORITY: OFFICIAL CBSE GENERAL MARKING GUIDELINES (Clauses 1–18 below).
-   - If a candidate demonstrates valid understanding of the core concept or economic value points, credit MUST be awarded.
-   - In non-language subjects (Economics, Commerce, Social Science), ZERO MARKS (0.0) shall be deducted for spelling errors, grammar slips, or imperfect English.
-   - In Case Studies, extracting and citing facts from the provided text is legitimate and deserves full credit.
-   - Use the full scale of marks (Clause 11). Do not hesitate to award full marks when deserved.
-2. ⚙️ SECONDARY PRIORITY: Algorithmic consistency checks.
-   - Algorithmic and proposition checks serve only as consistency aids. They are STRICTLY SUBORDINATE to official CBSE Board Standards and must NEVER be used to penalize conceptually sound answers.
-
-================================================================================
-🚨 CBSE GENERAL MARKING GUIDELINES (SUPREME AUTHORITY):
-================================================================================
-${JSON.stringify(generalGuidelines, null, 2)}
-
-================================================================================
-🚨 ALGORITHMIC CHECKS & REFERENCE GUARDRAILS:
-================================================================================
-${JSON.stringify(guardrails, null, 2)}
-================================================================================
+=== OFFICIAL CBSE BOARD EXAMINATION STANDARDS ===
+1. Value points & concepts over rigid wording: Award full credit when the student conveys the core concept in their own expression.
+2. Non-language subjects: ZERO marks deducted for minor spelling or grammar errors.
+3. Case studies: Citing facts from the given passage is legitimate and deserves full marks.
+4. Binary MCQs: Compare student's option letter strictly against the answer key.
+5. Deduct marks only for genuinely missing points or factual errors.
 `;
 }
 
@@ -444,13 +416,13 @@ export default async function handler(req, res) {
 ${body.evolvedDirectives.map((d, i) => `${i + 1}. ${d}`).join('\n')}
 `;
         }
+        const contextSourceText = cachedContentId
+            ? `The Exam Questions, Marking Scheme, and Board Rubrics are pre-loaded in your active cache (${cachedContentId}). Evaluate the student's handwritten responses against that cached scheme.`
+            : `1. The list of Exam Questions:\n${questions}\n\n2. The corresponding Marking Scheme / Guidelines:\n${body.markingScheme}`;
+
         textPrompt = `You are an expert teacher / exam moderator evaluating a student's answer sheet.
 You are provided with:
-1. The list of Exam Questions:
-${questions}
-
-2. The corresponding Marking Scheme / Guidelines:
-${body.markingScheme}
+${contextSourceText}
 
 3. Several images, PDF pages, or text transcription containing the Student's responses.
 
@@ -464,8 +436,8 @@ Your task is to:
 1. Read the Exam Questions and the Marking Scheme to understand what is required.
 2. Read the Student's responses (from the images, PDF pages, or text transcription) to identify the student's answers.
 3. Grade the student's answers using official CBSE Board Examination Standards:
-For every question, evaluate the economic concepts, explanations, and key value points presented:
-- Identify all valid economic points, arguments, formulas, and mechanisms presented by the student.
+For every question, evaluate the concepts, explanations, and key value points presented:
+- Identify all valid subject concepts, points, arguments, formulas, and mechanisms presented by the student.
 - Compare against the official marking scheme to award marks for every valid point conveyed.
 - Award full marks when the student demonstrates understanding of the core concept.
 
@@ -473,10 +445,10 @@ For every question, evaluate the economic concepts, explanations, and key value 
 - 🔴 EXACT QUESTION WEIGHTS (CRITICAL): Read the exact mark weight specified for each question or section header in the Exam Questions list. For every question object in the "results" array, set "maxMarks" to the EXACT numerical weight specified in the question paper for that question. Do NOT default all MCQs to 1 mark if the question paper specifies 0.5 marks or anything else.
 - 🔴 MANDATORY SUB-PARTS SPLIT: If any question contains distinct sub-parts (e.g., part a, part b, sub-part i, ii, iii), you MUST evaluate each sub-part separately as an individual entry in the "results" array (e.g., "Q31a", "Q31b") with its corresponding fraction of marks. NEVER bundle multi-part questions into a single composite block.
 - 🔴 POINT-TO-MARK RATIO & BREVITY CAP: For descriptive answers, each mark requires at least one distinct, well-reasoned point or explanation. For questions worth 3 or more marks, if a student provides only 1 single brief point or sentence, cap the score at a maximum of 40% to 50% of maxMarks (e.g., maximum 1.5 out of 4). Never award full marks for single-point answers on high-mark questions.
-- 🔴 VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using their own expression or alternative valid economic reasoning (e.g., tax evasion culture or informal sector for tax revenue stagnation), award due marks.
+- 🔴 VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using their own expression or alternative valid subject reasoning (e.g., tax evasion culture or informal sector for tax revenue stagnation), award due marks.
 - 🔴 CASE STUDIES & PASSAGE CITATION: In case study / data-interpretation questions (e.g., Q33), the passage is provided specifically for students to extract and cite facts. If the student accurately identifies and utilizes the key facts from the passage to answer the question, award FULL MARKS. Do NOT cap or penalize the answer for drawing directly from the provided case text.
 - MCQ questions: MCQ validation is strictly BINARY. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme. If they match exactly, award maxMarks (1/1). If they do not match, score = 0.
-- 🔴 ZERO DEDUCTIONS FOR LANGUAGE OR GRAMMAR: In non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing (e.g. 'did not returned', 'it does not pushes', 'liseness') as long as the economic concept is intelligible.
+- 🔴 ZERO DEDUCTIONS FOR LANGUAGE OR GRAMMAR: In non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing (e.g. 'did not returned', 'it does not pushes', 'liseness') as long as the subject concept is intelligible.
 - 🔴 OFF-TOPIC RULE: If a student's answer contains completely off-topic or irrelevant statements that do not address the prompt at all, award 0 marks.
 
 ⚠️ STRICT QUESTION MAPPING & SKIPPED DETECTOR (CRITICAL):
@@ -501,7 +473,7 @@ ${evolvedDirectivesPrompt}
        - Set "studentAnswerText": "" (do NOT re-transcribe answers that are already 100% correct).
        - Set "improvements": [] and "incorrectPhrases": [].
      - For PARTIAL OR ZERO MARKS (score < maxMarks):
-       - Provide comprehensive, detailed feedback explaining why marks were lost and what economic/subject concepts were missing.
+       - Provide comprehensive, detailed feedback explaining why marks were lost and what subject concepts were missing.
        - Extract the exact mistaken phrase or calculation from their answer into "incorrectPhrases" with a clear explanation of why it is wrong.
        - Provide concrete, actionable improvement suggestions.
        - Provide a concise quote of what the student wrote in "studentAnswerText".
@@ -684,7 +656,7 @@ Return STRICT JSON only (no markdown, no code blocks):
                 ]
             }],
             generationConfig: buildGenerationConfigForModel(PRIMARY_MODEL, {
-                mediaResolution: "MEDIA_RESOLUTION_HIGH",
+                mediaResolution: "MEDIA_RESOLUTION_MEDIUM",
                 responseMimeType: "application/json"
             })
         };
@@ -782,7 +754,7 @@ Return STRICT JSON only (no markdown, no code blocks):
         console.log(`📤 Calling single-pass Gemini Vision directly with ${targetModel}...`);
         const singlePassBody = JSON.parse(JSON.stringify(requestBody));
         singlePassBody.generationConfig = buildGenerationConfigForModel(targetModel, {
-            mediaResolution: "MEDIA_RESOLUTION_HIGH",
+            mediaResolution: "MEDIA_RESOLUTION_MEDIUM",
             responseMimeType: "application/json"
         });
         const geminiJson = await callGeminiModel(singlePassBody, targetModel, 0);
@@ -817,6 +789,7 @@ Format your output in clean Markdown, organizing by question numbers or sections
         }
 
         const transcribeRequestBody = JSON.parse(JSON.stringify(reqBody));
+        delete transcribeRequestBody.cachedContent; // Vision OCR only extracts handwriting, never needs question cache
         const contents = transcribeRequestBody.contents;
         if (contents && contents[0] && contents[0].parts) {
             const parts = contents[0].parts;
@@ -831,7 +804,7 @@ Format your output in clean Markdown, organizing by question numbers or sections
         // Transcription is pure OCR — run at high speed without thinking
         transcribeRequestBody.generationConfig = {
             temperature: 0.0,
-            mediaResolution: "MEDIA_RESOLUTION_HIGH"
+            mediaResolution: "MEDIA_RESOLUTION_MEDIUM"
         };
 
         const geminiJson = await callGeminiModel(transcribeRequestBody, targetModel, 0);
@@ -883,35 +856,57 @@ Return the response as a strict JSON object.`;
             result.modelUsed = `${PRIMARY_MODEL} (Dual-Pass Reasoning)`;
             result.primaryModelSuccess = true;
         } else {
-            // ========== TIER 1: PRIMARY MODEL (Gemini 4 Argon Direct Single-Pass Vision) ==========
-            // Direct Vision evaluates in 1 single API call (~8-12 seconds instead of 100+ seconds),
-            // eliminating the slow intermediate transcription pass and saving over 65% of tokens.
+            // ========== TIER 1: HYBRID PIPELINE (Flash Vision + Argon Grading) ==========
+            // Gemini 3.8 Flash processes images at 26x lower token rate (~₹0.10 image cost).
+            // Gemini 4 Argon evaluates the student's answers with deep reasoning (Argon image cost = ₹0.00!).
+            // Falls back seamlessly to Direct Single-Pass Argon Vision (with medium resolution) if needed.
             try {
-                console.log(`⚡ [Primary Evaluator] Starting Direct Single-Pass Vision with ${PRIMARY_MODEL}...`);
-                result = await evaluateSinglePass(PRIMARY_MODEL);
-                result.modelUsed = `${PRIMARY_MODEL} (Single-Pass Direct Vision)`;
-                result.primaryModelSuccess = true;
-            } catch (primaryErr) {
-                // ========== TIER 2: BACKUP MODEL FAILOVER (Gemini 3.8 Flash Direct Vision) ==========
-                console.warn(`🛡️ [BACKUP ACTIVATED] Primary model (${PRIMARY_MODEL}) failed. Failing over to backup: ${BACKUP_MODEL}... Reason: ${primaryErr.message}`);
-                try {
-                    console.log(`⚡ [Backup Evaluator] Starting Direct Single-Pass Vision with backup ${BACKUP_MODEL}...`);
-                    result = await evaluateSinglePass(BACKUP_MODEL);
-                    result.modelUsed = `${BACKUP_MODEL} (Backup Failover Single-Pass)`;
-                    result.backupModelActivated = true;
-                    result.failoverReason = primaryErr.message;
-                } catch (backupErr) {
-                    console.warn(`⚠️ [Backup Evaluator] Direct single-pass with ${BACKUP_MODEL} failed (${backupErr.message}). Attempting Dual-Pass fallback with ${BACKUP_MODEL}...`);
+                if (body.directVision) {
+                    console.log(`⚡ [Tier 1: Direct Vision] Starting Direct Single-Pass Vision with ${PRIMARY_MODEL}...`);
+                    result = await evaluateSinglePass(PRIMARY_MODEL);
+                    result.modelUsed = `${PRIMARY_MODEL} (Single-Pass Direct Vision)`;
+                    result.primaryModelSuccess = true;
+                } else {
+                    console.log(`⚡ [Tier 1: Hybrid] Step 1: Processing images with ${BACKUP_MODEL} (Vision)...`);
                     const transcription = await transcribeWithGemini(requestBody, mode, BACKUP_MODEL);
-                    const gradeText = await gradeWithGemini(transcription, textPrompt, BACKUP_MODEL);
+                    console.log(`🧠 [Tier 1: Hybrid] Step 2: Evaluating student answers with ${PRIMARY_MODEL} (Deep Reasoning)...`);
+                    const gradeText = await gradeWithGemini(transcription, textPrompt, PRIMARY_MODEL);
                     const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
                     const firstBrace = cleanGrade.indexOf('{');
                     const lastBrace = cleanGrade.lastIndexOf('}');
                     const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? cleanGrade.substring(firstBrace, lastBrace + 1) : cleanGrade;
                     result = JSON.parse(jsonStr);
-                    result.modelUsed = `${BACKUP_MODEL} (Backup Dual-Pass Fallback)`;
-                    result.backupModelActivated = true;
-                    result.failoverReason = `${primaryErr.message} | SinglePass: ${backupErr.message}`;
+                    result.modelUsed = `Hybrid: ${BACKUP_MODEL} (Vision) + ${PRIMARY_MODEL} (Grading)`;
+                    result.primaryModelSuccess = true;
+                }
+            } catch (primaryErr) {
+                console.warn(`⚠️ [Tier 1: Hybrid] Failed (${primaryErr.message}). Falling back to Direct Single-Pass Vision with ${PRIMARY_MODEL}...`);
+                try {
+                    result = await evaluateSinglePass(PRIMARY_MODEL);
+                    result.modelUsed = `${PRIMARY_MODEL} (Single-Pass Direct Vision)`;
+                    result.primaryModelSuccess = true;
+                } catch (argonDirectErr) {
+                    // ========== TIER 2: BACKUP MODEL FAILOVER (Gemini 3.8 Flash Direct Vision) ==========
+                    console.warn(`🛡️ [BACKUP ACTIVATED] Primary model (${PRIMARY_MODEL}) failed. Failing over to backup: ${BACKUP_MODEL}... Reason: ${primaryErr.message}`);
+                    try {
+                        console.log(`⚡ [Backup Evaluator] Starting Direct Single-Pass Vision with backup ${BACKUP_MODEL}...`);
+                        result = await evaluateSinglePass(BACKUP_MODEL);
+                        result.modelUsed = `${BACKUP_MODEL} (Backup Failover Single-Pass)`;
+                        result.backupModelActivated = true;
+                        result.failoverReason = primaryErr.message;
+                    } catch (backupErr) {
+                        console.warn(`⚠️ [Backup Evaluator] Direct single-pass with ${BACKUP_MODEL} failed (${backupErr.message}). Attempting Dual-Pass fallback with ${BACKUP_MODEL}...`);
+                        const transcription = await transcribeWithGemini(requestBody, mode, BACKUP_MODEL);
+                        const gradeText = await gradeWithGemini(transcription, textPrompt, BACKUP_MODEL);
+                        const cleanGrade = gradeText.replace(/```json|```/g, "").trim();
+                        const firstBrace = cleanGrade.indexOf('{');
+                        const lastBrace = cleanGrade.lastIndexOf('}');
+                        const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? cleanGrade.substring(firstBrace, lastBrace + 1) : cleanGrade;
+                        result = JSON.parse(jsonStr);
+                        result.modelUsed = `${BACKUP_MODEL} (Backup Dual-Pass Fallback)`;
+                        result.backupModelActivated = true;
+                        result.failoverReason = `${primaryErr.message} | SinglePass: ${backupErr.message}`;
+                    }
                 }
             }
         }
