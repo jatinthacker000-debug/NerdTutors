@@ -92,5 +92,12 @@ This section contains the exact implementations, structures, and business logic 
   - [js/matrix-manager.js](file:///d:/Trinno/NerdTutors/js/matrix-manager.js): Core matrix data engine with natural question sorting (`Q1`, `Q2` ... `Q10`, `Q17(i)`, `Q17(ii)`, `Q34b(ii)`), dynamic session filtering, toughest/easiest question detection, and CSV export.
   - [dashboard.css](file:///d:/Trinno/NerdTutors/dashboard.css): Sticky question column and header styling with green/amber/red performance pills.
 
+---
+
+## 8. Gate Authentication, Permanent Lifetime & Zero-Lockout Invariant
+* **Strict Permanent Lifetime (Infinite):** Gate authentication tokens MUST ALWAYS have permanent lifetime (`permanent: true`). Under NO circumstances should any agent introduce artificial expiration timestamps (like 12-hour, 24-hour, or session expiries) to gate tokens. Once a user logs into a device, that token MUST remain valid permanently.
+* **Zero Client Demo Lockouts:** All serverless API handlers (`api/ocr-evaluate.js`, `api/create-cache.js`, `api/extract-pdf.js`, `api/verify-gate.js`) must maintain dual support for permanent signed HMAC tokens, legacy base64 credentials, and timestamped tokens without rejecting on `data.exp` clock checks.
+* **Preservation of User Work:** If any network or authentication anomaly occurs on the frontend, the UI must NEVER discard uploaded files, student details, or cached state. Everything must be safely preserved in memory to prevent data loss or disruption during live demonstrations.
+
 
 
