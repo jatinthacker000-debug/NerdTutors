@@ -212,7 +212,7 @@ RULES:
     // Primary model for Vision PDF Document understanding
     const MODEL_NAME = process.env.DEFAULT_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-4-argon";
     if (MODEL_NAME.includes("argon") || MODEL_NAME.includes("gemini-4")) {
-        requestPayload.generationConfig.thinkingConfig = { thinkingLevel: "low" };
+        requestPayload.generationConfig.thinkingConfig = { thinkingLevel: "medium" };
     }
     let lastError = null;
     const projectId = process.env.GCP_PROJECT_ID || "975383880672";

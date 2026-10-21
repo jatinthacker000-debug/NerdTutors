@@ -554,7 +554,7 @@ async function startBundleEvaluation() {
             const payload = {
                 mode: 'session-evaluate',
                 model: 'gemini-4-argon',
-                thinkingLevel: 'low',
+                thinkingLevel: 'medium',
                 questions: selectedBundleSession.questions,
                 markingScheme: selectedBundleSession.markingScheme,
                 maxMarks: selectedBundleSession.maxMarks,
