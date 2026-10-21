@@ -500,41 +500,47 @@
                         <div id="bundleCacheStatusWrap"></div>
                     </div>
 
-                    <!-- Step 2: Add Student Papers -->
-                    <div style="background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 14px; padding: 2rem; text-align: center; margin-bottom: 1.75rem; cursor: pointer; transition: all 0.2s;" id="bundleDropZone">
-                        <input type="file" id="bundleFileInput" multiple accept="image/*,application/pdf" style="display: none;">
-                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📁</div>
-                        <h3 style="margin: 0 0 0.35rem 0; color: #1e293b; font-size: 1.15rem;">Click or Drag & Drop Student Papers to Add to Bundle</h3>
-                        <p style="margin: 0; color: #64748b; font-size: 0.85rem;">Accepts multiple JPG, PNG images or PDF answer sheets. Each file will be queued as an individual student paper.</p>
+                    <!-- Step 2: Add Student Paper Segments -->
+                    <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 1.5rem; margin-bottom: 1.75rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+                            <div>
+                                <h3 style="margin: 0; color: #1e293b; font-size: 1.15rem; font-weight: 700;">2. Student Answer Sheets (Segmented by Student)</h3>
+                                <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.88rem;">Each student can have multiple photos/pages. They are graded sequentially with full 75% cached context discount.</p>
+                            </div>
+                            <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                                <button type="button" id="btnAddStudentSegment" style="background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); color: white; border: none; padding: 0.55rem 1.1rem; border-radius: 8px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);">
+                                    ➕ Add Student Segment
+                                </button>
+                                <button type="button" id="btnQuickDropTrigger" style="background: #f8fafc; color: #334155; border: 1.5px solid #cbd5e1; padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+                                    📁 Quick Bulk Files
+                                </button>
+                                <input type="file" id="bundleFileInput" multiple accept="image/*,application/pdf" style="display: none;">
+                            </div>
+                        </div>
+
+                        <!-- Dropzone placeholder when no students are added -->
+                        <div id="bundleEmptyDropZone" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 2.5rem 1.5rem; text-align: center; cursor: pointer; background: #fafafa; transition: all 0.2s;">
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📁</div>
+                            <h4 style="margin: 0 0 0.35rem 0; color: #1e293b; font-size: 1.1rem;">Click "➕ Add Student Segment" or Drag & Drop Answer Sheets Here</h4>
+                            <p style="margin: 0; color: #64748b; font-size: 0.85rem;">Supports multi-page exams (JPEG, PNG, PDF). Each student holds their own set of pages.</p>
+                        </div>
+
+                        <!-- Container for dynamic Student Segment Cards -->
+                        <div id="bundleStudentsContainer" style="display: none; flex-direction: column; gap: 1rem; margin-top: 1rem;"></div>
                     </div>
 
                     <!-- Step 3: Bundle Queue & Scheduling -->
                     <div id="bundleQueueCard" style="display: none; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 1.75rem; box-shadow: 0 2px 8px rgba(0,0,0,0.02); overflow: hidden;">
                         <div style="padding: 1rem 1.5rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <h3 style="margin: 0; color: #1e293b; font-size: 1.05rem; font-weight: 700;">📑 Papers in Active Bundle</h3>
-                                <span id="bundleQueueCountBadge" style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">0 Papers</span>
+                                <h3 style="margin: 0; color: #1e293b; font-size: 1.05rem; font-weight: 700;">📑 Bundle Evaluation Summary</h3>
+                                <span id="bundleQueueCountBadge" style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">0 Students (0 Pages)</span>
                             </div>
                             <div style="display: flex; gap: 0.5rem;">
                                 <button type="button" id="btnClearBundle" style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
-                                    🗑️ Clear Queue
+                                    🗑️ Clear All Students
                                 </button>
                             </div>
-                        </div>
-
-                        <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                                <thead>
-                                    <tr style="background: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
-                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">#</th>
-                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">Student Name</th>
-                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">Uploaded File</th>
-                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase;">Status</th>
-                                        <th style="padding: 0.65rem 1rem; font-size: 0.78rem; font-weight: 700; color: #475569; text-transform: uppercase; text-align: right;">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="bundleQueueTbody"></tbody>
-                            </table>
                         </div>
 
                         <!-- Schedule Controls & Trigger Bar -->
@@ -558,7 +564,7 @@
 
                             <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                                 <button type="button" id="btnEvaluateBundleNow" class="btn" style="background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); color: white; border: none; padding: 0.75rem 1.6rem; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
-                                    🚀 Evaluate Bundle Now (0 Papers)
+                                    🚀 Evaluate Bundle Now (0 Students)
                                 </button>
                             </div>
                         </div>
