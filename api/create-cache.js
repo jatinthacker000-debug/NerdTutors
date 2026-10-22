@@ -61,6 +61,8 @@ export default async function handler(req, res) {
         subject,
         questions,
         markingScheme,
+        maxMarks = 40,
+        otherInstructions = "",
         ttlHours = 72
     } = body || {};
 
@@ -86,11 +88,12 @@ export default async function handler(req, res) {
         }
     } catch (_) {}
 
-    // Build the master cached context text
+    // Build the master cached context text containing 100% of static instructions
     const bundledContent = `=== OFFICIAL CBSE EXAM CONTEXT & ZERO-ERROR MARKING SCHEME ===
 Exam Name: ${examName || 'Standard Assessment'}
 Subject: ${subject || 'General'}
 Session ID: ${sessionId || 'unspecified'}
+Total Maximum Marks: ${maxMarks || 40}
 
 --- QUESTIONS & EXAM PAPER ---
 ${questions}
@@ -98,8 +101,50 @@ ${questions}
 --- OFFICIAL MARKING SCHEME & MODEL ANSWERS ---
 ${markingScheme}
 
+${otherInstructions ? `--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructions}\n` : ""}
+
 --- CBSE ZERO-ERROR AUTONOMOUS GRADER MASTER SPECIFICATION & COGNITIVE GUARDRAILS ---
 ${rulesText}
+
+--- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
+- Perform direct, focused rubric verification without discursive speculation.
+- Do NOT rewrite or transcribe the student's entire answer inside your internal thinking trace.
+- For MCQs: Compare the written option letter (A, B, C, D) directly against the key in a single step. Zero paragraphs of theory in thoughts.
+- For Subjective Questions: Check directly for the presence or absence of mandatory textbook value points and numerical steps. Deduct marks immediately for missing points without repetitive deliberation.
+- Keep your internal thought trace crisp, concise, and decisive.
+
+--- OFFICIAL CBSE EVALUATION STANDARDS & INSTRUCTIONS ---
+1. STRICT BINARY MCQ: Compare option letters directly. 1 mark if correct; 0 if wrong. Never award 0.5.
+2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
+3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
+4. MATHEMATICAL SUM INVARIANT: Total of question maxMarks must equal ${maxMarks || 40}.
+5. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
+
+--- MANDATORY OUTPUT JSON SCHEMA ---
+Return STRICT JSON in the following format:
+{
+  "totalScore": <number>,
+  "maxMarks": ${maxMarks || 40},
+  "overallFeedback": "<comprehensive 2-sentence performance summary>",
+  "improvements": ["1-2 high-impact bullet points"],
+  "results": [
+    {
+      "questionNumber": "Q1",
+      "questionText": "",
+      "maxMarks": <number - immutable question weight>,
+      "studentAnswerText": "<brief quote if marks lost, else ''>",
+      "feedback": "<concise feedback under 15 words>",
+      "score": <number - awarded marks>,
+      "improvements": ["<tip under 15 words if marks lost, else []>"],
+      "incorrectPhrases": [
+        {
+          "wrongText": "<key mistaken phrase/calculation>",
+          "explanation": "<brief explanation of error>"
+        }
+      ]
+    }
+  ]
+}
 ===================================================`;
 
     const isVertex = primaryKey.startsWith("AQ.") || Boolean(process.env.VERTEX_API_KEY);

@@ -295,6 +295,7 @@ export default async function handler(req, res) {
     const BACKUP_MODEL = process.env.GEMINI_BACKUP_MODEL || (PRIMARY_MODEL !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-2.5-flash");
     const activeModel = PRIMARY_MODEL;
     const cachedContentId = body.cachedContent || body.cachedContentId || null;
+    const isExplicitCache = Boolean(cachedContentId && !cachedContentId.startsWith('vertex-implicit') && !cachedContentId.startsWith('studio-implicit') && !cachedContentId.startsWith('session-cache'));
     const thinkingLevel = body.thinkingLevel || process.env.THINKING_LEVEL || "medium";
     const defaultThinkingBudget = Number(process.env.THINKING_BUDGET || 512);
     const thinkingBudget = body.thinkingBudget !== undefined ? Number(body.thinkingBudget) : defaultThinkingBudget;
@@ -326,6 +327,7 @@ export default async function handler(req, res) {
 
     // ===== Build Prompt Based on Mode =====
     let textPrompt = "";
+    let fullSessionPrompt = "";
 
     if (mode === "session-evaluate") {
         let questionsExplicitMax = null;
@@ -358,16 +360,33 @@ export default async function handler(req, res) {
 ${body.evolvedDirectives.map((d, i) => `${i + 1}. ${d}`).join('\n')}
 `;
         }
-        const contextSourceText = cachedContentId
-            ? `The Exam Questions, Marking Scheme, and Board Rubrics are pre-loaded in your active cache (${cachedContentId}). Evaluate the student's handwritten responses against that cached scheme.`
-            : `1. The list of Exam Questions:\n${questions}\n\n2. The corresponding Marking Scheme / Guidelines:\n${body.markingScheme}`;
+        const reasoningGuardrailPrompt = `
+--- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
+You must operate with decisive, highly focused academic reasoning:
+1. NO DISCURSIVE SPECULATION: Formulate your evaluation directly against the marking scheme value points without philosophical or meta-cognitive preamble.
+2. NO VERBATIM TRANSCRIPTION IN THOUGHTS: Do NOT re-transcribe the student's entire essay or answer sheet inside your internal thinking trace. Quote only the specific flawed phrase if deducting marks.
+3. DIRECT BINARY MCQ VERIFICATION: For MCQs, compare the student's selected option letter (A, B, C, D) directly against the key option letter in a single reasoning step. Do NOT write paragraphs of subject theory or background history for MCQs in your thinking process.
+4. TARGETED SUBJECTIVE AUDIT: For subjective questions, scan directly for mandatory key terms, formulas, and required value points from the marking scheme. If a point is present, award marks immediately; if missing, note the deduction immediately. Avoid cyclical, repetitive second-guessing.
+5. CONCISE, DECISIVE THOUGHT TRACE: Keep your internal reasoning crisp, structured, and under 1,500 thinking tokens while preserving full moderator accuracy.
+`;
 
-        textPrompt = `You are an expert teacher / exam moderator evaluating a student's answer sheet.
+        const leanSessionPrompt = `You are an expert CBSE exam moderator evaluating this student's handwritten answer sheet.
+The Exam Questions, Marking Scheme, Teacher Directives, CBSE Master Rules, and Output Schema are already pre-loaded in your active cache (${cachedContentId}).
+${reasoningGuardrailPrompt}
+${overrideInstructionsPrompt}
+Follow the pre-cached JSON schema and instructions strictly. Output clean plain text only (no markdown bold asterisks or hashes in feedback). Return STRICT JSON only.`;
+
+        fullSessionPrompt = `You are an expert teacher / exam moderator evaluating a student's answer sheet.
 You are provided with:
-${contextSourceText}
+1. The list of Exam Questions:
+${questions}
+
+2. The corresponding Marking Scheme / Guidelines:
+${body.markingScheme}
 
 3. Several images, PDF pages, or text transcription containing the Student's responses.
 
+${reasoningGuardrailPrompt}
 ${universalGuardrailsPrompt}
 ${subjectSpecificInstructions}
 
@@ -400,13 +419,13 @@ For every question, evaluate the concepts, explanations, and key value points pr
       - Mathematical Total = 6.0 + 24.0 = 30.0 marks exact.
 - 🔴 MANDATORY SUB-PARTS SPLIT: If any question contains distinct sub-parts (e.g., part a, part b, sub-part i, ii, iii), you MUST evaluate each sub-part separately as an individual entry in the "results" array (e.g., "Q31a", "Q31b") with its corresponding fraction of marks. NEVER bundle multi-part questions into a single composite block.
 - 🔴 POINT-TO-MARK RATIO & PARTIAL MARKING: For descriptive answers, each mark requires one distinct, well-reasoned value point. Award partial marks strictly in discrete half-mark or full-mark increments (0.5, 1.0, 1.5, 2.0, etc.) mapped directly to points present in the student's answer. Keep "maxMarks" intact at its full weight.
-- 🔴 VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using their own expression or alternative valid subject reasoning (e.g., tax evasion culture or informal sector for tax revenue stagnation), award due marks.
+- 🔴 VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using their own expression or alternative valid subject reasoning, award due marks.
 - 🔴 STRICT BINARY MCQ EVALUATION (ALL-OR-NOTHING): MCQ validation is strictly ALL-OR-NOTHING. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme.
   - If the option matches: score = maxMarks (full credit: 1.0 or 0.5).
   - If the option does not match: score = 0.0.
-  - No fractional partial marks (e.g. 0.25 on 0.5, 0.5 on 1.0) are EVER permitted for MCQs.
+  - No fractional partial marks are EVER permitted for MCQs.
 - 🔴 STRICT MCQ BREVITY CAP (CRITICAL): For 1-mark MCQs (e.g. Q1-Q10, Q18-Q27), keep "feedback" strictly to 1 short sentence (e.g. "Option (D) is correct." or "Incorrect option chosen; correct is (D)."). For MCQs, NEVER write paragraphs of theory, history, or background notes. Maximum 1 short sentence (under 15 words). Set "improvements": [].
-- 🔴 ZERO DEDUCTIONS FOR LANGUAGE OR GRAMMAR: In non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing (e.g. 'did not returned', 'it does not pushes', 'liseness') as long as the subject concept is intelligible.
+- 🔴 ZERO DEDUCTIONS FOR LANGUAGE OR GRAMMAR: In non-language subjects (Economics 030, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors, minor grammatical slips, or imperfect English phrasing as long as the subject concept is intelligible.
 - 🔴 OFF-TOPIC RULE: If a student's answer contains completely off-topic or irrelevant statements that do not address the prompt at all, award 0 marks.
 - 🔴 DEFEND VS REFUTE STANCE RULE (CRITICAL CBSE STANDARD):
   For questions asking the student to "Defend or Refute" a given statement:
@@ -472,6 +491,8 @@ Return STRICT JSON only (no markdown, no code blocks):
     }
   ]
 }`;
+
+        textPrompt = isExplicitCache ? leanSessionPrompt : fullSessionPrompt;
     } else if (mode === "full-sheet" && Array.isArray(questions) && questions.length > 0) {
         // ========== FULL SHEET MODE ==========
         // Student uploads ONE photo with all answers, we provide questions list
@@ -611,11 +632,9 @@ Return STRICT JSON only (no markdown, no code blocks):
         }));
 
         // Prefix Caching Optimization:
-        // Placing textPrompt (Exam questions + Marking scheme + CBSE rubrics) as the FIRST part
-        // guarantees that all student evaluations share the identical 4,000+ token prefix!
-        // This triggers Vertex AI's automatic implicit KV-cache engine for 75% cost savings!
-        const isExplicitCache = cachedContentId && !cachedContentId.startsWith('vertex-implicit') && !cachedContentId.startsWith('studio-implicit') && !cachedContentId.startsWith('session-cache');
-
+        // When using explicit context cache (Google AI Studio), textPrompt is ultra-lean (~80 tokens).
+        // When using Vertex AI implicit cache, textPrompt prefix contains 100% of static context,
+        // triggering Vertex AI's automatic KV-cache engine at 75% cost savings!
         requestBody = {
             ...(isExplicitCache ? { cachedContent: cachedContentId } : {}),
             contents: [{
@@ -704,8 +723,11 @@ Return STRICT JSON only (no markdown, no code blocks):
                 const raw = await response.text();
                 if (!response.ok) {
                     if (reqBody.cachedContent && (response.status === 404 || (response.status === 400 && raw.toLowerCase().includes('cache')))) {
-                        console.warn(`⚠️ Cache ${reqBody.cachedContent} expired or invalid (${response.status}). Retrying without cache...`);
+                        console.warn(`⚠️ Cache ${reqBody.cachedContent} expired or invalid (${response.status}). Retrying with full prompt...`);
                         delete reqBody.cachedContent;
+                        if (fullSessionPrompt && reqBody.contents && reqBody.contents[0] && reqBody.contents[0].parts && reqBody.contents[0].parts[0]) {
+                            reqBody.contents[0].parts[0].text = fullSessionPrompt;
+                        }
                         return await callGeminiModel(reqBody, modelName, keyIndex);
                     }
                     if (response.status === 429 || response.status === 503 || response.status === 504) {

@@ -1412,6 +1412,8 @@
                                 subject: selectedSession.subject,
                                 questions: selectedSession.questions,
                                 markingScheme: selectedSession.markingScheme,
+                                maxMarks: selectedSession.maxMarks || 40,
+                                otherInstructions: selectedSession.otherInstructions || '',
                                 model: 'gemini-4-argon',
                                 ttlHours: 72
                             })

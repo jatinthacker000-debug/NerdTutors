@@ -1524,6 +1524,8 @@ async function cacheTestSession(id) {
                 subject: data.subject,
                 questions: data.questions,
                 markingScheme: data.markingScheme,
+                maxMarks: data.maxMarks || 40,
+                otherInstructions: data.otherInstructions || '',
                 model: 'gemini-4-argon',
                 ttlHours: 72
             })

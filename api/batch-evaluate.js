@@ -356,11 +356,21 @@ export default async function handler(req, res) {
 
     const isArgon = model.includes("argon") || model.includes("gemini-4");
 
+    const reasoningGuardrailPrompt = `
+--- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
+- Formulate your evaluation directly against the marking scheme value points without discursive preamble.
+- Do NOT rewrite or transcribe the student's entire answer inside your internal thinking trace.
+- For MCQs: Compare the written option letter (A, B, C, D) directly against the key in a single reasoning step. Zero paragraphs of theory in thoughts.
+- For Subjective Questions: Check directly for the presence or absence of mandatory textbook value points. Deduct marks immediately for missing points without repetitive deliberation.
+- Keep your internal thought trace crisp, concise, and decisive.
+`;
+
     // Streamlined prompt: if cachedContentId is attached, Google already holds the entire
     // question paper, marking scheme, and rubrics in memory!
     let promptBase = "";
     if (cachedContentId) {
         promptBase = `Evaluate this student's answer sheet against the pre-cached exam questions and official marking scheme.
+${reasoningGuardrailPrompt}
 CRITICAL CONSTRAINTS:
 1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
@@ -369,7 +379,7 @@ ${otherInstructions ? `Teacher override: ${otherInstructions}\n` : ""}
 Return STRICT JSON:
 {
   "results": [
-    { "questionId": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
+    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
   ],
   "totalScore": <number>,
   "totalMaxMarks": ${maxMarks},
@@ -378,6 +388,7 @@ Return STRICT JSON:
     } else {
         const subjectDirectives = getSubjectDirectives(subject);
         promptBase = `You are evaluating student handwritten answer sheets against the official exam questions and marking scheme below.
+${reasoningGuardrailPrompt}
 CRITICAL CONSTRAINTS:
 1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
@@ -394,7 +405,7 @@ ${otherInstructions ? `\n--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructi
 Return STRICT JSON:
 {
   "results": [
-    { "questionId": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
+    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
   ],
   "totalScore": <number>,
   "totalMaxMarks": ${maxMarks},
