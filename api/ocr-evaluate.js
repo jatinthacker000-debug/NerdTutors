@@ -796,13 +796,30 @@ Return STRICT JSON only (no markdown, no code blocks):
             responseMimeType: "application/json"
         });
         const geminiJson = await callGeminiModel(singlePassBody, targetModel, 0);
-        const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        const clean = text.replace(/```json|```/g, "").trim();
+        const parts = geminiJson?.candidates?.[0]?.content?.parts || [];
+        let thoughtText = "";
+        let jsonText = "";
+        for (const p of parts) {
+            if (p.thought) {
+                thoughtText += (p.text || "") + "\n";
+            } else if (p.text) {
+                jsonText += p.text;
+            }
+        }
+        if (!jsonText && parts[0]?.text) {
+            jsonText = parts[0].text;
+        }
+
+        const clean = jsonText.replace(/```json|```/g, "").trim();
         const firstBrace = clean.indexOf('{');
         const lastBrace = clean.lastIndexOf('}');
         const jsonStr = (firstBrace !== -1 && lastBrace !== -1) ? clean.substring(firstBrace, lastBrace + 1) : clean;
         console.log(`🧼 CLEAN JSON received from ${targetModel} single-pass`);
-        return JSON.parse(jsonStr);
+        const parsed = JSON.parse(jsonStr);
+        if (thoughtText.trim()) {
+            parsed.internalThoughts = thoughtText.trim();
+        }
+        return parsed;
     }
 
     async function transcribeWithGemini(reqBody, mode, targetModel = PRIMARY_MODEL) {

@@ -1952,6 +1952,12 @@
             console.log("%c📅 Evaluation Date & Time:", "color: #64748b;", dateStr);
             console.log("%c🏷️ Pricing Plan:", "color: #64748b;", usage.pricingTier || "Google Cloud PayGo");
             console.groupEnd();
+
+            if (report.internalThoughts) {
+                console.groupCollapsed("%c🧠 [AI Internal Reasoning / Thinking Trace] Click to Expand", "color: #ec4899; font-weight: bold; font-size: 12px;");
+                console.log(report.internalThoughts);
+                console.groupEnd();
+            }
         }
 
         document.getElementById('btnPrintCard').addEventListener('click', () => {
