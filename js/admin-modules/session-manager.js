@@ -497,50 +497,86 @@ function formatDisplayText(raw) {
     return safe;
 }
 
-function getCorrectAnswer(markingSchemeText, index) {
+function getCorrectAnswer(markingSchemeText, index, questionNumber = '', questionsArr = []) {
+    if (Array.isArray(questionsArr) && index >= 0 && index < questionsArr.length) {
+        const qObj = questionsArr[index];
+        if (qObj && typeof qObj === 'object') {
+            const directAns = qObj.modelAnswer || qObj.answer || qObj.markingScheme || qObj.solution || qObj.correctAnswer;
+            if (directAns && typeof directAns === 'string' && directAns.trim()) {
+                return directAns.trim();
+            }
+        }
+    }
+
     if (!markingSchemeText) return 'Refer to marking scheme guidelines.';
-    const lines = markingSchemeText.split('\n');
+
+    const trimmedScheme = markingSchemeText.trim();
+    if (trimmedScheme.startsWith('[') || trimmedScheme.startsWith('{')) {
+        try {
+            const parsedScheme = JSON.parse(trimmedScheme);
+            if (Array.isArray(parsedScheme)) {
+                if (parsedScheme[index]) {
+                    const pItem = parsedScheme[index];
+                    const ans = typeof pItem === 'string' ? pItem : (pItem.answer || pItem.modelAnswer || pItem.markingScheme || pItem.text || pItem.solution);
+                    if (ans) return String(ans).trim();
+                }
+                if (questionNumber) {
+                    const cleanQ = questionNumber.replace(/[^0-9]/g, '');
+                    const matchItem = parsedScheme.find(item => {
+                        const idStr = String(item.questionId || item.id || item.questionNumber || item.qNo || '');
+                        return idStr.replace(/[^0-9]/g, '') === cleanQ;
+                    });
+                    if (matchItem) {
+                        const ans = matchItem.answer || matchItem.modelAnswer || matchItem.markingScheme || matchItem.text || matchItem.solution;
+                        if (ans) return String(ans).trim();
+                    }
+                }
+            }
+        } catch (_) {}
+    }
+
     const qNum = index + 1;
-    
-    // Matches: Q1:, Q1., Question 1:, Question 1., Q1 Ans, Q1. Ans, Q1 -
-    const regex = new RegExp(`^(Q|Question)\\s*${qNum}\\s*(\\.|:|\\s+Ans|\\s*-|\\s*$)`, 'i');
-    
+    const cleanQNum = questionNumber ? (questionNumber.match(/\d+/) ? questionNumber.match(/\d+/)[0] : qNum) : qNum;
+    const nextQNum = parseInt(cleanQNum, 10) + 1;
+
+    const lines = markingSchemeText.split(/\r?\n/);
+    const qHeaderRegex = new RegExp(`^(?:[#*\\s>\\-\\[]*)(?:Q|Question|Ans|Answer)?\\s*\\.?\\s*${cleanQNum}\\s*(?:\\.|:|\\)|\\s+Ans|\\s*\\-|\\s*\\]|\\*\\*|$)`, 'i');
+    const nextQHeaderRegex = new RegExp(`^(?:[#*\\s>\\-\\[]*)(?:Q|Question|Ans|Answer)?\\s*\\.?\\s*${nextQNum}\\s*(?:\\.|:|\\)|\\s+Ans|\\s*\\-|\\s*\\]|\\*\\*|$)`, 'i');
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        if (regex.test(line)) {
-            let answerLines = [line.replace(regex, '').trim()];
-            if (answerLines[0].toLowerCase().startsWith('ans')) {
-                answerLines[0] = answerLines[0].replace(/^ans(\.|\:|\s+)/i, '').trim();
+        if (qHeaderRegex.test(line)) {
+            let answerLines = [line.replace(qHeaderRegex, '').replace(/^[*_#:\-\s]+/, '').trim()];
+            if (answerLines[0] && answerLines[0].toLowerCase().startsWith('ans')) {
+                answerLines[0] = answerLines[0].replace(/^ans(wer)?(\.|\:|\s+)/i, '').trim();
             }
             for (let j = i + 1; j < lines.length; j++) {
                 const nextLine = lines[j].trim();
-                if (/^(Q|Question)\s*\d+\s*(\.|\:|\s+Ans|\s*-|\s*$)/i.test(nextLine)) {
+                if (nextQHeaderRegex.test(nextLine) || /^(?:[#*\\s>\\-\\[]*)(?:Q|Question|Ans|Answer)\s*\.?\s*\d+\s*(?:\.|:|\)|\s+Ans|\s*\-|\s*\]|\*\*|$)/i.test(nextLine)) {
                     break;
                 }
                 answerLines.push(nextLine);
             }
-            return answerLines.filter(Boolean).join(' ');
+            const fullAns = answerLines.filter(Boolean).join('\n').replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+            if (fullAns) return fullAns;
         }
     }
-    
-    // Fallback string matching
+
     const fallbacks = [
-        `Q${qNum}.`,
-        `Q${qNum}:`,
-        `Q${qNum} `,
-        `Question ${qNum}.`,
-        `Question ${qNum}:`,
-        `Question ${qNum} `
+        `Q${cleanQNum}.`, `Q${cleanQNum}:`, `Q${cleanQNum} `, `Q.${cleanQNum}`,
+        `**Q${cleanQNum}**`, `**Q${cleanQNum}:**`,
+        `Question ${cleanQNum}.`, `Question ${cleanQNum}:`, `Question ${cleanQNum} `,
+        `Ans ${cleanQNum}.`, `Ans ${cleanQNum}:`, `Answer ${cleanQNum}:`
     ];
     for (const fb of fallbacks) {
         const startIdx = markingSchemeText.indexOf(fb);
         if (startIdx !== -1) {
             let endIdx = -1;
             const nextFbs = [
-                `Q${qNum + 1}.`,
-                `Q${qNum + 1}:`,
-                `Question ${qNum + 1}.`,
-                `Question ${qNum + 1}:`
+                `Q${nextQNum}.`, `Q${nextQNum}:`, `Q${nextQNum} `, `Q.${nextQNum}`,
+                `**Q${nextQNum}**`, `**Q${nextQNum}:**`,
+                `Question ${nextQNum}.`, `Question ${nextQNum}:`,
+                `Ans ${nextQNum}.`, `Ans ${nextQNum}:`
             ];
             for (const nextFb of nextFbs) {
                 const idx = markingSchemeText.indexOf(nextFb, startIdx + fb.length);
@@ -548,17 +584,18 @@ function getCorrectAnswer(markingSchemeText, index) {
                     endIdx = idx;
                 }
             }
-            let matchedText = endIdx === -1 
+            let matchedText = endIdx === -1
                 ? markingSchemeText.substring(startIdx + fb.length).trim()
                 : markingSchemeText.substring(startIdx + fb.length, endIdx).trim();
-            
+
             if (matchedText.toLowerCase().startsWith('ans')) {
-                matchedText = matchedText.replace(/^ans(\.|\:|\s+)/i, '').trim();
+                matchedText = matchedText.replace(/^ans(wer)?(\.|\:|\s+)/i, '').trim();
             }
-            return matchedText;
+            matchedText = matchedText.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+            if (matchedText) return matchedText;
         }
     }
-    
+
     return 'Refer to marking scheme guidelines.';
 }
 
@@ -873,8 +910,8 @@ window.printReportCard = async function(resultId) {
                     const max = q.marks !== undefined ? q.marks : (q.maxMarks || 1);
                     const studentAns = q.studentAnswer || q.extractedAnswer || q.studentAnswerText || '';
                     const qText = q.questionText || q.questionNumber || `Question ${originalIndex + 1}`;
-                    const rawAns = q.modelAnswer || getCorrectAnswer(markingSchemeText, originalIndex >= 0 ? originalIndex : idx);
-                    const isMcq = (max === 1) || /mcq/i.test(q.questionNumber || '') || /option/i.test(rawAns);
+                    const rawAns = q.modelAnswer || getCorrectAnswer(markingSchemeText, originalIndex >= 0 ? originalIndex : idx, q.questionNumber, questionsArr);
+                    const isMcq = (max <= 1.0) && (/mcq/i.test(q.questionNumber || '') || /option/i.test(rawAns));
                     const correctAns = cleanModelAnswer(rawAns, isMcq);
                     
                     return `
