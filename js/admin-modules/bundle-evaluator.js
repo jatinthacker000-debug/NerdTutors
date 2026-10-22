@@ -458,179 +458,170 @@ function renderBundleQueue() {
 
     container.innerHTML = html;
 }
-
-// ==================== BUNDLE EVALUATION RUNNER ====================
-async function startBundleEvaluation() {
-    if (isEvaluatingBundle) return;
-    if (!selectedBundleSession) {
-        showToast("Please select an Exam Session first.", "warning");
-        return;
-    }
-
 // ==================== BUNDLE BATCH RUNNER (ASYNCHRONOUS) ====================
 async function submitGoogleBatchJob() {
-    if (isEvaluatingBundle) return;
-    if (!selectedBundleSession) {
-        showToast("Please select an Exam Session first.", "warning");
-        return;
-    }
-
-    const pendingStudents = queuedBundleStudents.filter(s => s.pages && s.pages.length > 0);
-    if (pendingStudents.length === 0) {
-        showToast("Please add at least 1 student with answer sheet pages before submitting.", "warning");
-        return;
-    }
-
-    const btnSubmit = document.getElementById('btnSubmitBatchJob');
-    if (btnSubmit) {
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = `⏳ Submitting Batch to Google Cloud...`;
-    }
-    isEvaluatingBundle = true;
-
-    try {
-        showToast("⚡ Connecting to Google Gemini Batch API...", "info");
-
-        // Format payload for /api/batch-evaluate
-        const studentsPayload = pendingStudents.map(st => ({
-            studentName: st.studentName || "Student",
-            pages: st.pages.map(p => ({
-                base64: p.base64,
-                mimeType: p.mimeType || "image/jpeg"
-            }))
-        }));
-
-        const requestBody = {
-            action: 'create',
-            sessionId: selectedBundleSession.id,
-            examName: selectedBundleSession.name,
-            subject: selectedBundleSession.subject,
-            questions: selectedBundleSession.questions,
-            markingScheme: selectedBundleSession.markingScheme,
-            maxMarks: Number(selectedBundleSession.maxMarks) || 40,
-            otherInstructions: selectedBundleSession.otherInstructions || "",
-            cachedContentId: selectedBundleSession.cachedContentId || null,
-            model: 'gemini-4-argon',
-            students: studentsPayload
-        };
-
-        const res = await fetch('/api/batch-evaluate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-            throw new Error(data.error || "Failed to submit Google Batch Job");
+        if (isEvaluatingBundle) return;
+        if (!selectedBundleSession) {
+            showToast("Please select an Exam Session first.", "warning");
+            return;
         }
 
-        // 🚀 Prominent Color-Coded Console Log
-        console.log("%c🚀 GOOGLE GEMINI BATCH JOB CREATED SUCCESSFULLY!", "background: #4f46e5; color: #ffffff; font-size: 14px; font-weight: bold; padding: 6px 12px; border-radius: 6px;");
-        console.log("🆔 Batch Job ID:         ", data.batchId);
-        console.log("📚 Exam Session:          ", selectedBundleSession.name);
-        console.log("👥 Total Students Queued: ", pendingStudents.length);
-        console.log("💰 Applied Discount:      50% Asynchronous Batch Discount");
-        console.log("🕒 Initial State:         ", data.state || "JOB_STATE_PENDING");
+        const pendingStudents = queuedBundleStudents.filter(s => s.pages && s.pages.length > 0);
+        if (pendingStudents.length === 0) {
+            showToast("Please add at least 1 student with answer sheet pages before submitting.", "warning");
+            return;
+        }
 
-        // Save active batch record in Firestore batchJobs collection
-        await addDoc(collection(db, 'batchJobs'), {
-            batchId: data.batchId,
-            displayName: data.displayName || selectedBundleSession.name,
-            sessionId: selectedBundleSession.id,
-            sessionName: selectedBundleSession.name,
-            class: selectedBundleSession.class || 'Class 12th',
-            subject: selectedBundleSession.subject || 'Economics',
-            targetGroup: selectedBundleSession.targetGroup || 'Both',
-            maxMarks: Number(selectedBundleSession.maxMarks) || 40,
-            studentCount: pendingStudents.length,
-            studentsMetadata: pendingStudents.map(s => ({ studentName: s.studentName })),
-            status: data.state || 'JOB_STATE_PENDING',
-            createdAt: serverTimestamp()
-        });
-
-        // Clear the upper segment inputs smoothly without full page refresh
-        queuedBundleStudents = [];
-        renderBundleQueue();
-
-        showToast(`🎉 Batch Job created: ${data.batchId}! Track progress in registry below.`, "success");
-        loadBatchJobs(true);
-
-    } catch (err) {
-        console.error("Batch submission error:", err);
-        showToast(err.message, "error");
-    } finally {
-        isEvaluatingBundle = false;
+        const btnSubmit = document.getElementById('btnSubmitBatchJob');
         if (btnSubmit) {
-            btnSubmit.disabled = false;
-            btnSubmit.innerHTML = `⚡ Submit Google Batch Job (${queuedBundleStudents.length} Students)`;
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = `⏳ Submitting Batch to Google Cloud...`;
+        }
+        isEvaluatingBundle = true;
+
+        try {
+            showToast("⚡ Connecting to Google Gemini Batch API...", "info");
+
+            // Format payload for /api/batch-evaluate
+            const studentsPayload = pendingStudents.map(st => ({
+                studentName: st.studentName || "Student",
+                pages: st.pages.map(p => ({
+                    base64: p.base64,
+                    mimeType: p.mimeType || "image/jpeg"
+                }))
+            }));
+
+            const requestBody = {
+                action: 'create',
+                sessionId: selectedBundleSession.id,
+                examName: selectedBundleSession.name,
+                subject: selectedBundleSession.subject,
+                questions: selectedBundleSession.questions,
+                markingScheme: selectedBundleSession.markingScheme,
+                maxMarks: Number(selectedBundleSession.maxMarks) || 40,
+                otherInstructions: selectedBundleSession.otherInstructions || "",
+                cachedContentId: selectedBundleSession.cachedContentId || null,
+                model: 'gemini-4-argon',
+                students: studentsPayload
+            };
+
+            const res = await fetch('/api/batch-evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to submit Google Batch Job");
+            }
+
+            // 🚀 Prominent Color-Coded Console Log
+            console.log("%c🚀 GOOGLE GEMINI BATCH JOB CREATED SUCCESSFULLY!", "background: #4f46e5; color: #ffffff; font-size: 14px; font-weight: bold; padding: 6px 12px; border-radius: 6px;");
+            console.log("🆔 Batch Job ID:         ", data.batchId);
+            console.log("📚 Exam Session:          ", selectedBundleSession.name);
+            console.log("👥 Total Students Queued: ", pendingStudents.length);
+            console.log("💰 Applied Discount:      50% Asynchronous Batch Discount");
+            console.log("🕒 Initial State:         ", data.state || "JOB_STATE_PENDING");
+
+            // Save active batch record in Firestore batchJobs collection
+            await addDoc(collection(db, 'batchJobs'), {
+                batchId: data.batchId,
+                displayName: data.displayName || selectedBundleSession.name,
+                sessionId: selectedBundleSession.id,
+                sessionName: selectedBundleSession.name,
+                class: selectedBundleSession.class || 'Class 12th',
+                subject: selectedBundleSession.subject || 'Economics',
+                targetGroup: selectedBundleSession.targetGroup || 'Both',
+                maxMarks: Number(selectedBundleSession.maxMarks) || 40,
+                studentCount: pendingStudents.length,
+                studentsMetadata: pendingStudents.map(s => ({ studentName: s.studentName })),
+                status: data.state || 'JOB_STATE_PENDING',
+                createdAt: serverTimestamp()
+            });
+
+            // Clear the upper segment inputs smoothly without full page refresh
+            queuedBundleStudents = [];
+            renderBundleQueue();
+
+            showToast(`🎉 Batch Job created: ${data.batchId}! Track progress in registry below.`, "success");
+            loadBatchJobs(true);
+
+        } catch (err) {
+            console.error("Batch submission error:", err);
+            showToast(err.message, "error");
+        } finally {
+            isEvaluatingBundle = false;
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = `⚡ Submit Google Batch Job (${queuedBundleStudents.length} Students)`;
+            }
         }
     }
-}
 
-// ==================== BATCH JOBS REGISTRY & SYNC ====================
-let unsubscribeBatchJobs = null;
+    // ==================== BATCH JOBS REGISTRY & SYNC ====================
+    let unsubscribeBatchJobs = null;
 
-export function loadBatchJobs(forceToast = false) {
-    const container = document.getElementById('batchJobsListContainer');
-    if (!container) return;
+    export function loadBatchJobs(forceToast = false) {
+        const container = document.getElementById('batchJobsListContainer');
+        if (!container) return;
 
-    if (unsubscribeBatchJobs) {
-        unsubscribeBatchJobs();
-        unsubscribeBatchJobs = null;
+        if (unsubscribeBatchJobs) {
+            unsubscribeBatchJobs();
+            unsubscribeBatchJobs = null;
+        }
+
+        const q = query(collection(db, 'batchJobs'), orderBy('createdAt', 'desc'));
+        unsubscribeBatchJobs = onSnapshot(q, (snapshot) => {
+            const jobs = [];
+            snapshot.forEach(docSnap => {
+                jobs.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            renderBatchJobs(jobs);
+            if (forceToast) showToast("Batch jobs registry refreshed.", "info");
+        }, (err) => {
+            console.warn("Batch jobs snapshot error:", err.message);
+            container.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load batch jobs: ${escapeHtml(err.message)}</div>`;
+        });
     }
 
-    const q = query(collection(db, 'batchJobs'), orderBy('createdAt', 'desc'));
-    unsubscribeBatchJobs = onSnapshot(q, (snapshot) => {
-        const jobs = [];
-        snapshot.forEach(docSnap => {
-            jobs.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        renderBatchJobs(jobs);
-        if (forceToast) showToast("Batch jobs registry refreshed.", "info");
-    }, (err) => {
-        console.warn("Batch jobs snapshot error:", err.message);
-        container.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load batch jobs: ${escapeHtml(err.message)}</div>`;
-    });
-}
+    function renderBatchJobs(jobs) {
+        const container = document.getElementById('batchJobsListContainer');
+        if (!container) return;
 
-function renderBatchJobs(jobs) {
-    const container = document.getElementById('batchJobsListContainer');
-    if (!container) return;
-
-    if (!jobs || jobs.length === 0) {
-        container.innerHTML = `
+        if (!jobs || jobs.length === 0) {
+            container.innerHTML = `
             <div style="text-align: center; color: #94a3b8; padding: 2rem 1rem; background: #fafafa; border-radius: 8px; border: 1.5px dashed #e2e8f0;">
                 <div style="font-size: 1.8rem; margin-bottom: 0.25rem;">📦</div>
                 <strong style="color: #475569; font-size: 0.95rem;">No Batch Jobs Found</strong>
                 <p style="margin: 0.25rem 0 0 0; font-size: 0.82rem; color: #64748b;">Add students above and click "Submit Google Batch Job" to create an asynchronous batch.</p>
             </div>
         `;
-        return;
-    }
-
-    let html = '';
-    jobs.forEach(job => {
-        const batchId = job.batchId || 'batches/unknown';
-        const sessionName = job.sessionName || job.displayName || 'Exam Assessment';
-        const studentCount = job.studentCount || job.studentsMetadata?.length || 0;
-        const status = job.status || 'JOB_STATE_PENDING';
-
-        let statusPill = `<span style="background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">⏳ PENDING</span>`;
-        if (status === 'JOB_STATE_RUNNING') {
-            statusPill = `<span style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🔄 RUNNING ON GOOGLE</span>`;
-        } else if (status === 'JOB_STATE_SUCCEEDED') {
-            statusPill = `<span style="background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🎉 SUCCEEDED (READY)</span>`;
-        } else if (status === 'SYNCED') {
-            statusPill = `<span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">✅ SYNCED TO RESULTS</span>`;
-        } else if (status === 'JOB_STATE_FAILED') {
-            statusPill = `<span style="background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">❌ FAILED</span>`;
+            return;
         }
 
-        const dateStr = job.createdAt?.toDate ? job.createdAt.toDate().toLocaleString() : 'Just now';
+        let html = '';
+        jobs.forEach(job => {
+            const batchId = job.batchId || 'batches/unknown';
+            const sessionName = job.sessionName || job.displayName || 'Exam Assessment';
+            const studentCount = job.studentCount || job.studentsMetadata?.length || 0;
+            const status = job.status || 'JOB_STATE_PENDING';
 
-        html += `
+            let statusPill = `<span style="background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">⏳ PENDING</span>`;
+            if (status === 'JOB_STATE_RUNNING') {
+                statusPill = `<span style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🔄 RUNNING ON GOOGLE</span>`;
+            } else if (status === 'JOB_STATE_SUCCEEDED') {
+                statusPill = `<span style="background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🎉 SUCCEEDED (READY)</span>`;
+            } else if (status === 'SYNCED') {
+                statusPill = `<span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">✅ SYNCED TO RESULTS</span>`;
+            } else if (status === 'JOB_STATE_FAILED') {
+                statusPill = `<span style="background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">❌ FAILED</span>`;
+            }
+
+            const dateStr = job.createdAt?.toDate ? job.createdAt.toDate().toLocaleString() : 'Just now';
+
+            html += `
             <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                 <div style="min-width: 260px; flex: 1;">
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
@@ -659,108 +650,108 @@ function renderBatchJobs(jobs) {
                 </div>
             </div>
         `;
-    });
+        });
 
-    container.innerHTML = html;
-}
+        container.innerHTML = html;
+    }
 
-async function checkAndSyncBatch(batchId, docId) {
-    try {
-        showToast(`Checking status of ${batchId}...`, "info");
+    async function checkAndSyncBatch(batchId, docId) {
+        try {
+            showToast(`Checking status of ${batchId}...`, "info");
 
-        // 1. Check status
-        const statusRes = await fetch(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`);
-        const statusData = await statusRes.json();
+            // 1. Check status
+            const statusRes = await fetch(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`);
+            const statusData = await statusRes.json();
 
-        if (!statusRes.ok) {
-            throw new Error(statusData.error || "Failed to check batch status");
-        }
-
-        const currentState = statusData.state || 'JOB_STATE_PENDING';
-        await updateDoc(doc(db, 'batchJobs', docId), { status: currentState });
-
-        if (currentState === 'JOB_STATE_RUNNING' || currentState === 'JOB_STATE_PENDING') {
-            showToast(`⏳ Batch is still processing in Google's queue (${currentState}). Check back in a few minutes.`, "info");
-            return;
-        }
-
-        if (currentState === 'JOB_STATE_FAILED') {
-            showToast(`⚠️ Batch job failed on Google Cloud: ${statusData.error?.message || 'Unknown error'}`, "error");
-            return;
-        }
-
-        if (currentState === 'JOB_STATE_SUCCEEDED') {
-            showToast("🎉 Batch completed by Google! Syncing parsed report cards to Firestore...", "info");
-
-            const batchDocSnap = await getDoc(doc(db, 'batchJobs', docId));
-            const batchJobData = batchDocSnap.data() || {};
-
-            const syncRes = await fetch('/api/batch-evaluate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'sync',
-                    batchId: batchId,
-                    maxMarks: batchJobData.maxMarks || 40,
-                    studentsMetadata: batchJobData.studentsMetadata || []
-                })
-            });
-
-            const syncData = await syncRes.json();
-            if (!syncRes.ok) {
-                throw new Error(syncData.error || "Failed to parse batch results from Google Cloud");
+            if (!statusRes.ok) {
+                throw new Error(statusData.error || "Failed to check batch status");
             }
 
-            const parsedResults = syncData.parsedResults || [];
-            let syncedCount = 0;
+            const currentState = statusData.state || 'JOB_STATE_PENDING';
+            await updateDoc(doc(db, 'batchJobs', docId), { status: currentState });
 
-            for (const item of parsedResults) {
-                if (item.result) {
-                    const lockedMax = Number(batchJobData.maxMarks) || 40;
-                    const clampedScore = Math.min(Math.max(0, Number(item.result.totalScore) || 0), lockedMax);
+            if (currentState === 'JOB_STATE_RUNNING' || currentState === 'JOB_STATE_PENDING') {
+                showToast(`⏳ Batch is still processing in Google's queue (${currentState}). Check back in a few minutes.`, "info");
+                return;
+            }
 
-                    await addDoc(collection(db, 'testResults'), {
-                        studentName: item.studentName || 'Student',
-                        studentId: null,
-                        batch: batchJobData.targetGroup || 'Both',
-                        class: batchJobData.class || 'Class 12th',
-                        subject: batchJobData.subject || 'Economics',
-                        sessionId: batchJobData.sessionId || null,
-                        sessionName: batchJobData.sessionName || 'Batch Exam',
-                        score: clampedScore,
-                        maxMarks: lockedMax,
-                        overallFeedback: item.result.overallFeedback || '',
-                        improvements: item.result.improvements || [],
-                        breakdown: item.result.results || [],
-                        modelUsed: 'gemini-4-argon',
-                        isBatchEvaluated: true,
+            if (currentState === 'JOB_STATE_FAILED') {
+                showToast(`⚠️ Batch job failed on Google Cloud: ${statusData.error?.message || 'Unknown error'}`, "error");
+                return;
+            }
+
+            if (currentState === 'JOB_STATE_SUCCEEDED') {
+                showToast("🎉 Batch completed by Google! Syncing parsed report cards to Firestore...", "info");
+
+                const batchDocSnap = await getDoc(doc(db, 'batchJobs', docId));
+                const batchJobData = batchDocSnap.data() || {};
+
+                const syncRes = await fetch('/api/batch-evaluate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'sync',
                         batchId: batchId,
-                        createdAt: serverTimestamp()
-                    });
-                    syncedCount++;
+                        maxMarks: batchJobData.maxMarks || 40,
+                        studentsMetadata: batchJobData.studentsMetadata || []
+                    })
+                });
+
+                const syncData = await syncRes.json();
+                if (!syncRes.ok) {
+                    throw new Error(syncData.error || "Failed to parse batch results from Google Cloud");
                 }
+
+                const parsedResults = syncData.parsedResults || [];
+                let syncedCount = 0;
+
+                for (const item of parsedResults) {
+                    if (item.result) {
+                        const lockedMax = Number(batchJobData.maxMarks) || 40;
+                        const clampedScore = Math.min(Math.max(0, Number(item.result.totalScore) || 0), lockedMax);
+
+                        await addDoc(collection(db, 'testResults'), {
+                            studentName: item.studentName || 'Student',
+                            studentId: null,
+                            batch: batchJobData.targetGroup || 'Both',
+                            class: batchJobData.class || 'Class 12th',
+                            subject: batchJobData.subject || 'Economics',
+                            sessionId: batchJobData.sessionId || null,
+                            sessionName: batchJobData.sessionName || 'Batch Exam',
+                            score: clampedScore,
+                            maxMarks: lockedMax,
+                            overallFeedback: item.result.overallFeedback || '',
+                            improvements: item.result.improvements || [],
+                            breakdown: item.result.results || [],
+                            modelUsed: 'gemini-4-argon',
+                            isBatchEvaluated: true,
+                            batchId: batchId,
+                            createdAt: serverTimestamp()
+                        });
+                        syncedCount++;
+                    }
+                }
+
+                await updateDoc(doc(db, 'batchJobs', docId), {
+                    status: 'SYNCED',
+                    syncedCount: syncedCount,
+                    syncedAt: serverTimestamp()
+                });
+
+                showToast(`🎉 Success! ${syncedCount} student papers successfully synced into testResults!`, "success");
             }
-
-            await updateDoc(doc(db, 'batchJobs', docId), {
-                status: 'SYNCED',
-                syncedCount: syncedCount,
-                syncedAt: serverTimestamp()
-            });
-
-            showToast(`🎉 Success! ${syncedCount} student papers successfully synced into testResults!`, "success");
+        } catch (err) {
+            console.error("Check & sync error:", err);
+            showToast(err.message, "error");
         }
-    } catch (err) {
-        console.error("Check & sync error:", err);
-        showToast(err.message, "error");
     }
-}
 
-async function deleteBatchJob(docId) {
-    if (!confirm("Are you sure you want to delete this batch job record from the registry?")) return;
-    try {
-        await deleteDoc(doc(db, 'batchJobs', docId));
-        showToast("Batch job record deleted.", "info");
-    } catch (e) {
-        showToast("Error deleting batch job: " + e.message, "error");
+    async function deleteBatchJob(docId) {
+        if (!confirm("Are you sure you want to delete this batch job record from the registry?")) return;
+        try {
+            await deleteDoc(doc(db, 'batchJobs', docId));
+            showToast("Batch job record deleted.", "info");
+        } catch (e) {
+            showToast("Error deleting batch job: " + e.message, "error");
+        }
     }
-}
