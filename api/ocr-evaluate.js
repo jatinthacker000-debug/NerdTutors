@@ -95,10 +95,16 @@ function getSubjectDirectives(subject) {
 
     if (!selectedRules) return "";
 
-    return `
-=== SUBJECT-SPECIFIC BOARD DIRECTIVES: ${subjectHeader} ===
-${JSON.stringify(selectedRules)}
-`;
+    let formattedRules = "";
+    if (typeof selectedRules === "object") {
+        formattedRules = Object.entries(selectedRules)
+            .map(([key, val]) => `• ${key.replace(/_/g, ' ')}: ${typeof val === 'string' ? val : JSON.stringify(val)}`)
+            .join('\n');
+    } else {
+        formattedRules = String(selectedRules);
+    }
+
+    return `\n=== SUBJECT DIRECTIVES: ${subjectHeader} ===\n${formattedRules}\n`;
 }
 
 function getUniversalGuardrails() {
@@ -295,7 +301,7 @@ export default async function handler(req, res) {
     const BACKUP_MODEL = process.env.GEMINI_BACKUP_MODEL || (PRIMARY_MODEL !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-2.5-flash");
     const activeModel = PRIMARY_MODEL;
     const cachedContentId = body.cachedContent || body.cachedContentId || null;
-    const isExplicitCache = Boolean(cachedContentId && !cachedContentId.startsWith('vertex-implicit') && !cachedContentId.startsWith('studio-implicit') && !cachedContentId.startsWith('session-cache'));
+    const isExplicitCache = Boolean(cachedContentId && (cachedContentId.startsWith('cachedContents/') || cachedContentId.includes('/cachedContents/')));
     const thinkingLevel = body.thinkingLevel || process.env.THINKING_LEVEL || "medium";
     const defaultThinkingBudget = Number(process.env.THINKING_BUDGET || 512);
     const thinkingBudget = body.thinkingBudget !== undefined ? Number(body.thinkingBudget) : defaultThinkingBudget;
@@ -339,6 +345,7 @@ export default async function handler(req, res) {
         }
         const mm = questionsExplicitMax || maxMarks || 100;
         console.log(`📄 SESSION EVALUATE MODE: Max Marks = ${mm} (explicit: ${questionsExplicitMax || 'none'}, session: ${maxMarks || 'none'}), Subject = ${subject || 'General'}`);
+        console.log(`⚡ Context Cache Status: ${isExplicitCache ? `ACTIVE (${cachedContentId}) - 75% DISCOUNT` : 'DISABLED (Using Direct Prompt)'}`);
 
         let subjectSpecificInstructions = getSubjectDirectives(subject);
         let universalGuardrailsPrompt = getUniversalGuardrails();

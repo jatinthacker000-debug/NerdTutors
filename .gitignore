@@ -6,3 +6,6 @@ scratch/
 CBSE_Class_*
 *Benchmark_Report*
 *.md.bak
+vertex-key.json
+*service-account*.json
+*vertex*.json

@@ -10,6 +10,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { getVertexAccessToken } from './vertex-auth.js';
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -150,30 +151,47 @@ Return STRICT JSON in the following format:
     const isVertex = primaryKey.startsWith("AQ.") || Boolean(process.env.VERTEX_API_KEY);
     const ttlSeconds = Math.max(3600, Math.min(ttlHours * 3600, 259200)); // 1 hour to 3 days
     const expireTime = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+    const cleanSession = (sessionId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
 
-    // On Vertex AI: Implicit Caching is built-in and automatic for shared prompt prefixes >= 4096 tokens!
-    // Google Vertex AI GenAiCacheService rejects API keys with 401 because it requires OAuth2 service accounts.
-    // Instead, marking the session with a deterministic cache ID ensures the system front-loads the prompt prefix,
-    // automatically activating Vertex AI's KV-cache engine at 75% token discount!
+    let endpoint = "";
+    let payload = {};
+    const headers = { "Content-Type": "application/json" };
+
     if (isVertex) {
-        const cleanSession = (sessionId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
-        const cacheToken = `vertex-implicit-${cleanSession}`;
-        console.log(`⚡ [Vertex AI Implicit Cache] Activated for session ${sessionId}. Prefix caching enabled for 75% discount.`);
-        return res.status(200).json({
-            success: true,
-            cachedContentId: cacheToken,
-            mode: "implicit",
-            model: model,
-            expireTime: expireTime,
-            message: `⚡ Context cache active on ${model}. Shared question paper and marking scheme are cached with 75% token discount.`
-        });
-    }
+        const projectId = process.env.GCP_PROJECT_ID || "975383880672";
+        const location = process.env.GCP_LOCATION || "us-central1";
 
-    // On Google AI Studio (Gemini API with AIza... keys): Use explicit cachedContents endpoint
-    try {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${primaryKey}`;
-        const cleanSession = (sessionId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
-        const payload = {
+        let authToken = null;
+        try {
+            authToken = await getVertexAccessToken();
+        } catch (e) {
+            console.warn("Could not obtain Service Account OAuth2 token:", e.message);
+        }
+
+        if (authToken) {
+            headers["Authorization"] = `Bearer ${authToken}`;
+            endpoint = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/cachedContents`;
+        } else {
+            endpoint = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/cachedContents?key=${primaryKey}`;
+        }
+
+        payload = {
+            model: `projects/${projectId}/locations/${location}/publishers/google/models/${model}`,
+            displayName: `cache_${cleanSession}`,
+            contents: [
+                {
+                    role: "user",
+                    parts: [
+                        { text: bundledContent }
+                    ]
+                }
+            ],
+            ttl: `${ttlSeconds}s`
+        };
+    } else {
+        // Google AI Studio
+        endpoint = `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${primaryKey}`;
+        payload = {
             model: `models/${model}`,
             displayName: `cache_${cleanSession}`,
             contents: [
@@ -186,10 +204,13 @@ Return STRICT JSON in the following format:
             ],
             ttl: `${ttlSeconds}s`
         };
+    }
 
+    try {
+        console.log(`📡 [Real Cache Creation Attempt] Calling: ${endpoint.replace(/key=[^&\s]+/gi, 'key=REDACTED')}`);
         const response = await fetch(endpoint, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: headers,
             body: JSON.stringify(payload)
         });
 
@@ -197,40 +218,38 @@ Return STRICT JSON in the following format:
         let data = {};
         try { data = JSON.parse(rawText); } catch (_) {}
 
-        if (!response.ok) {
-            console.warn("⚠️ Google AI Studio Cache API notice:", response.status, rawText);
-            // Graceful fallback to implicit prefix caching if explicit cache creation returns error
-            const fallbackToken = `studio-implicit-${cleanSession.slice(0, 32)}`;
+        if (response.ok && data && data.name) {
+            console.log(`✅ [Real Cache Created] Active Cache ID: ${data.name}`);
             return res.status(200).json({
                 success: true,
-                cachedContentId: fallbackToken,
-                mode: "implicit-fallback",
+                cachedContentId: data.name,
+                mode: isVertex ? "explicit-vertex" : "explicit-studio",
                 model: model,
-                expireTime: expireTime,
-                message: `⚡ Prefix caching enabled for session (75% discount active).`
+                expireTime: data.expireTime || expireTime,
+                message: `⚡ Context cache successfully created on ${model} (75% discount active).`
             });
         }
 
+        // If Google rejects the API key for caching (401/403/400)
+        console.warn(`⚠️ Google Cache API responded with status ${response.status}:`, rawText);
         return res.status(200).json({
-            success: true,
-            cachedContentId: data.name,
-            mode: "explicit",
-            model: model,
-            expireTime: data.expireTime || expireTime,
-            message: `⚡ Context cache successfully created on ${model} (75% discount).`
+            success: false,
+            cachedContentId: null,
+            mode: "unsupported",
+            status: response.status,
+            error: `Cache creation not supported with current credentials (${response.status})`,
+            details: data?.error?.message || rawText,
+            message: `⚠️ Explicit cache creation requires service account credentials on Vertex AI. Using streamlined prompt with 0 bloat (Plan C).`
         });
 
     } catch (err) {
-        console.warn("⚠️ Context Cache fallback:", err.message);
-        const cleanSession = (sessionId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
-        const fallbackToken = `session-cache-${cleanSession}`;
+        console.warn("⚠️ Context Cache network error:", err.message);
         return res.status(200).json({
-            success: true,
-            cachedContentId: fallbackToken,
-            mode: "implicit-fallback",
-            model: model,
-            expireTime: expireTime,
-            message: `⚡ Session cached successfully (75% discount active).`
+            success: false,
+            cachedContentId: null,
+            mode: "error",
+            error: err.message,
+            message: `⚠️ Network error creating cache. Evaluator will use streamlined prompt.`
         });
     }
 }

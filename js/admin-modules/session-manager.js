@@ -1541,12 +1541,16 @@ async function cacheTestSession(id) {
             throw new Error(result.error || result.details || rawText || "Failed to create context cache");
         }
 
-        await updateDoc(docRef, {
-            cachedContentId: result.cachedContentId,
-            cacheExpiresAt: result.expireTime || null
-        });
-
-        showToast("⚡ Context Cache created! Future evaluations get 75% token discount.", "success");
+        if (result.success && result.cachedContentId) {
+            await updateDoc(docRef, {
+                cachedContentId: result.cachedContentId,
+                cacheExpiresAt: result.expireTime || null
+            });
+            showToast("⚡ Real Context Cache created! Future evaluations get 75% token discount.", "success");
+        } else {
+            console.warn("Cache creation notice:", result);
+            showToast(result.message || "Cache could not be created with this credential type.", "warning");
+        }
         loadTestSessionsForManagement();
     } catch (err) {
         console.error("Cache creation error:", err);
