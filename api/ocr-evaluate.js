@@ -732,8 +732,11 @@ Return STRICT JSON only (no markdown, no code blocks):
                     const inrCachedRate = isCallArgon ? 0.000095988 : 0.000014398;
                     const inrCandidateRate = isCallArgon ? 0.001919775 : 0.000575932;
 
+                    // Vertex AI Cloud Billing Calibration: Medium thinking on Argon adds internal reasoning tokens to GCP Output SKU
+                    const thinkingAdjustmentInr = (isCallArgon && (reqBody?.generationConfig?.thinkingConfig?.thinkingLevel === "medium" || reqBody?.generationConfig?.thinkingConfig?.thinkingBudget >= 512)) ? 2.75 : 0;
+
                     const nonCachedPrompt = Math.max(0, pTokens - cachedTokens);
-                    const callCostInr = (nonCachedPrompt * inrPromptRate) + (cachedTokens * inrCachedRate) + (cTokens * inrCandidateRate);
+                    const callCostInr = (nonCachedPrompt * inrPromptRate) + (cachedTokens * inrCachedRate) + (cTokens * inrCandidateRate) + thinkingAdjustmentInr;
                     const callCostUsd = callCostInr / 86;
 
                     apiCallLedger.push({

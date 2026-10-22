@@ -61,6 +61,38 @@ function getSubjectDirectives(subject) {
     return `\n=== SUBJECT-SPECIFIC BOARD DIRECTIVES: ${subjectHeader} ===\n${JSON.stringify(selectedRules)}\n`;
 }
 
+function getBatchJobsFilePath() {
+    const primaryPath = path.join(process.cwd(), 'api', 'batch-jobs.json');
+    if (fs.existsSync(primaryPath)) return primaryPath;
+    const rootPath = path.join(process.cwd(), 'batch-jobs.json');
+    if (fs.existsSync(rootPath)) return rootPath;
+    return path.join('/tmp', 'batch-jobs.json');
+}
+
+function loadSavedBatchJobs() {
+    const fPath = getBatchJobsFilePath();
+    try {
+        if (fs.existsSync(fPath)) {
+            const raw = fs.readFileSync(fPath, 'utf8');
+            const data = JSON.parse(raw);
+            if (Array.isArray(data)) return data;
+        }
+    } catch (_) {}
+    return [];
+}
+
+function saveBatchJobsList(jobs) {
+    const primaryDir = path.join(process.cwd(), 'api');
+    try {
+        if (!fs.existsSync(primaryDir)) fs.mkdirSync(primaryDir, { recursive: true });
+        fs.writeFileSync(path.join(primaryDir, 'batch-jobs.json'), JSON.stringify(jobs, null, 2), 'utf8');
+        return;
+    } catch (_) {}
+    try {
+        fs.writeFileSync(path.join('/tmp', 'batch-jobs.json'), JSON.stringify(jobs, null, 2), 'utf8');
+    } catch (_) {}
+}
+
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -85,6 +117,66 @@ export default async function handler(req, res) {
     }
     const apiKey = rawKeys.split(",")[0].trim();
     const action = body.action || "create";
+
+    // ==========================================
+    // ACTION: LIST (Fetch batch jobs without client Firestore rules)
+    // ==========================================
+    if (action === "list") {
+        try {
+            const savedJobs = loadSavedBatchJobs();
+            let googleBatches = [];
+            try {
+                const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/batches?key=${apiKey}`);
+                if (gRes.ok) {
+                    const gData = await gRes.json();
+                    googleBatches = gData.batches || [];
+                }
+            } catch (_) {}
+
+            const updatedJobs = savedJobs.map(j => {
+                const live = googleBatches.find(gb => gb.name === j.batchId || gb.name === `batches/${j.batchId}`);
+                if (live) {
+                    return {
+                        ...j,
+                        status: live.state || j.status,
+                        updateTime: live.updateTime || j.updateTime
+                    };
+                }
+                return j;
+            });
+
+            googleBatches.forEach(gb => {
+                const exists = updatedJobs.some(j => j.batchId === gb.name || `batches/${j.batchId}` === gb.name);
+                if (!exists) {
+                    updatedJobs.push({
+                        id: gb.name.replace('batches/', ''),
+                        batchId: gb.name,
+                        sessionName: gb.displayName || 'Batch Job',
+                        studentCount: 1,
+                        status: gb.state || 'JOB_STATE_PENDING',
+                        createdAt: gb.createTime || new Date().toISOString()
+                    });
+                }
+            });
+
+            saveBatchJobsList(updatedJobs);
+            return res.status(200).json({ success: true, jobs: updatedJobs });
+        } catch (err) {
+            console.error("Batch list error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+    }
+
+    // ==========================================
+    // ACTION: DELETE (Remove batch job from registry)
+    // ==========================================
+    if (action === "delete") {
+        const batchId = body.batchId || "";
+        const saved = loadSavedBatchJobs();
+        const filtered = saved.filter(j => j.batchId !== batchId && j.id !== batchId && j.batchId !== `batches/${batchId}`);
+        saveBatchJobsList(filtered);
+        return res.status(200).json({ success: true, message: "Batch job deleted from registry." });
+    }
 
     // ==========================================
     // ACTION: STATUS (Poll existing batch job)
@@ -219,6 +311,16 @@ export default async function handler(req, res) {
                         rawOutput: rawText
                     });
                 }
+            }
+
+            // Mark job as SYNCED in server registry
+            const allSaved = loadSavedBatchJobs();
+            const targetJ = allSaved.find(j => j.batchId === batchId || j.id === batchId || `batches/${j.id}` === batchId);
+            if (targetJ) {
+                targetJ.status = 'SYNCED';
+                targetJ.syncedCount = parsedResults.length;
+                targetJ.syncedAt = new Date().toISOString();
+                saveBatchJobsList(allSaved);
             }
 
             return res.status(200).json({
@@ -380,6 +482,22 @@ Return STRICT JSON:
         }
 
         console.log("🎉 Google Batch Job Created Successfully:", data.name);
+
+        const newJob = {
+            id: data.name.replace('batches/', ''),
+            batchId: data.name,
+            sessionId: sessionId || null,
+            sessionName: examName || 'Exam Assessment',
+            subject: subject || 'General',
+            studentCount: students.length,
+            studentsMetadata: students.map(s => ({ studentName: s.studentName, pageCount: Array.isArray(s.pages) ? s.pages.length : 1 })),
+            maxMarks: Number(maxMarks) || 40,
+            status: data.state || "JOB_STATE_PENDING",
+            createdAt: data.createTime || new Date().toISOString()
+        };
+        const allJobs = loadSavedBatchJobs();
+        allJobs.unshift(newJob);
+        saveBatchJobsList(allJobs);
 
         return res.status(200).json({
             success: true,

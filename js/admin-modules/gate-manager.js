@@ -76,8 +76,8 @@ export async function loadGateCredentials() {
         await loadFromBackendApi(listBody);
 
     } catch (err) {
-        console.warn("⚠️ Firestore access restricted, fetching from backend API:", err.message);
-        await loadFromBackendApi(listBody, true);
+        // Fallback directly to serverless API without client permission alert
+        await loadFromBackendApi(listBody, false);
     }
 }
 

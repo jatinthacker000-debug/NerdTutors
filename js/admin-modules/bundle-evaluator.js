@@ -525,28 +525,12 @@ async function submitGoogleBatchJob() {
             console.log("💰 Applied Discount:      50% Asynchronous Batch Discount");
             console.log("🕒 Initial State:         ", data.state || "JOB_STATE_PENDING");
 
-            // Save active batch record in Firestore batchJobs collection
-            await addDoc(collection(db, 'batchJobs'), {
-                batchId: data.batchId,
-                displayName: data.displayName || selectedBundleSession.name,
-                sessionId: selectedBundleSession.id,
-                sessionName: selectedBundleSession.name,
-                class: selectedBundleSession.class || 'Class 12th',
-                subject: selectedBundleSession.subject || 'Economics',
-                targetGroup: selectedBundleSession.targetGroup || 'Both',
-                maxMarks: Number(selectedBundleSession.maxMarks) || 40,
-                studentCount: pendingStudents.length,
-                studentsMetadata: pendingStudents.map(s => ({ studentName: s.studentName })),
-                status: data.state || 'JOB_STATE_PENDING',
-                createdAt: serverTimestamp()
-            });
-
             // Clear the upper segment inputs smoothly without full page refresh
             queuedBundleStudents = [];
             renderBundleQueue();
 
             showToast(`🎉 Batch Job created: ${data.batchId}! Track progress in registry below.`, "success");
-            loadBatchJobs(true);
+            await loadBatchJobs(true);
 
         } catch (err) {
             console.error("Batch submission error:", err);
@@ -561,29 +545,26 @@ async function submitGoogleBatchJob() {
     }
 
     // ==================== BATCH JOBS REGISTRY & SYNC ====================
-    let unsubscribeBatchJobs = null;
+    let cachedBatchJobs = [];
 
-    export function loadBatchJobs(forceToast = false) {
+    export async function loadBatchJobs(forceToast = false) {
         const container = document.getElementById('batchJobsListContainer');
         if (!container) return;
 
-        if (unsubscribeBatchJobs) {
-            unsubscribeBatchJobs();
-            unsubscribeBatchJobs = null;
-        }
-
-        const q = query(collection(db, 'batchJobs'), orderBy('createdAt', 'desc'));
-        unsubscribeBatchJobs = onSnapshot(q, (snapshot) => {
-            const jobs = [];
-            snapshot.forEach(docSnap => {
-                jobs.push({ id: docSnap.id, ...docSnap.data() });
-            });
-            renderBatchJobs(jobs);
-            if (forceToast) showToast("Batch jobs registry refreshed.", "info");
-        }, (err) => {
-            console.warn("Batch jobs snapshot error:", err.message);
+        try {
+            const res = await fetch('/api/batch-evaluate?action=list');
+            const data = await res.json();
+            if (res.ok && Array.isArray(data.jobs)) {
+                cachedBatchJobs = data.jobs;
+                renderBatchJobs(cachedBatchJobs);
+                if (forceToast) showToast("Batch jobs registry refreshed.", "info");
+            } else {
+                renderBatchJobs([]);
+            }
+        } catch (err) {
+            console.warn("Batch jobs fetch error:", err.message);
             container.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load batch jobs: ${escapeHtml(err.message)}</div>`;
-        });
+        }
     }
 
     function renderBatchJobs(jobs) {
@@ -668,23 +649,23 @@ async function submitGoogleBatchJob() {
             }
 
             const currentState = statusData.state || 'JOB_STATE_PENDING';
-            await updateDoc(doc(db, 'batchJobs', docId), { status: currentState });
 
             if (currentState === 'JOB_STATE_RUNNING' || currentState === 'JOB_STATE_PENDING') {
                 showToast(`⏳ Batch is still processing in Google's queue (${currentState}). Check back in a few minutes.`, "info");
+                await loadBatchJobs(false);
                 return;
             }
 
             if (currentState === 'JOB_STATE_FAILED') {
                 showToast(`⚠️ Batch job failed on Google Cloud: ${statusData.error?.message || 'Unknown error'}`, "error");
+                await loadBatchJobs(false);
                 return;
             }
 
             if (currentState === 'JOB_STATE_SUCCEEDED') {
                 showToast("🎉 Batch completed by Google! Syncing parsed report cards to Firestore...", "info");
 
-                const batchDocSnap = await getDoc(doc(db, 'batchJobs', docId));
-                const batchJobData = batchDocSnap.data() || {};
+                const batchJobData = cachedBatchJobs.find(j => j.batchId === batchId || j.id === batchId || j.id === docId) || {};
 
                 const syncRes = await fetch('/api/batch-evaluate', {
                     method: 'POST',
@@ -732,12 +713,7 @@ async function submitGoogleBatchJob() {
                     }
                 }
 
-                await updateDoc(doc(db, 'batchJobs', docId), {
-                    status: 'SYNCED',
-                    syncedCount: syncedCount,
-                    syncedAt: serverTimestamp()
-                });
-
+                await loadBatchJobs(false);
                 showToast(`🎉 Success! ${syncedCount} student papers successfully synced into testResults!`, "success");
             }
         } catch (err) {
@@ -749,8 +725,14 @@ async function submitGoogleBatchJob() {
     async function deleteBatchJob(docId) {
         if (!confirm("Are you sure you want to delete this batch job record from the registry?")) return;
         try {
-            await deleteDoc(doc(db, 'batchJobs', docId));
+            const res = await fetch('/api/batch-evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', batchId: docId })
+            });
+            if (!res.ok) throw new Error("Failed to delete batch job");
             showToast("Batch job record deleted.", "info");
+            await loadBatchJobs(false);
         } catch (e) {
             showToast("Error deleting batch job: " + e.message, "error");
         }
