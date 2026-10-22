@@ -1483,7 +1483,9 @@ document.getElementById('editSessionForm')?.addEventListener('submit', async (e)
             maxMarks,
             questions,
             markingScheme,
-            otherInstructions
+            otherInstructions,
+            cachedContentId: null,
+            cacheExpiresAt: null
         });
         showToast("Test Session updated successfully!", "success");
         document.getElementById('editSessionModal')?.classList.remove('show');
