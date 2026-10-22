@@ -112,7 +112,21 @@ This section contains the exact implementations, structures, and business logic 
 * **Defend vs Refute Stance Enforcement:** When an exam question requires students to Defend or Refute a statement, choosing the incorrect stance is a fatal premise error. It is capped to a maximum of 1.0 mark in both the system prompt and programmatically via `wrongStance` detection in `api/ocr-evaluate.js`.
 * **Strict Objective Marking (No Leniency):** Eliminates unwarranted full marks on subjective questions; answers missing core technical keywords or value points receive immediate 0.5 to 1.0 mark deductions, aligning with strict human board moderators.
 * **Feedback Token Budget:** Individual question feedback is strictly capped at 15 words, and improvement recommendations are limited to a maximum of 2 concise items (max 15 words each).
+---
 
-
-
+## 11. Google Gemini Asynchronous Batch API (50% Cost Reduction Architecture)
+* **Official 50% Batch Discount:** Google's Batch API evaluates bulk requests asynchronously at an official 50% discount on both prompt and candidate tokens compared to standard generation.
+* **Inline Requests vs Input Files:**
+  * **Inline Requests (`ai.batches.create` with `src: inlinedRequests`):** Ideal for payloads under 20MB. An array of `GenerateContentRequest` objects containing contents, system instructions, and structured schemas (`responseMimeType: 'application/json'`). Results are retrieved via `dest.inlinedResponses`.
+  * **Input Files (JSONL via File API):** For massive multi-gigabyte sets (up to 2GB), requests are written line-by-line (`{"key": "req-1", "request": {...}}`), uploaded via File API (`ai.files.upload`), and evaluated with output written to a completed destination file.
+* **Job States & Lifecycle:**
+  * `JOB_STATE_PENDING`: Enqueued in Google Cloud's distributed scheduler.
+  * `JOB_STATE_RUNNING`: Active processing underway.
+  * `JOB_STATE_SUCCEEDED`: Evaluation complete. Results ready for download/extraction.
+  * `JOB_STATE_FAILED`: Unrecoverable execution error.
+  * `JOB_STATE_CANCELLED`: Job aborted by client.
+  * `JOB_STATE_EXPIRED`: Job exceeded 48-hour execution window.
+* **Polling & Webhook Retrieval:**
+  * Client polls via `ai.batches.get({ name: batchJob.name })` or subscribes to webhook event `batch.succeeded`.
+  * Results are extracted from `batchJob.dest.inlinedResponses` (or file buffer if file-based), parsed through CBSE zero-error safety nets (clamping, binary MCQ hard-lock, defend/refute caps), and batch-inserted into Firestore `testResults`.
 

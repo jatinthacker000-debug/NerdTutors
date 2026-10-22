@@ -3034,4 +3034,74 @@
                 justify-content: center;
                 padding: 0.7rem;
             }
+        }
+
+        /* Responsive & Small Screen Padding Reductions for Admin & Bundle Evaluator */
+        @media (max-width: 768px) {
+            body {
+                padding: 8px !important;
+            }
+            .admin-header {
+                padding: 1.25rem 1rem !important;
+                border-radius: 8px 8px 0 0 !important;
+            }
+            .admin-title h1 {
+                font-size: 1.35rem !important;
+            }
+            .admin-content {
+                padding: 1rem 0.75rem !important;
+                border-radius: 0 0 8px 8px !important;
+            }
+            .tabs {
+                gap: 0.4rem !important;
+                margin-bottom: 1.25rem !important;
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab-btn {
+                padding: 0.5rem 0.85rem !important;
+                font-size: 0.85rem !important;
+                white-space: nowrap;
+            }
+            .question-form {
+                padding: 0.85rem !important;
+            }
+            .bundle-card {
+                padding: 1rem !important;
+                margin-bottom: 1rem !important;
+            }
+            .bundle-dropzone {
+                padding: 1.5rem 0.75rem !important;
+            }
+            .student-segment-card {
+                padding: 0.85rem !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 4px !important;
+            }
+            .admin-header {
+                padding: 1rem 0.75rem !important;
+            }
+            .admin-title h1 {
+                font-size: 1.15rem !important;
+            }
+            .admin-content {
+                padding: 0.75rem 0.5rem !important;
+            }
+            .question-form {
+                padding: 0.65rem !important;
+            }
+            .bundle-card {
+                padding: 0.75rem !important;
+            }
+            .bundle-dropzone {
+                padding: 1.25rem 0.5rem !important;
+            }
+            .student-segment-card {
+                padding: 0.65rem !important;
+            }
         }

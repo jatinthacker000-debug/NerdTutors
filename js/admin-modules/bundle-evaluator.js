@@ -13,6 +13,8 @@ import {
     getDoc,
     updateDoc,
     addDoc,
+    deleteDoc,
+    onSnapshot,
     serverTimestamp,
     query,
     orderBy
@@ -32,15 +34,13 @@ export function setupBundleEvaluator() {
     const btnQuickDrop = document.getElementById('btnQuickDropTrigger');
     const emptyDropZone = document.getElementById('bundleEmptyDropZone');
     const btnAddSegment = document.getElementById('btnAddStudentSegment');
-    const btnEvaluateNow = document.getElementById('btnEvaluateBundleNow');
+    const btnSubmitBatch = document.getElementById('btnSubmitBatchJob');
     const btnClearBundle = document.getElementById('btnClearBundle');
-    const scheduleToggle = document.getElementById('bundleScheduleToggle');
-    const scheduleTimeInput = document.getElementById('bundleScheduleTime');
-    const btnSetSchedule = document.getElementById('btnSetBundleSchedule');
-    const btnCancelSchedule = document.getElementById('btnCancelBundleSchedule');
+    const btnRefreshBatchJobs = document.getElementById('btnRefreshBatchJobs');
 
-    // 1. Load Sessions into Dropdown
+    // 1. Load Sessions into Dropdown & load active Batch Jobs
     loadBundleSessions();
+    loadBatchJobs();
 
     sessionSelect?.addEventListener('change', (e) => {
         const sessionId = e.target.value;
@@ -98,39 +98,23 @@ export function setupBundleEvaluator() {
         showToast("All student segments cleared.", "info");
     });
 
-    // 5. Evaluate Bundle Now Trigger
-    btnEvaluateNow?.addEventListener('click', () => {
-        startBundleEvaluation();
+    // 5. Submit Batch Job Trigger (Asynchronous 50% discount)
+    btnSubmitBatch?.addEventListener('click', () => {
+        submitGoogleBatchJob();
     });
 
-    // 6. Scheduling
-    scheduleToggle?.addEventListener('change', (e) => {
-        const scheduleControls = document.getElementById('bundleScheduleControls');
-        if (scheduleControls) {
-            scheduleControls.style.display = e.target.checked ? 'flex' : 'none';
-        }
+    btnRefreshBatchJobs?.addEventListener('click', () => {
+        loadBatchJobs(true);
     });
 
-    btnSetSchedule?.addEventListener('click', () => {
-        const timeVal = scheduleTimeInput?.value;
-        if (!timeVal) {
-            showToast("Please pick a scheduled time first", "warning");
-            return;
-        }
-        setupSchedule(timeVal);
-    });
-
-    btnCancelSchedule?.addEventListener('click', () => {
-        cancelSchedule();
-        showToast("Scheduled bundle evaluation cancelled.", "info");
-    });
-
-    // Global window handlers for student card interactions
+    // Global window handlers for student card and batch registry interactions
     window.addBundleStudentSegment = () => addStudentSegment();
     window.removeBundleStudent = (studentId) => removeStudent(studentId);
     window.updateBundleStudentName = (studentId, name) => updateStudentName(studentId, name);
     window.handleStudentPagesUpload = (studentId, files) => handleStudentPages(studentId, Array.from(files));
     window.removePageFromStudent = (studentId, pageId) => removePage(studentId, pageId);
+    window.checkAndSyncBatchJob = (batchId, docId) => checkAndSyncBatch(batchId, docId);
+    window.deleteBatchJobDoc = (docId) => deleteBatchJob(docId);
 }
 
 export async function loadBundleSessions() {
@@ -372,6 +356,7 @@ function renderBundleQueue() {
     const totalStudents = queuedBundleStudents.length;
     const totalPages = queuedBundleStudents.reduce((sum, s) => sum + s.pages.length, 0);
 
+    const btnSubmitBatch = document.getElementById('btnSubmitBatchJob');
     if (totalStudents === 0) {
         if (emptyDropZone) emptyDropZone.style.display = 'block';
         if (container) {
@@ -379,7 +364,10 @@ function renderBundleQueue() {
             container.innerHTML = '';
         }
         if (queueCard) queueCard.style.display = 'none';
-        if (btnEvaluateNow) btnEvaluateNow.disabled = true;
+        if (btnSubmitBatch) {
+            btnSubmitBatch.disabled = true;
+            btnSubmitBatch.innerHTML = `⚡ Submit Google Batch Job (0 Students)`;
+        }
         return;
     }
 
@@ -387,9 +375,9 @@ function renderBundleQueue() {
     if (container) container.style.display = 'flex';
     if (queueCard) queueCard.style.display = 'block';
 
-    if (btnEvaluateNow) {
-        btnEvaluateNow.disabled = isEvaluatingBundle || totalPages === 0;
-        btnEvaluateNow.innerHTML = `🚀 Evaluate Bundle Now (${totalStudents} Students · ${totalPages} Pages)`;
+    if (btnSubmitBatch) {
+        btnSubmitBatch.disabled = isEvaluatingBundle || totalPages === 0;
+        btnSubmitBatch.innerHTML = `⚡ Submit Google Batch Job (${totalStudents} Students · ${totalPages} Pages)`;
     }
     if (queueCountBadge) {
         queueCountBadge.textContent = `${totalStudents} Students (${totalPages} Pages)`;
@@ -479,190 +467,300 @@ async function startBundleEvaluation() {
         return;
     }
 
-    const pendingStudents = queuedBundleStudents.filter(s => (s.status === 'ready' || s.status === 'error') && s.pages.length > 0);
-    if (pendingStudents.length === 0) {
-        showToast("No pending students with uploaded pages to evaluate.", "warning");
+// ==================== BUNDLE BATCH RUNNER (ASYNCHRONOUS) ====================
+async function submitGoogleBatchJob() {
+    if (isEvaluatingBundle) return;
+    if (!selectedBundleSession) {
+        showToast("Please select an Exam Session first.", "warning");
         return;
     }
 
+    const pendingStudents = queuedBundleStudents.filter(s => s.pages && s.pages.length > 0);
+    if (pendingStudents.length === 0) {
+        showToast("Please add at least 1 student with answer sheet pages before submitting.", "warning");
+        return;
+    }
+
+    const btnSubmit = document.getElementById('btnSubmitBatchJob');
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `⏳ Submitting Batch to Google Cloud...`;
+    }
     isEvaluatingBundle = true;
-    renderBundleQueue();
 
-    const progressCard = document.getElementById('bundleProgressCard');
-    const progressBar = document.getElementById('bundleProgressBar');
-    const progressStatus = document.getElementById('bundleProgressStatus');
-    const progressCount = document.getElementById('bundleProgressCount');
+    try {
+        showToast("⚡ Connecting to Google Gemini Batch API...", "info");
 
-    if (progressCard) progressCard.style.display = 'block';
+        // Format payload for /api/batch-evaluate
+        const studentsPayload = pendingStudents.map(st => ({
+            studentName: st.studentName || "Student",
+            pages: st.pages.map(p => ({
+                base64: p.base64,
+                mimeType: p.mimeType || "image/jpeg"
+            }))
+        }));
 
-    let completedCount = 0;
-    const totalToProcess = pendingStudents.length;
+        const requestBody = {
+            action: 'create',
+            sessionId: selectedBundleSession.id,
+            examName: selectedBundleSession.name,
+            subject: selectedBundleSession.subject,
+            questions: selectedBundleSession.questions,
+            markingScheme: selectedBundleSession.markingScheme,
+            maxMarks: Number(selectedBundleSession.maxMarks) || 40,
+            otherInstructions: selectedBundleSession.otherInstructions || "",
+            cachedContentId: selectedBundleSession.cachedContentId || null,
+            model: 'gemini-4-argon',
+            students: studentsPayload
+        };
 
-    // ⚡ CONTEXT CACHING: Auto-create shared context cache if missing (75% savings for all students)
-    let activeCacheId = selectedBundleSession.cachedContentId || null;
-    if (!activeCacheId && selectedBundleSession.questions && selectedBundleSession.markingScheme) {
-        try {
-            if (progressStatus) progressStatus.textContent = "⚡ Building shared Gemini Context Cache for bundle (75% discount)...";
-            const cacheRes = await fetch('/api/create-cache', {
+        const res = await fetch('/api/batch-evaluate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || "Failed to submit Google Batch Job");
+        }
+
+        // 🚀 Prominent Color-Coded Console Log
+        console.log("%c🚀 GOOGLE GEMINI BATCH JOB CREATED SUCCESSFULLY!", "background: #4f46e5; color: #ffffff; font-size: 14px; font-weight: bold; padding: 6px 12px; border-radius: 6px;");
+        console.log("🆔 Batch Job ID:         ", data.batchId);
+        console.log("📚 Exam Session:          ", selectedBundleSession.name);
+        console.log("👥 Total Students Queued: ", pendingStudents.length);
+        console.log("💰 Applied Discount:      50% Asynchronous Batch Discount");
+        console.log("🕒 Initial State:         ", data.state || "JOB_STATE_PENDING");
+
+        // Save active batch record in Firestore batchJobs collection
+        await addDoc(collection(db, 'batchJobs'), {
+            batchId: data.batchId,
+            displayName: data.displayName || selectedBundleSession.name,
+            sessionId: selectedBundleSession.id,
+            sessionName: selectedBundleSession.name,
+            class: selectedBundleSession.class || 'Class 12th',
+            subject: selectedBundleSession.subject || 'Economics',
+            targetGroup: selectedBundleSession.targetGroup || 'Both',
+            maxMarks: Number(selectedBundleSession.maxMarks) || 40,
+            studentCount: pendingStudents.length,
+            studentsMetadata: pendingStudents.map(s => ({ studentName: s.studentName })),
+            status: data.state || 'JOB_STATE_PENDING',
+            createdAt: serverTimestamp()
+        });
+
+        // Clear the upper segment inputs smoothly without full page refresh
+        queuedBundleStudents = [];
+        renderBundleQueue();
+
+        showToast(`🎉 Batch Job created: ${data.batchId}! Track progress in registry below.`, "success");
+        loadBatchJobs(true);
+
+    } catch (err) {
+        console.error("Batch submission error:", err);
+        showToast(err.message, "error");
+    } finally {
+        isEvaluatingBundle = false;
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = `⚡ Submit Google Batch Job (${queuedBundleStudents.length} Students)`;
+        }
+    }
+}
+
+// ==================== BATCH JOBS REGISTRY & SYNC ====================
+let unsubscribeBatchJobs = null;
+
+export function loadBatchJobs(forceToast = false) {
+    const container = document.getElementById('batchJobsListContainer');
+    if (!container) return;
+
+    if (unsubscribeBatchJobs) {
+        unsubscribeBatchJobs();
+        unsubscribeBatchJobs = null;
+    }
+
+    const q = query(collection(db, 'batchJobs'), orderBy('createdAt', 'desc'));
+    unsubscribeBatchJobs = onSnapshot(q, (snapshot) => {
+        const jobs = [];
+        snapshot.forEach(docSnap => {
+            jobs.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        renderBatchJobs(jobs);
+        if (forceToast) showToast("Batch jobs registry refreshed.", "info");
+    }, (err) => {
+        console.warn("Batch jobs snapshot error:", err.message);
+        container.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load batch jobs: ${escapeHtml(err.message)}</div>`;
+    });
+}
+
+function renderBatchJobs(jobs) {
+    const container = document.getElementById('batchJobsListContainer');
+    if (!container) return;
+
+    if (!jobs || jobs.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; color: #94a3b8; padding: 2rem 1rem; background: #fafafa; border-radius: 8px; border: 1.5px dashed #e2e8f0;">
+                <div style="font-size: 1.8rem; margin-bottom: 0.25rem;">📦</div>
+                <strong style="color: #475569; font-size: 0.95rem;">No Batch Jobs Found</strong>
+                <p style="margin: 0.25rem 0 0 0; font-size: 0.82rem; color: #64748b;">Add students above and click "Submit Google Batch Job" to create an asynchronous batch.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    jobs.forEach(job => {
+        const batchId = job.batchId || 'batches/unknown';
+        const sessionName = job.sessionName || job.displayName || 'Exam Assessment';
+        const studentCount = job.studentCount || job.studentsMetadata?.length || 0;
+        const status = job.status || 'JOB_STATE_PENDING';
+
+        let statusPill = `<span style="background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">⏳ PENDING</span>`;
+        if (status === 'JOB_STATE_RUNNING') {
+            statusPill = `<span style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🔄 RUNNING ON GOOGLE</span>`;
+        } else if (status === 'JOB_STATE_SUCCEEDED') {
+            statusPill = `<span style="background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">🎉 SUCCEEDED (READY)</span>`;
+        } else if (status === 'SYNCED') {
+            statusPill = `<span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">✅ SYNCED TO RESULTS</span>`;
+        } else if (status === 'JOB_STATE_FAILED') {
+            statusPill = `<span style="background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">❌ FAILED</span>`;
+        }
+
+        const dateStr = job.createdAt?.toDate ? job.createdAt.toDate().toLocaleString() : 'Just now';
+
+        html += `
+            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div style="min-width: 260px; flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+                        <span style="font-family: monospace; font-size: 0.85rem; font-weight: 700; background: #f1f5f9; color: #1e293b; padding: 2px 6px; border-radius: 4px;">
+                            ${escapeHtml(batchId)}
+                        </span>
+                        ${statusPill}
+                    </div>
+                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
+                        ${escapeHtml(sessionName)} · <span style="color: #64748b; font-weight: 600; font-size: 0.85rem;">${studentCount} Students</span>
+                    </div>
+                    <div style="color: #94a3b8; font-size: 0.78rem; margin-top: 0.2rem;">
+                        Submitted: ${dateStr}
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <button type="button" onclick="window.checkAndSyncBatchJob('${escapeHtml(batchId)}', '${job.id}')"
+                        style="background: #4f46e5; color: white; border: none; padding: 0.45rem 0.9rem; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem;">
+                        🔄 Check Status & Sync
+                    </button>
+                    <button type="button" onclick="window.deleteBatchJobDoc('${job.id}')"
+                        style="background: #f1f5f9; color: #dc2626; border: 1px solid #fee2e2; padding: 0.45rem 0.65rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+async function checkAndSyncBatch(batchId, docId) {
+    try {
+        showToast(`Checking status of ${batchId}...`, "info");
+
+        // 1. Check status
+        const statusRes = await fetch(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`);
+        const statusData = await statusRes.json();
+
+        if (!statusRes.ok) {
+            throw new Error(statusData.error || "Failed to check batch status");
+        }
+
+        const currentState = statusData.state || 'JOB_STATE_PENDING';
+        await updateDoc(doc(db, 'batchJobs', docId), { status: currentState });
+
+        if (currentState === 'JOB_STATE_RUNNING' || currentState === 'JOB_STATE_PENDING') {
+            showToast(`⏳ Batch is still processing in Google's queue (${currentState}). Check back in a few minutes.`, "info");
+            return;
+        }
+
+        if (currentState === 'JOB_STATE_FAILED') {
+            showToast(`⚠️ Batch job failed on Google Cloud: ${statusData.error?.message || 'Unknown error'}`, "error");
+            return;
+        }
+
+        if (currentState === 'JOB_STATE_SUCCEEDED') {
+            showToast("🎉 Batch completed by Google! Syncing parsed report cards to Firestore...", "info");
+
+            const batchDocSnap = await getDoc(doc(db, 'batchJobs', docId));
+            const batchJobData = batchDocSnap.data() || {};
+
+            const syncRes = await fetch('/api/batch-evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sessionId: selectedBundleSession.id,
-                    examName: selectedBundleSession.name,
-                    subject: selectedBundleSession.subject,
-                    questions: selectedBundleSession.questions,
-                    markingScheme: selectedBundleSession.markingScheme,
-                    model: 'gemini-4-argon',
-                    ttlHours: 72
+                    action: 'sync',
+                    batchId: batchId,
+                    maxMarks: batchJobData.maxMarks || 40,
+                    studentsMetadata: batchJobData.studentsMetadata || []
                 })
             });
-            const rawText = await cacheRes.text();
-            let cacheData = {};
-            try { cacheData = JSON.parse(rawText); } catch (_) {}
-            if (cacheData && cacheData.cachedContentId) {
-                activeCacheId = cacheData.cachedContentId;
-                selectedBundleSession.cachedContentId = activeCacheId;
-                await updateDoc(doc(db, 'testSessions', selectedBundleSession.id), {
-                    cachedContentId: activeCacheId,
-                    cacheExpiresAt: cacheData.expireTime || null
-                });
-                renderSessionCacheStatus();
-                console.log("⚡ Context cache created for bundle run:", activeCacheId);
-            }
-        } catch (cErr) {
-            console.warn("Bundle cache creation notice:", cErr.message);
-        }
-    }
 
-    // Process each student sequentially (1 student per HTTP request, perfectly within Vercel's 4.5MB limit)
-    for (let i = 0; i < pendingStudents.length; i++) {
-        const student = pendingStudents[i];
-        student.status = 'evaluating';
-        renderBundleQueue();
-
-        if (progressStatus) progressStatus.textContent = `Grading student ${i + 1} of ${totalToProcess}: ${student.studentName} (${student.pages.length} pages)...`;
-        if (progressCount) progressCount.textContent = `${i + 1} / ${totalToProcess}`;
-        if (progressBar) progressBar.style.width = `${Math.round(((i) / totalToProcess) * 100)}%`;
-
-        try {
-            // Bundle all pages of this student into the images payload
-            const imagesPayload = student.pages.map(p => ({
-                data: p.base64,
-                mimeType: p.mimeType
-            }));
-
-            const payload = {
-                mode: 'session-evaluate',
-                model: 'gemini-4-argon',
-                thinkingLevel: 'medium',
-                questions: selectedBundleSession.questions,
-                markingScheme: selectedBundleSession.markingScheme,
-                maxMarks: selectedBundleSession.maxMarks,
-                images: imagesPayload,
-                subject: selectedBundleSession.subject,
-                otherInstructions: selectedBundleSession.otherInstructions || "",
-                cachedContentId: activeCacheId // Enables 75% cached discount
-            };
-
-            const evalRes = await fetch('/api/ocr-evaluate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const evalData = await evalRes.json();
-            if (!evalRes.ok) {
-                throw new Error(evalData.error || "Grading error");
+            const syncData = await syncRes.json();
+            if (!syncRes.ok) {
+                throw new Error(syncData.error || "Failed to parse batch results from Google Cloud");
             }
 
-            // Save directly to Firestore testResults collection
-            const lockedMax = Number(selectedBundleSession.maxMarks) || 40;
-            const clampedScore = Math.min(Math.max(0, Number(evalData.totalScore) || 0), lockedMax);
+            const parsedResults = syncData.parsedResults || [];
+            let syncedCount = 0;
 
-            const docRef = await addDoc(collection(db, 'testResults'), {
-                studentName: student.studentName,
-                studentId: null,
-                batch: selectedBundleSession.targetGroup || 'Both',
-                class: selectedBundleSession.class || 'Class 12th',
-                subject: selectedBundleSession.subject || 'Economics',
-                sessionId: selectedBundleSession.id,
-                sessionName: selectedBundleSession.name || 'Bundle Exam',
-                score: clampedScore,
-                maxMarks: lockedMax,
-                overallFeedback: evalData.overallFeedback || '',
-                improvements: evalData.improvements || [],
-                breakdown: evalData.results || [],
-                modelUsed: evalData.modelUsed || 'gemini-4-argon',
-                tokenUsage: evalData.tokenUsage || null,
-                isBundleEvaluated: true,
-                createdAt: serverTimestamp()
+            for (const item of parsedResults) {
+                if (item.result) {
+                    const lockedMax = Number(batchJobData.maxMarks) || 40;
+                    const clampedScore = Math.min(Math.max(0, Number(item.result.totalScore) || 0), lockedMax);
+
+                    await addDoc(collection(db, 'testResults'), {
+                        studentName: item.studentName || 'Student',
+                        studentId: null,
+                        batch: batchJobData.targetGroup || 'Both',
+                        class: batchJobData.class || 'Class 12th',
+                        subject: batchJobData.subject || 'Economics',
+                        sessionId: batchJobData.sessionId || null,
+                        sessionName: batchJobData.sessionName || 'Batch Exam',
+                        score: clampedScore,
+                        maxMarks: lockedMax,
+                        overallFeedback: item.result.overallFeedback || '',
+                        improvements: item.result.improvements || [],
+                        breakdown: item.result.results || [],
+                        modelUsed: 'gemini-4-argon',
+                        isBatchEvaluated: true,
+                        batchId: batchId,
+                        createdAt: serverTimestamp()
+                    });
+                    syncedCount++;
+                }
+            }
+
+            await updateDoc(doc(db, 'batchJobs', docId), {
+                status: 'SYNCED',
+                syncedCount: syncedCount,
+                syncedAt: serverTimestamp()
             });
 
-            student.status = 'completed';
-            student.result = evalData;
-            student.resultId = docRef.id;
-            completedCount++;
-
-        } catch (evalErr) {
-            console.error(`Error evaluating student ${student.studentName}:`, evalErr);
-            student.status = 'error';
-            student.errorMessage = evalErr.message;
+            showToast(`🎉 Success! ${syncedCount} student papers successfully synced into testResults!`, "success");
         }
-
-        renderBundleQueue();
-        if (progressBar) progressBar.style.width = `${Math.round(((i + 1) / totalToProcess) * 100)}%`;
+    } catch (err) {
+        console.error("Check & sync error:", err);
+        showToast(err.message, "error");
     }
-
-    isEvaluatingBundle = false;
-    if (progressBar) progressBar.style.width = '100%';
-    if (progressStatus) progressStatus.textContent = `🎉 Bundle completed! ${completedCount} of ${totalToProcess} students evaluated successfully.`;
-
-    renderBundleQueue();
-    showToast(`Bundle grading finished! ${completedCount} student(s) evaluated.`, 'success');
 }
 
-// ==================== SCHEDULING LOGIC ====================
-function setupSchedule(timeString) {
-    cancelSchedule();
-
-    const [targetHours, targetMinutes] = timeString.split(':').map(Number);
-    const now = new Date();
-    const target = new Date();
-    target.setHours(targetHours, targetMinutes, 0, 0);
-
-    if (target.getTime() <= now.getTime()) {
-        target.setDate(target.getDate() + 1);
-    }
-
-    const msUntilTarget = target.getTime() - now.getTime();
-    scheduledTimeStr = target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const statusBadge = document.getElementById('bundleScheduleCountdown');
-    if (statusBadge) {
-        statusBadge.style.display = 'inline-block';
-        statusBadge.textContent = `⏰ Scheduled for ${scheduledTimeStr} (waiting...)`;
-    }
-
-    bundleScheduleTimer = setTimeout(() => {
-        showToast(`⏰ Scheduled time reached! Starting bundle evaluation...`, 'info');
-        startBundleEvaluation();
-        cancelSchedule();
-    }, msUntilTarget);
-
-    showToast(`Bundle evaluation scheduled for ${scheduledTimeStr}!`, 'success');
-}
-
-function cancelSchedule() {
-    if (bundleScheduleTimer) {
-        clearTimeout(bundleScheduleTimer);
-        bundleScheduleTimer = null;
-    }
-    scheduledTimeStr = null;
-    const statusBadge = document.getElementById('bundleScheduleCountdown');
-    if (statusBadge) {
-        statusBadge.style.display = 'none';
-        statusBadge.textContent = '';
+async function deleteBatchJob(docId) {
+    if (!confirm("Are you sure you want to delete this batch job record from the registry?")) return;
+    try {
+        await deleteDoc(doc(db, 'batchJobs', docId));
+        showToast("Batch job record deleted.", "info");
+    } catch (e) {
+        showToast("Error deleting batch job: " + e.message, "error");
     }
 }
