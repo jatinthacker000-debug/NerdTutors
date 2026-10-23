@@ -130,3 +130,33 @@ This section contains the exact implementations, structures, and business logic 
   * Client polls via `ai.batches.get({ name: batchJob.name })` or subscribes to webhook event `batch.succeeded`.
   * Results are extracted from `batchJob.dest.inlinedResponses` (or file buffer if file-based), parsed through CBSE zero-error safety nets (clamping, binary MCQ hard-lock, defend/refute caps), and batch-inserted into Firestore `testResults`.
 
+---
+
+## 12. Six-Layer Context & Instruction Architecture
+The AI receives instructions exclusively through a decoupled 6-layer hierarchy to prevent prompt bloat and token duplication:
+1. **Layer 1: Exam Session Paper & Key:** Questions, official CBSE marking scheme, and maximum marks (stored in Google Context Cache).
+2. **Layer 2: Teacher Override Directives (`otherInstructions`):** Allow-listed teacher preferences for that specific test session (stored in Google Context Cache).
+3. **Layer 3: Universal CBSE Board Guardrails:** Strict binary MCQs (1 or 0, never fractional), Defend/Refute stance caps, value points over rigid terminology, zero language/spelling deductions in non-language subjects, 15-word feedback budget, math sum invariant, and unattempted question detection (stored in Google Context Cache).
+4. **Layer 4: Targeted Subject Directives (`cbse-rules.json`):** Dynamically filtered by session subject (`ECONOMICS_030`, `ACCOUNTANCY_055`, `BUSINESS_STUDIES_054`, or `SOCIAL_SCIENCE_087`). Irrelevant subjects are strictly excluded to avoid cognitive cross-contamination.
+5. **Layer 5: Cognitive Thinking Guardrails:** Pinned `thinkingLevel: "medium"`, 1-step MCQ verification, anti-discursive thinking rules preventing verbatim essay transcription in internal thoughts (stored in Google Context Cache).
+6. **Layer 6: Mandatory Output JSON Schema:** Rigid JSON structure (`totalScore`, `maxMarks`, `overallFeedback`, `improvements`, `results: [...]`) enforced with `responseMimeType: 'application/json'`.
+
+* **Anti-Duplication Rule for Live Prompts:** When `cachedContentId` is active, the runtime prompt sent with student images MUST remain ultra-lean (~30 tokens) and NEVER repeat the thinking guardrails, teacher overrides, or CBSE rules, as they already exist in Google's active memory.
+
+---
+
+## 13. Academic Research Benchmarks vs. NerdTutors Implementation Matrix
+Derived from the 23 Oct 2026 academic study *"Reliable AI Marking of Handwritten Exam Sheets: Failures and Fixes"*:
+
+| Research Vulnerability & Best Practice | NerdTutors Production Defense | Implementation Status |
+|---|---|---|
+| **Invented weights & sum mismatches** | Deterministic JavaScript clamp (`0 <= score <= maxMarks`) and programmatic sum recalculation | ✅ Active in `api/ocr-evaluate.js` |
+| **MCQ over-award & lenient partial marks** | Strict binary code gate: MCQs dynamically locked to 0.5 or 1.0; wrong option letter forced to `score = 0.0` | ✅ Active in `api/ocr-evaluate.js` |
+| **Student prompt injection (hidden/visible)** | Student image/text fenced as untrusted data; explicit anti-injection system prompt; strict schema-only output | ✅ Active in `api/ocr-evaluate.js` |
+| **Stance error on Defend/Refute questions** | Wrong stance automatically capped to maximum 1.0 mark in prompt and JavaScript | ✅ Active in `api/ocr-evaluate.js` |
+| **Prompt caching of paper & scheme** | Google Cloud Vertex AI Context Caching (75% token discount); student images placed after cached prefix | ✅ Active in `api/create-cache.js` |
+| **Batch API evaluation (50% discount)** | Asynchronous Batch Prediction API with status polling and Firestore sync | ✅ Active in `api/batch-evaluate.js` |
+| **Run-to-run variance at temperature 0** | Locked `temperature: 0.0` AND hard-pinned `seed: 42` across all API calls | ✅ Active in `api/ocr-evaluate.js` |
+| **Blank & skipped question hallucinations** | Explicit presence check: omitted questions forced to `score: 0` with "The question was not attempted" | ✅ Active in `api/ocr-evaluate.js` |
+| **Transcriber over-correction hiding mistakes** | Gemini 4 Argon Direct Single-Pass Vision reads raw handwriting directly against rubric without autocorrecting | ✅ Active in `api/ocr-evaluate.js` |
+
