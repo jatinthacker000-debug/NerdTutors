@@ -242,6 +242,20 @@ window.viewReportCard = function(resultId) {
         <div style="text-align: center; border-bottom: 4px solid #1e3c72; padding-bottom: 1rem; margin-bottom: 1.5rem;">
             <h2 style="color: #1e3c72; margin: 0; font-size: 2rem; font-weight: 800; font-family: 'Poppins', sans-serif;">NERD TUTORS</h2>
             <p style="margin: 4px 0 0 0; color: #718096; font-size: 0.85rem; text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Official Academic Report Card</p>
+            <div style="margin-top: 0.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; font-weight: 700; background: #e0e7ff; color: #3730a3; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid #c7d2fe;">
+                    🤖 ${escapeHtml(res.modelUsed || 'gemini-4-argon')}
+                </span>
+                ${(res.tokenUsage?.cachedTokens > 0 || res.isBatchEvaluated) ? `
+                <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; font-weight: 700; background: #dcfce7; color: #166534; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid #86efac;">
+                    ⚡ ${res.isBatchEvaluated ? 'Google Batch Predicted (50% Off)' : '75% Cached (Google Verified)'}
+                </span>
+                ` : `
+                <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; font-weight: 700; background: #f1f5f9; color: #475569; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid #cbd5e1;">
+                    ⚡ Direct Single-Pass Vision
+                </span>
+                `}
+            </div>
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; font-size: 0.9rem;">
