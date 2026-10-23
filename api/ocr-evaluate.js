@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { getVertexAccessToken } from './vertex-auth.js';
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -345,7 +346,7 @@ export default async function handler(req, res) {
         }
         const mm = questionsExplicitMax || maxMarks || 100;
         console.log(`📄 SESSION EVALUATE MODE: Max Marks = ${mm} (explicit: ${questionsExplicitMax || 'none'}, session: ${maxMarks || 'none'}), Subject = ${subject || 'General'}`);
-        console.log(`⚡ Context Cache Status: ${isExplicitCache ? `ACTIVE (${cachedContentId}) - 75% DISCOUNT` : 'DISABLED (Using Direct Prompt)'}`);
+        console.log(`⚡ Context Cache Status: ${isExplicitCache ? `Cache ID Attached (${cachedContentId}) - Awaiting Google usageMetadata verification` : 'DISABLED (Using Direct Prompt)'}`);
 
         let subjectSpecificInstructions = getSubjectDirectives(subject);
         let universalGuardrailsPrompt = getUniversalGuardrails();
@@ -705,23 +706,36 @@ Return STRICT JSON only (no markdown, no code blocks):
         const projectId = process.env.GCP_PROJECT_ID || "975383880672";
         const location = process.env.GCP_LOCATION || "us-central1";
 
+        let authToken = null;
+        try {
+            authToken = await getVertexAccessToken();
+        } catch (_) {}
+
         for (let attempt = 0; attempt < apiKeys.length; attempt++) {
             const keyIndex = (preferredKeyIndex + attempt) % apiKeys.length;
             const currentKey = apiKeys[keyIndex];
 
-            const isVertex = currentKey.startsWith("AQ.") || Boolean(process.env.VERTEX_API_KEY);
-            const currentModelUrl = isVertex
-                ? `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent`
-                : `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+            const isVertex = currentKey.startsWith("AQ.") || Boolean(process.env.VERTEX_API_KEY) || Boolean(authToken);
+            const headers = { "Content-Type": "application/json" };
+            let callUrl = "";
+
+            if (isVertex && authToken) {
+                headers["Authorization"] = `Bearer ${authToken}`;
+                callUrl = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent`;
+            } else if (isVertex) {
+                callUrl = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent?key=${currentKey}`;
+            } else {
+                callUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${currentKey}`;
+            }
 
             try {
-                console.log(`📡 [${isVertex ? 'Vertex AI' : 'Gemini'} Call] Model: ${modelName}, Key Index: ${keyIndex + 1}/${apiKeys.length}...`);
+                console.log(`📡 [${isVertex ? (authToken ? 'Vertex AI OAuth2' : 'Vertex AI Key') : 'Gemini Studio'} Call] Model: ${modelName}, Key Index: ${keyIndex + 1}/${apiKeys.length}...`);
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-                const response = await fetch(`${currentModelUrl}?key=${currentKey}`, {
+                const response = await fetch(callUrl, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: headers,
                     body: JSON.stringify(reqBody),
                     signal: controller.signal
                 });
@@ -755,6 +769,12 @@ Return STRICT JSON only (no markdown, no code blocks):
                     cumulativeUsage.candidatesTokens += cTokens;
                     cumulativeUsage.cachedTokens += cachedTokens;
                     cumulativeUsage.totalTokens += totTokens;
+
+                    if (cachedTokens > 0) {
+                        console.log(`⚡ [Google Verified Cache Hit] ${cachedTokens.toLocaleString()} tokens served from cache! (75% cost discount applied by Google)`);
+                    } else if (reqBody.cachedContent) {
+                        console.warn(`⚠️ [Google Cache Unused] Google returned 0 cached tokens for ${reqBody.cachedContent}. Full prompt billed.`);
+                    }
 
                     const isCallArgon = modelName.includes("argon") || modelName.includes("gemini-4");
                     const inrPromptRate = isCallArgon ? 0.000383955 : 0.000143983;
@@ -1149,18 +1169,26 @@ Return the response as a strict JSON object.`;
             totalTokens: cumulativeUsage.totalTokens || (cumulativeUsage.promptTokens + cumulativeUsage.candidatesTokens),
             costInr: Number(totalCostInr.toFixed(2)),
             costUsd: Number(totalCostUsd.toFixed(4)),
-            thinkingLevel: isArgonUsed ? (thinkingLevel || "low") : undefined,
-            thinkingBudget: !isArgonUsed ? (thinkingBudget || 256) : undefined,
+            thinkingLevel: isArgonUsed ? (thinkingLevel || "medium") : undefined,
+            thinkingBudget: !isArgonUsed ? (thinkingBudget || 512) : undefined,
             pricingTier: isArgonUsed ? "Gemini 4 Argon Direct Vision (Official GCP List Price)" : "Gemini 3.8 Flash Standard",
             apiCallsCount: apiCallLedger.length,
-            calls: apiCallLedger
+            calls: apiCallLedger,
+            cacheVerified: cumulativeUsage.cachedTokens > 0,
+            cacheDiscountActive: cumulativeUsage.cachedTokens > 0
         };
 
         console.log("\n================================================================================");
         console.log("📊 [GEMINI TOKEN USAGE & COST AUDIT REPORT]");
         console.log(`🤖 Model Executed:       ${result.modelUsed}`);
-        console.log(`⚙️ Thinking Level:       ${isArgonUsed ? (thinkingLevel || 'low') : `budget ${thinkingBudget || 256}`}`);
+        console.log(`⚙️ Thinking Level:       ${isArgonUsed ? (thinkingLevel || 'medium') : `budget ${thinkingBudget || 256}`}`);
         console.log(`📥 Input (Prompt) Tokens: ${cumulativeUsage.promptTokens.toLocaleString()}`);
+        if (cumulativeUsage.cachedTokens > 0) {
+            console.log(`⚡ Cached Tokens:        ${cumulativeUsage.cachedTokens.toLocaleString()} (✅ GOOGLE VERIFIED 75% DISCOUNT APPLIED)`);
+            console.log(`🆕 Fresh Prompt Tokens:  ${Math.max(0, cumulativeUsage.promptTokens - cumulativeUsage.cachedTokens).toLocaleString()}`);
+        } else {
+            console.log(`⚡ Cached Tokens:        0 (❌ NO CACHE DISCOUNT - Full Input Billed)`);
+        }
         console.log(`📤 Output Tokens:        ${cumulativeUsage.candidatesTokens.toLocaleString()} (Includes Grading + Thinking)`);
         console.log(`🔢 Total Tokens:         ${(cumulativeUsage.promptTokens + cumulativeUsage.candidatesTokens).toLocaleString()}`);
         console.log(`💵 Estimated Cost (USD): $${result.tokenUsage.costUsd.toFixed(4)}`);

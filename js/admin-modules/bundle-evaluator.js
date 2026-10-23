@@ -517,13 +517,15 @@ async function submitGoogleBatchJob() {
                 throw new Error(data.error || "Failed to submit Google Batch Job");
             }
 
-            // 🚀 Prominent Color-Coded Console Log
-            console.log("%c🚀 GOOGLE GEMINI BATCH JOB CREATED SUCCESSFULLY!", "background: #4f46e5; color: #ffffff; font-size: 14px; font-weight: bold; padding: 6px 12px; border-radius: 6px;");
-            console.log("🆔 Batch Job ID:         ", data.batchId);
-            console.log("📚 Exam Session:          ", selectedBundleSession.name);
-            console.log("👥 Total Students Queued: ", pendingStudents.length);
-            console.log("💰 Applied Discount:      50% Asynchronous Batch Discount");
-            console.log("🕒 Initial State:         ", data.state || "JOB_STATE_PENDING");
+            // 📦 Authentic Google Batch Verification Log
+            console.group("%c📦 GOOGLE GEMINI BATCH AUDIT - JOB SUBMISSION RECEIPT", "background: #4f46e5; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+            console.log("%c🆔 Google Batch Job ID:", "font-weight: bold; color: #0284c7;", data.batchId);
+            console.log("%c📚 Exam Session:      ", "font-weight: bold;", selectedBundleSession.name);
+            console.log("%c👥 Students Queued:   ", "font-weight: bold; color: #16a34a;", pendingStudents.length);
+            console.log("%c💰 Pricing Tier:      ", "font-weight: bold; color: #d97706;", "Official Google 50% Batch Discount");
+            console.log("%c🕒 Current State:     ", "font-weight: bold;", data.state || "JOB_STATE_PENDING");
+            console.log("%c📡 Lifecycle Notice:  ", "color: #64748b;", "Job is queued asynchronously on Google Cloud. Click 'Sync' in the registry when completed.");
+            console.groupEnd();
 
             // Clear the upper segment inputs smoothly without full page refresh
             queuedBundleStudents = [];
@@ -533,7 +535,10 @@ async function submitGoogleBatchJob() {
             await loadBatchJobs(true);
 
         } catch (err) {
-            console.error("Batch submission error:", err);
+            console.group("%c❌ GOOGLE GEMINI BATCH SUBMISSION FAILED", "background: #dc2626; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+            console.error("Error Message:", err.message);
+            console.warn("Requirements: Requires 'Vertex AI Administrator' on service account in GCP IAM or Gemini API enabled on API key.");
+            console.groupEnd();
             showToast(err.message, "error");
         } finally {
             isEvaluatingBundle = false;
