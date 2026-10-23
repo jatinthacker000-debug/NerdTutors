@@ -25,8 +25,25 @@ export async function getVertexAccessToken() {
     // 2. Fallback to environment variable
     if (!credentials && process.env.GCP_SERVICE_ACCOUNT_KEY) {
         try {
-            credentials = JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY);
+            let rawKey = process.env.GCP_SERVICE_ACCOUNT_KEY.trim();
+            // Unwrap surrounding single or double quotes if added by shell or cloud consoles
+            if ((rawKey.startsWith("'") && rawKey.endsWith("'")) || (rawKey.startsWith('"') && rawKey.endsWith('"'))) {
+                rawKey = rawKey.slice(1, -1).trim();
+            }
+            // Check if Base64 encoded
+            if (!rawKey.startsWith('{') && rawKey.length > 50) {
+                try {
+                    const decoded = Buffer.from(rawKey, 'base64').toString('utf8');
+                    if (decoded.includes('{')) rawKey = decoded;
+                } catch (_) {}
+            }
+            credentials = JSON.parse(rawKey);
         } catch (_) {}
+    }
+
+    // Sanitize RSA private key newlines so OpenSSL PEM parser never fails with ERR_OSSL_PEM_NO_START_LINE
+    if (credentials && credentials.private_key) {
+        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
     }
 
     if (!credentials || !credentials.client_email || !credentials.private_key) {

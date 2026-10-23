@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getVertexAccessToken } from './vertex-auth.js';
 
 // Force load .env.local if present locally
 try {
@@ -111,12 +112,25 @@ export default async function handler(req, res) {
         body = req.query;
     }
 
+    let authToken = null;
+    try {
+        authToken = await getVertexAccessToken();
+    } catch (_) {}
+
     const rawKeys = process.env.GEMINI_API_KEY || process.env.VERTEX_API_KEY || process.env.GEMINI_KEY || "";
-    if (!rawKeys) {
-        return res.status(500).json({ error: "Gemini API key is not configured in server environment." });
+    if (!rawKeys && !authToken) {
+        return res.status(500).json({ error: "Neither Gemini API key nor GCP Service Account key is configured in server environment." });
     }
-    const apiKey = rawKeys.split(",")[0].trim();
+    const apiKey = rawKeys ? rawKeys.split(",")[0].trim() : "";
     const action = body.action || "create";
+
+    function getGoogleEndpoint(pathStr) {
+        const headers = {};
+        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+        const sep = pathStr.includes("?") ? "&" : "?";
+        const url = (apiKey && !authToken) ? `${pathStr}${sep}key=${apiKey}` : pathStr;
+        return { url, headers };
+    }
 
     // ==========================================
     // ACTION: LIST (Fetch batch jobs without client Firestore rules)
@@ -126,7 +140,8 @@ export default async function handler(req, res) {
             const savedJobs = loadSavedBatchJobs();
             let googleBatches = [];
             try {
-                const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/batches?key=${apiKey}`);
+                const { url: listUrl, headers: listHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/batches`);
+                const gRes = await fetch(listUrl, { headers: listHeaders });
                 if (gRes.ok) {
                     const gData = await gRes.json();
                     googleBatches = gData.batches || [];
@@ -191,8 +206,8 @@ export default async function handler(req, res) {
         }
 
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/${batchId}?key=${apiKey}`;
-            const gRes = await fetch(url);
+            const { url: statusUrl, headers: statusHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/${batchId}`);
+            const gRes = await fetch(statusUrl, { headers: statusHeaders });
             const data = await gRes.json();
 
             if (!gRes.ok) {
@@ -230,8 +245,8 @@ export default async function handler(req, res) {
         }
 
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/${batchId}?key=${apiKey}`;
-            const gRes = await fetch(url);
+            const { url: syncUrl, headers: syncHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/${batchId}`);
+            const gRes = await fetch(syncUrl, { headers: syncHeaders });
             const data = await gRes.json();
 
             if (!gRes.ok) {
@@ -458,12 +473,13 @@ Return STRICT JSON:
     };
 
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/${targetModel}:batchGenerateContent?key=${apiKey}`;
+        const { url: createUrl, headers: createHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/${targetModel}:batchGenerateContent`);
+        createHeaders["Content-Type"] = "application/json";
         console.log(`🚀 Sending batch creation request to Google (${students.length} students)...`);
 
-        const gRes = await fetch(url, {
+        const gRes = await fetch(createUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: createHeaders,
             body: JSON.stringify(batchPayload)
         });
 
