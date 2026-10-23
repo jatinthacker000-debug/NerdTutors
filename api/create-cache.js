@@ -35,6 +35,55 @@ try {
     console.warn("Env force load error:", e.message);
 }
 
+// Load CBSE Master Rules Matrix
+let cbseRules = null;
+try {
+    const rulesPath = path.join(process.cwd(), 'api', 'cbse-rules.json');
+    if (fs.existsSync(rulesPath)) {
+        cbseRules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+    }
+} catch (e) {
+    console.warn("Could not load cbse-rules.json in create-cache:", e.message);
+}
+
+function getSubjectDirectives(subject) {
+    const sub = (subject || "").toLowerCase();
+    if (!cbseRules || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR || !cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.SUBJECT_SPECIFIC_DIRECTIVES) {
+        return "";
+    }
+
+    const directives = cbseRules.STAGE_2_DETERMINISTIC_EVALUATOR.SUBJECT_SPECIFIC_DIRECTIVES;
+    let selectedRules = null;
+    let subjectHeader = "";
+
+    if (sub.includes("account") || sub.includes("accounting")) {
+        selectedRules = directives.ACCOUNTANCY_055;
+        subjectHeader = "ACCOUNTANCY (CBSE CODE 055)";
+    } else if (sub.includes("business")) {
+        selectedRules = directives.BUSINESS_STUDIES_054;
+        subjectHeader = "BUSINESS STUDIES (CBSE CODE 054)";
+    } else if (sub.includes("economics")) {
+        selectedRules = directives.ECONOMICS_030;
+        subjectHeader = "ECONOMICS (CBSE CODE 030)";
+    } else if (sub.includes("social") || sub.includes("history") || sub.includes("geography") || sub.includes("civics")) {
+        selectedRules = directives.SOCIAL_SCIENCE_087;
+        subjectHeader = "SOCIAL SCIENCE (CBSE CODE 087)";
+    }
+
+    if (!selectedRules) return "";
+
+    let formattedRules = "";
+    if (typeof selectedRules === "object") {
+        formattedRules = Object.entries(selectedRules)
+            .map(([key, val]) => `• ${key.replace(/_/g, ' ')}: ${typeof val === 'string' ? val : JSON.stringify(val)}`)
+            .join('\n');
+    } else {
+        formattedRules = String(selectedRules);
+    }
+
+    return `\n--- SUBJECT-SPECIFIC BOARD DIRECTIVES: ${subjectHeader} ---\n${formattedRules}\n`;
+}
+
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -80,14 +129,7 @@ export default async function handler(req, res) {
     const primaryKey = apiKeys[0];
     const model = body?.model || process.env.GEMINI_MODEL || "gemini-4-argon";
 
-    // Load CBSE Master Rules Matrix to embed into the persistent cache
-    let rulesText = "";
-    try {
-        const rulesPath = path.join(process.cwd(), 'api', 'cbse-rules.json');
-        if (fs.existsSync(rulesPath)) {
-            rulesText = fs.readFileSync(rulesPath, 'utf8');
-        }
-    } catch (_) {}
+    const subjectDirectivesText = getSubjectDirectives(subject);
 
     // Build the master cached context text containing 100% of static instructions
     const bundledContent = `=== OFFICIAL CBSE EXAM CONTEXT & ZERO-ERROR MARKING SCHEME ===
@@ -103,10 +145,7 @@ ${questions}
 ${markingScheme}
 
 ${otherInstructions ? `--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructions}\n` : ""}
-
---- CBSE ZERO-ERROR AUTONOMOUS GRADER MASTER SPECIFICATION & COGNITIVE GUARDRAILS ---
-${rulesText}
-
+${subjectDirectivesText}
 --- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
 - Perform direct, focused rubric verification without discursive speculation.
 - Do NOT rewrite or transcribe the student's entire answer inside your internal thinking trace.
@@ -120,6 +159,9 @@ ${rulesText}
 3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
 4. MATHEMATICAL SUM INVARIANT: Total of question maxMarks must equal ${maxMarks || 40}.
 5. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
+6. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
+7. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
+8. PLAIN-TEXT MANDATE: Output clean plain text only. Never use markdown bold (**text**) or hashes in feedback.
 
 --- MANDATORY OUTPUT JSON SCHEMA ---
 Return STRICT JSON in the following format:

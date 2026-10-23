@@ -369,22 +369,7 @@ export default async function handler(req, res) {
     // question paper, marking scheme, and rubrics in memory!
     let promptBase = "";
     if (cachedContentId) {
-        promptBase = `Evaluate this student's answer sheet against the pre-cached exam questions and official marking scheme.
-${reasoningGuardrailPrompt}
-CRITICAL CONSTRAINTS:
-1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
-2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
-3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
-${otherInstructions ? `Teacher override: ${otherInstructions}\n` : ""}
-Return STRICT JSON:
-{
-  "results": [
-    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
-  ],
-  "totalScore": <number>,
-  "totalMaxMarks": ${maxMarks},
-  "overallFeedback": "<comprehensive 2-3 sentence performance summary>"
-}`;
+        promptBase = `Evaluate this student's handwritten answer sheet against the pre-loaded Exam Questions, Marking Scheme, Subject Directives, and Output Schema in your active cache (${cachedContentId}). Return STRICT JSON only.`;
     } else {
         const subjectDirectives = getSubjectDirectives(subject);
         promptBase = `You are evaluating student handwritten answer sheets against the official exam questions and marking scheme below.

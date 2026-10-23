@@ -379,10 +379,8 @@ You must operate with decisive, highly focused academic reasoning:
 `;
 
         const leanSessionPrompt = `You are an expert CBSE exam moderator evaluating this student's handwritten answer sheet.
-The Exam Questions, Marking Scheme, Teacher Directives, CBSE Master Rules, and Output Schema are already pre-loaded in your active cache (${cachedContentId}).
-${reasoningGuardrailPrompt}
-${overrideInstructionsPrompt}
-Follow the pre-cached JSON schema and instructions strictly. Output clean plain text only (no markdown bold asterisks or hashes in feedback). Return STRICT JSON only.`;
+The Exam Questions, Marking Scheme, Subject Directives, Teacher Directives, Reasoning Guardrails, and Output Schema are already pre-loaded in your active cache (${cachedContentId}).
+Follow the pre-cached JSON schema and grading rubrics strictly. Output clean plain text only (no markdown bold asterisks or hashes in feedback). Return STRICT JSON only.`;
 
         fullSessionPrompt = `You are an expert teacher / exam moderator evaluating a student's answer sheet.
 You are provided with:
