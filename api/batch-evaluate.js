@@ -215,7 +215,10 @@ export default async function handler(req, res) {
 
         if (!res.ok) {
             const errTxt = await res.text();
-            throw new Error(`Google Cloud Storage upload failed (${res.status}): ${errTxt}`);
+            let parsedErr = {};
+            try { parsedErr = JSON.parse(errTxt); } catch (_) {}
+            const msg = parsedErr?.error?.message || (errTxt.startsWith('<') ? "Google Cloud Storage returned an HTML error" : errTxt);
+            throw new Error(`Google Cloud Storage upload failed (${res.status}): ${msg}`);
         }
 
         return `gs://${bucketName}/${objectPath}`;
@@ -410,8 +413,8 @@ export default async function handler(req, res) {
             const studentsMetadata = body.studentsMetadata || [];
             const parsedResults = [];
 
-            for (let i = 0; i < inlinedResponses.length; i++) {
-                const item = inlinedResponses[i];
+            for (let i = 0; i < responsesList.length; i++) {
+                const item = responsesList[i];
                 const meta = studentsMetadata[i] || { studentName: `Student ${i + 1}` };
 
                 let rawText = "";
@@ -494,24 +497,25 @@ export default async function handler(req, res) {
     // ==========================================
     // ACTION: CREATE (Submit a new batch to Google)
     // ==========================================
-    const {
-        sessionId,
-        examName,
-        subject,
-        questions,
-        markingScheme,
-        maxMarks = 40,
-        otherInstructions = "",
-        students = [],
-        cachedContentId = null,
-        model = process.env.GEMINI_MODEL || "gemini-4-argon"
-    } = body;
+    try {
+        const {
+            sessionId,
+            examName,
+            subject,
+            questions,
+            markingScheme,
+            maxMarks = 40,
+            otherInstructions = "",
+            students = [],
+            cachedContentId = null,
+            model = process.env.GEMINI_MODEL || "gemini-4-argon"
+        } = body;
 
-    if (!students || students.length === 0) {
-        return res.status(400).json({ error: "At least one student with answer sheet pages is required to create a batch." });
-    }
+        if (!students || students.length === 0) {
+            return res.status(400).json({ error: "At least one student with answer sheet pages is required to create a batch." });
+        }
 
-    const isArgon = model.includes("argon") || model.includes("gemini-4");
+        const isArgon = model.includes("argon") || model.includes("gemini-4");
 
     const reasoningGuardrailPrompt = `
 --- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
@@ -634,7 +638,6 @@ Return STRICT JSON:
         }
     };
 
-    try {
         const { url: createUrl, headers: createHeaders } = getEndpoint("create", cleanModel);
         createHeaders["Content-Type"] = "application/json";
         console.log(`🚀 Dispatching Vertex AI Batch Prediction Job to ${createUrl} (Model: publishers/google/models/${cleanModel})...`);
