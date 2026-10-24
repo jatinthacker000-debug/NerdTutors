@@ -166,10 +166,99 @@ export default async function handler(req, res) {
         if (actionName === "create" || actionName === "list") {
             url = basePath;
         } else if (actionName === "status" || actionName === "sync" || actionName === "cancel") {
-            const cleanBatch = batchId.replace(/^projects\/[^/]+\/locations\/[^/]+\/batchPredictionJobs\//, '').replace(/^batches\//, '');
+            const cleanBatch = String(batchId).replace(/^.*\/batchPredictionJobs\//, '').replace(/^batches\//, '');
             url = `${basePath}/${cleanBatch}`;
         }
         return { url, headers };
+    }
+
+    async function uploadToGcs(bucketName, objectPath, contentString, contentType = 'application/jsonl') {
+        const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucketName)}/o?uploadType=media&name=${encodeURIComponent(objectPath)}`;
+        let res = await fetch(uploadUrl, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${authToken}`,
+                "Content-Type": contentType
+            },
+            body: contentString
+        });
+
+        if (res.status === 404) {
+            console.log(`🪣 Bucket '${bucketName}' not found. Creating bucket in project '${projectId}'...`);
+            const createBucketRes = await fetch(`https://storage.googleapis.com/storage/v1/b?project=${encodeURIComponent(projectId)}`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${authToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name: bucketName,
+                    location: "US",
+                    storageClass: "STANDARD"
+                })
+            });
+
+            if (!createBucketRes.ok && createBucketRes.status !== 409) {
+                const errTxt = await createBucketRes.text();
+                console.warn(`Bucket creation notice: ${errTxt}`);
+            }
+
+            res = await fetch(uploadUrl, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${authToken}`,
+                    "Content-Type": contentType
+                },
+                body: contentString
+            });
+        }
+
+        if (!res.ok) {
+            const errTxt = await res.text();
+            throw new Error(`Google Cloud Storage upload failed (${res.status}): ${errTxt}`);
+        }
+
+        return `gs://${bucketName}/${objectPath}`;
+    }
+
+    async function readGcsPredictions(gcsOutputDirectory) {
+        if (!gcsOutputDirectory || !gcsOutputDirectory.startsWith('gs://')) return [];
+        const withoutGs = gcsOutputDirectory.replace('gs://', '');
+        const firstSlash = withoutGs.indexOf('/');
+        const bucket = firstSlash !== -1 ? withoutGs.substring(0, firstSlash) : withoutGs;
+        const prefix = firstSlash !== -1 ? withoutGs.substring(firstSlash + 1) : '';
+
+        const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o?prefix=${encodeURIComponent(prefix)}`;
+        const listRes = await fetch(listUrl, {
+            headers: { "Authorization": `Bearer ${authToken}` }
+        });
+        if (!listRes.ok) {
+            const errTxt = await listRes.text();
+            console.error("GCS list output error:", errTxt);
+            return [];
+        }
+        const listData = await listRes.json();
+        const items = listData.items || [];
+        const jsonlFiles = items.filter(it => it.name.endsWith('.jsonl'));
+
+        const allResponses = [];
+        for (const fileObj of jsonlFiles) {
+            const fileUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(fileObj.name)}?alt=media`;
+            const fileRes = await fetch(fileUrl, {
+                headers: { "Authorization": `Bearer ${authToken}` }
+            });
+            if (fileRes.ok) {
+                const textContent = await fileRes.text();
+                const lines = textContent.split('\n').map(l => l.trim()).filter(Boolean);
+                for (const line of lines) {
+                    try {
+                        const parsedLine = JSON.parse(line);
+                        allResponses.push(parsedLine);
+                    } catch (_) {}
+                }
+            }
+        }
+        return allResponses;
     }
 
     // ==========================================
@@ -238,15 +327,14 @@ export default async function handler(req, res) {
     // ACTION: STATUS (Poll existing batch job)
     // ==========================================
     if (action === "status") {
-        let batchId = body.batchId || "";
+        const batchId = body.batchId || "";
         if (!batchId) {
             return res.status(400).json({ error: "batchId is required for status check." });
         }
-        if (!batchId.startsWith("batches/")) {
-            batchId = "batches/" + batchId;
-        }
 
         try {
+            const { url: statusUrl, headers: statusHeaders } = getEndpoint("status", "", batchId);
+            const gRes = await fetch(statusUrl, { headers: statusHeaders });
             const rawText = await gRes.text();
             let data = {};
             try { data = JSON.parse(rawText); } catch (_) {}
@@ -262,11 +350,12 @@ export default async function handler(req, res) {
                 batchId: data.name,
                 displayName: data.displayName || "",
                 state: data.state || "JOB_STATE_PENDING",
-                done: data.done || (data.state === 'JOB_STATE_SUCCEEDED' || data.state === 'JOB_STATE_FAILED'),
+                done: data.done || (data.state === 'JOB_STATE_SUCCEEDED' || data.state === 'JOB_STATE_FAILED' || data.state === 'JOB_STATE_CANCELLED'),
                 createTime: data.createTime || null,
                 updateTime: data.updateTime || null,
                 error: data.error || null,
-                hasResponses: Boolean(data.dest?.inlinedResponses || data.response?.responses)
+                outputInfo: data.outputInfo || null,
+                hasResponses: Boolean(data.outputInfo?.gcsOutputDirectory || data.dest?.inlinedResponses || data.response?.responses)
             });
         } catch (err) {
             console.error("Batch status error:", err);
@@ -278,16 +367,14 @@ export default async function handler(req, res) {
     // ACTION: SYNC (Retrieve & parse responses)
     // ==========================================
     if (action === "sync") {
-        let batchId = body.batchId || "";
+        const batchId = body.batchId || "";
         if (!batchId) {
             return res.status(400).json({ error: "batchId is required to sync results." });
-        }
-        if (!batchId.startsWith("batches/")) {
-            batchId = "batches/" + batchId;
         }
 
         try {
             const { url: syncUrl, headers: syncHeaders } = getEndpoint("sync", "", batchId);
+            const gRes = await fetch(syncUrl, { headers: syncHeaders });
             const rawText = await gRes.text();
             let data = {};
             try { data = JSON.parse(rawText); } catch (_) {}
@@ -306,9 +393,18 @@ export default async function handler(req, res) {
                 });
             }
 
-            const inlinedResponses = data.dest?.inlinedResponses || data.response?.responses || [];
-            if (!inlinedResponses || inlinedResponses.length === 0) {
-                return res.status(400).json({ error: "No response objects found in Google Batch result." });
+            let responsesList = [];
+            const gcsOutputDir = data.outputInfo?.gcsOutputDirectory || body.gcsOutputDirectory;
+            if (gcsOutputDir) {
+                console.log(`📥 Reading batch prediction output from GCS: ${gcsOutputDir}...`);
+                responsesList = await readGcsPredictions(gcsOutputDir);
+            }
+            if (responsesList.length === 0) {
+                responsesList = data.dest?.inlinedResponses || data.response?.responses || [];
+            }
+
+            if (!responsesList || responsesList.length === 0) {
+                return res.status(400).json({ error: "No response objects found in Google Batch result or GCS output directory." });
             }
 
             const studentsMetadata = body.studentsMetadata || [];
@@ -508,6 +604,17 @@ Return STRICT JSON:
     const cleanModel = (model || "gemini-4-argon").replace(/^publishers\/google\/models\//, '').replace(/^models\//, '');
     const cleanSession = (sessionId || 'exam').replace(/[^a-zA-Z0-9_-]/g, '_');
     const gcsBucket = process.env.GCP_STORAGE_BUCKET || `${projectId}-batch-evals`;
+    const inputFileName = `inputs/${cleanSession}_${Date.now()}.jsonl`;
+    const jsonlData = inlinedRequests.map(req => JSON.stringify({ request: req })).join('\n') + '\n';
+
+    console.log(`📤 Uploading batch input (${inlinedRequests.length} students) to Google Cloud Storage (gs://${gcsBucket}/${inputFileName})...`);
+    let gcsInputUri = body.gcsInputUri || "";
+    if (!gcsInputUri) {
+        gcsInputUri = await uploadToGcs(gcsBucket, inputFileName, jsonlData);
+        console.log(`✅ Uploaded input file to ${gcsInputUri}`);
+    }
+
+    const outputPrefix = body.gcsOutputUri || `gs://${gcsBucket}/outputs/${cleanSession}_${Date.now()}/`;
 
     // Official Google Cloud Vertex AI projects.locations.batchPredictionJobs resource schema
     const vertexBatchPayload = {
@@ -516,15 +623,13 @@ Return STRICT JSON:
         inputConfig: {
             instancesFormat: "jsonl",
             gcsSource: {
-                uris: [
-                    body.gcsInputUri || `gs://${gcsBucket}/inputs/${cleanSession}_${Date.now()}.jsonl`
-                ]
+                uris: [gcsInputUri]
             }
         },
         outputConfig: {
             predictionsFormat: "jsonl",
             gcsDestination: {
-                outputUriPrefix: body.gcsOutputUri || `gs://${gcsBucket}/outputs/${cleanSession}_${Date.now()}/`
+                outputUriPrefix: outputPrefix
             }
         }
     };
@@ -566,6 +671,8 @@ Return STRICT JSON:
             studentsMetadata: students.map(s => ({ studentName: s.studentName, pageCount: Array.isArray(s.pages) ? s.pages.length : 1 })),
             maxMarks: Number(maxMarks) || 40,
             status: data.state || "JOB_STATE_PENDING",
+            gcsInputUri: gcsInputUri,
+            gcsOutputDirectory: outputPrefix,
             createdAt: data.createTime || new Date().toISOString()
         };
         const allJobs = loadSavedBatchJobs();
