@@ -90,3 +90,51 @@ export async function getVertexAccessToken() {
     tokenExpiresAt = now + (data.expires_in || 3600);
     return cachedToken;
 }
+
+export function getVertexCredentialsInfo() {
+    let credentials = null;
+    let source = "NONE";
+
+    try {
+        const keyPath = path.join(process.cwd(), 'vertex-key.json');
+        if (fs.existsSync(keyPath)) {
+            credentials = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+            source = "vertex-key.json";
+        }
+    } catch (_) {}
+
+    if (!credentials && process.env.GCP_SERVICE_ACCOUNT_KEY) {
+        try {
+            let rawKey = process.env.GCP_SERVICE_ACCOUNT_KEY.trim();
+            if ((rawKey.startsWith("'") && rawKey.endsWith("'")) || (rawKey.startsWith('"') && rawKey.endsWith('"'))) {
+                rawKey = rawKey.slice(1, -1).trim();
+            }
+            if (!rawKey.startsWith('{') && rawKey.length > 50) {
+                try {
+                    const decoded = Buffer.from(rawKey, 'base64').toString('utf8');
+                    if (decoded.includes('{')) rawKey = decoded;
+                } catch (_) {}
+            }
+            credentials = JSON.parse(rawKey);
+            source = "process.env.GCP_SERVICE_ACCOUNT_KEY";
+        } catch (_) {}
+    }
+
+    if (!credentials) {
+        return {
+            configured: false,
+            source: "NONE",
+            clientEmail: null,
+            projectId: null,
+            error: "GCP_SERVICE_ACCOUNT_KEY environment variable is missing or could not be parsed."
+        };
+    }
+
+    return {
+        configured: Boolean(credentials.client_email && credentials.private_key),
+        source,
+        clientEmail: credentials.client_email || "MISSING",
+        projectId: credentials.project_id || process.env.GCP_PROJECT_ID || "nerd-tutors-001",
+        hasPrivateKey: Boolean(credentials.private_key)
+    };
+}

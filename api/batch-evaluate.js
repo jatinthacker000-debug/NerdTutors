@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getVertexAccessToken } from './vertex-auth.js';
+import { getVertexAccessToken, getVertexCredentialsInfo } from './vertex-auth.js';
 
 // Force load .env.local if present locally
 try {
@@ -113,22 +113,66 @@ export default async function handler(req, res) {
     }
 
     let authToken = null;
+    let authError = null;
+    const credsInfo = getVertexCredentialsInfo();
+
     try {
         authToken = await getVertexAccessToken();
-    } catch (_) {}
+    } catch (e) {
+        authError = e.message;
+    }
 
     const rawKeys = process.env.GEMINI_API_KEY || process.env.VERTEX_API_KEY || process.env.GEMINI_KEY || "";
     if (!rawKeys && !authToken) {
-        return res.status(500).json({ error: "Neither Gemini API key nor GCP Service Account key is configured in server environment." });
+        return res.status(500).json({
+            error: "Neither Gemini API key nor GCP Service Account key is configured in server environment.",
+            authAudit: {
+                serviceAccountFetched: false,
+                error: credsInfo.error || authError || "Missing GCP_SERVICE_ACCOUNT_KEY"
+            }
+        });
     }
+
     const apiKey = rawKeys ? rawKeys.split(",")[0].trim() : "";
     const action = body.action || "create";
 
-    function getGoogleEndpoint(pathStr) {
-        const headers = {};
-        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-        const sep = pathStr.includes("?") ? "&" : "?";
-        const url = (apiKey && !authToken) ? `${pathStr}${sep}key=${apiKey}` : pathStr;
+    const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
+    const location = process.env.GCP_LOCATION || "us-central1";
+
+    const authAudit = {
+        serviceAccountFetched: Boolean(credsInfo.configured),
+        serviceAccountEmail: credsInfo.clientEmail,
+        projectId: projectId,
+        tokenActive: Boolean(authToken),
+        cloudProvider: authToken ? "Google Cloud Vertex AI (us-central1)" : "Google AI Studio API Key",
+        authError: authError
+    };
+
+    function getEndpoint(actionName, targetModel = "", batchId = "") {
+        const cleanModel = (targetModel || "gemini-4-argon").replace(/^publishers\/google\/models\//, '').replace(/^models\//, '');
+        const headers = { "Content-Type": "application/json" };
+        let url = "";
+
+        if (authToken) {
+            headers["Authorization"] = `Bearer ${authToken}`;
+            if (actionName === "create") {
+                url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${cleanModel}:batchGenerateContent`;
+            } else if (actionName === "list") {
+                url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${cleanModel}:batchGenerateContent`;
+            } else if (actionName === "status" || actionName === "sync") {
+                const cleanBatch = batchId.replace('batches/', '');
+                url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/batchPredictionJobs/${cleanBatch}`;
+            }
+        } else {
+            if (actionName === "create") {
+                url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:batchGenerateContent?key=${apiKey}`;
+            } else if (actionName === "list") {
+                url = `https://generativelanguage.googleapis.com/v1beta/batches?key=${apiKey}`;
+            } else if (actionName === "status" || actionName === "sync") {
+                const cleanBatch = batchId.startsWith('batches/') ? batchId : `batches/${batchId}`;
+                url = `https://generativelanguage.googleapis.com/v1beta/${cleanBatch}?key=${apiKey}`;
+            }
+        }
         return { url, headers };
     }
 
@@ -140,7 +184,7 @@ export default async function handler(req, res) {
             const savedJobs = loadSavedBatchJobs();
             let googleBatches = [];
             try {
-                const { url: listUrl, headers: listHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/batches`);
+                const { url: listUrl, headers: listHeaders } = getEndpoint("list");
                 const gRes = await fetch(listUrl, { headers: listHeaders });
                 if (gRes.ok) {
                     const gData = await gRes.json();
@@ -206,13 +250,14 @@ export default async function handler(req, res) {
         }
 
         try {
-            const { url: statusUrl, headers: statusHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/${batchId}`);
+            const { url: statusUrl, headers: statusHeaders } = getEndpoint("status", "", batchId);
             const gRes = await fetch(statusUrl, { headers: statusHeaders });
             const data = await gRes.json();
 
             if (!gRes.ok) {
                 return res.status(gRes.status).json({
-                    error: data.error?.message || "Failed to fetch batch status from Google Cloud."
+                    error: data.error?.message || "Failed to fetch batch status from Google Cloud.",
+                    authAudit
                 });
             }
 
@@ -245,12 +290,15 @@ export default async function handler(req, res) {
         }
 
         try {
-            const { url: syncUrl, headers: syncHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/${batchId}`);
+            const { url: syncUrl, headers: syncHeaders } = getEndpoint("sync", "", batchId);
             const gRes = await fetch(syncUrl, { headers: syncHeaders });
             const data = await gRes.json();
 
             if (!gRes.ok) {
-                return res.status(gRes.status).json({ error: data.error?.message || "Failed to sync batch." });
+                return res.status(gRes.status).json({
+                    error: data.error?.message || "Failed to sync batch.",
+                    authAudit
+                });
             }
 
             if (data.state !== 'JOB_STATE_SUCCEEDED') {
@@ -473,9 +521,9 @@ Return STRICT JSON:
     };
 
     try {
-        const { url: createUrl, headers: createHeaders } = getGoogleEndpoint(`https://generativelanguage.googleapis.com/v1beta/${targetModel}:batchGenerateContent`);
+        const { url: createUrl, headers: createHeaders } = getEndpoint("create", targetModel);
         createHeaders["Content-Type"] = "application/json";
-        console.log(`🚀 Sending batch creation request to Google (${students.length} students)...`);
+        console.log(`🚀 Sending batch creation request to ${authAudit.cloudProvider} (${students.length} students)...`);
 
         const gRes = await fetch(createUrl, {
             method: "POST",
@@ -489,7 +537,8 @@ Return STRICT JSON:
             console.error("Google Batch creation error:", data);
             return res.status(gRes.status).json({
                 error: data.error?.message || "Failed to create Google Batch Job.",
-                details: data.error?.details || null
+                details: data.error?.details || null,
+                authAudit
             });
         }
 
@@ -517,11 +566,12 @@ Return STRICT JSON:
             displayName: data.displayName || displayName,
             state: data.state || "JOB_STATE_PENDING",
             studentCount: students.length,
-            createTime: data.createTime || new Date().toISOString()
+            createTime: data.createTime || new Date().toISOString(),
+            authAudit
         });
 
     } catch (err) {
         console.error("Batch endpoint fatal error:", err);
-        return res.status(500).json({ error: err.message });
+        return res.status(500).json({ error: err.message, authAudit });
     }
 }

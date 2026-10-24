@@ -513,12 +513,28 @@ async function submitGoogleBatchJob() {
 
             const data = await res.json();
 
+            if (data.authAudit) {
+                console.group("%c🔐 VERTEX AI SERVICE ACCOUNT AUDIT", "background: #0f172a; color: #38bdf8; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+                console.log("%c🔑 Key Loaded in Vercel:      ", "font-weight: bold; color: " + (data.authAudit.serviceAccountFetched ? "#10b981" : "#ef4444") + ";", data.authAudit.serviceAccountFetched ? "✅ YES (Key parsed successfully)" : "❌ NO (Missing)");
+                console.log("%c📧 Service Account Principal:", "font-weight: bold; color: #0284c7;", data.authAudit.serviceAccountEmail || "None");
+                console.log("%c🆔 GCP Project ID:          ", "font-weight: bold;", data.authAudit.projectId || "None");
+                console.log("%c🎫 OAuth2 Token Active:     ", "font-weight: bold; color: " + (data.authAudit.tokenActive ? "#10b981" : "#ef4444") + ";", data.authAudit.tokenActive ? "✅ YES (Handshake approved)" : "❌ FAILED");
+                console.log("%c🏛️ Cloud Infrastructure:    ", "font-weight: bold; color: #8b5cf6;", data.authAudit.cloudProvider);
+                if (data.authAudit.authError) {
+                    console.error("Token Handshake Error:", data.authAudit.authError);
+                }
+                console.groupEnd();
+            }
+
             if (!res.ok) {
-                throw new Error(data.error || "Failed to submit Google Batch Job");
+                const errMsg = data.error || (typeof data.details === 'string' ? data.details : JSON.stringify(data.details)) || "Failed to submit Google Batch Job";
+                const errObj = new Error(errMsg);
+                errObj.authAudit = data.authAudit;
+                throw errObj;
             }
 
             // 📦 Authentic Google Batch Verification Log
-            console.group("%c📦 GOOGLE GEMINI BATCH AUDIT - JOB SUBMISSION RECEIPT", "background: #4f46e5; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+            console.group("%c📦 VERTEX AI BATCH AUDIT - JOB SUBMISSION RECEIPT", "background: #4f46e5; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
             console.log("%c🆔 Google Batch Job ID:", "font-weight: bold; color: #0284c7;", data.batchId);
             console.log("%c📚 Exam Session:      ", "font-weight: bold;", selectedBundleSession.name);
             console.log("%c👥 Students Queued:   ", "font-weight: bold; color: #16a34a;", pendingStudents.length);
@@ -535,9 +551,20 @@ async function submitGoogleBatchJob() {
             await loadBatchJobs(true);
 
         } catch (err) {
-            console.group("%c❌ GOOGLE GEMINI BATCH SUBMISSION FAILED", "background: #dc2626; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+            console.group("%c❌ VERTEX AI BATCH DISPATCH FAILED", "background: #dc2626; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
             console.error("Error Message:", err.message);
-            console.warn("Requirements: Requires 'Vertex AI Administrator' on service account in GCP IAM or Gemini API enabled on API key.");
+            if (err.authAudit?.serviceAccountFetched) {
+                console.log("%c🔑 Key Check:", "color: #10b981; font-weight: bold;", "✅ The Service Account Key IS successfully loaded and recognized by Vercel!");
+                console.log("%c📧 Principal:", "font-weight: bold;", err.authAudit.serviceAccountEmail);
+            } else {
+                console.warn("%c🔑 Key Check:", "color: #ef4444; font-weight: bold;", "❌ Vercel has NOT fetched the key. Check GCP_SERVICE_ACCOUNT_KEY in Vercel Environment Variables.");
+            }
+
+            if (err.message.includes("403") || err.message.includes("permission") || err.message.includes("IAM") || err.message.includes("denied")) {
+                console.warn("%c👉 ROOT CAUSE DIAGNOSIS:", "color: #f59e0b; font-weight: bold;", "The key was loaded by Vercel, but GCP IAM denied access. Please go to GCP Console -> IAM & Admin and assign the role 'Vertex AI User' to " + (err.authAudit?.serviceAccountEmail || "the service account") + ".");
+            } else if (err.message.includes("insufficient") || err.message.includes("scopes")) {
+                console.warn("%c👉 ROOT CAUSE DIAGNOSIS:", "color: #f59e0b; font-weight: bold;", "Ensure the service account has Vertex AI permissions enabled.");
+            }
             console.groupEnd();
             showToast(err.message, "error");
         } finally {
