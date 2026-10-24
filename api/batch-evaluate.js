@@ -137,8 +137,10 @@ export default async function handler(req, res) {
     const action = body.action || "create";
 
     const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
-    const location = process.env.GCP_LOCATION || "us";
-    const host = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+    const location = process.env.GCP_LOCATION || "global";
+    const host = location === "global" 
+        ? "aiplatform.googleapis.com" 
+        : (location === "us" ? "aiplatform.us.rep.googleapis.com" : (location === "eu" ? "aiplatform.eu.rep.googleapis.com" : `${location}-aiplatform.googleapis.com`));
 
     const authAudit = {
         serviceAccountFetched: Boolean(credsInfo.configured),
@@ -147,7 +149,7 @@ export default async function handler(req, res) {
         location: location,
         tokenActive: Boolean(authToken),
         hasApiKey: Boolean(apiKey),
-        cloudProvider: "Google Cloud Vertex AI (projects.locations.batchPredictionJobs)",
+        cloudProvider: `Google Cloud Vertex AI (${location} - ${host})`,
         authError: authError
     };
 
