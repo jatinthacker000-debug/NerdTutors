@@ -94,6 +94,38 @@ function saveBatchJobsList(jobs) {
     } catch (_) {}
 }
 
+function getDeletedJobsFilePath() {
+    const primaryPath = path.join(process.cwd(), 'api', 'deleted-batch-jobs.json');
+    if (fs.existsSync(primaryPath)) return primaryPath;
+    const rootPath = path.join(process.cwd(), 'deleted-batch-jobs.json');
+    if (fs.existsSync(rootPath)) return rootPath;
+    return path.join('/tmp', 'deleted-batch-jobs.json');
+}
+
+function loadDeletedJobIds() {
+    const fPath = getDeletedJobsFilePath();
+    try {
+        if (fs.existsSync(fPath)) {
+            const raw = fs.readFileSync(fPath, 'utf8');
+            const data = JSON.parse(raw);
+            if (Array.isArray(data)) return data;
+        }
+    } catch (_) {}
+    return [];
+}
+
+function saveDeletedJobIds(ids) {
+    const primaryDir = path.join(process.cwd(), 'api');
+    try {
+        if (!fs.existsSync(primaryDir)) fs.mkdirSync(primaryDir, { recursive: true });
+        fs.writeFileSync(path.join(primaryDir, 'deleted-batch-jobs.json'), JSON.stringify(ids, null, 2), 'utf8');
+        return;
+    } catch (_) {}
+    try {
+        fs.writeFileSync(path.join('/tmp', 'deleted-batch-jobs.json'), JSON.stringify(ids, null, 2), 'utf8');
+    } catch (_) {}
+}
+
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -270,6 +302,8 @@ export default async function handler(req, res) {
     if (action === "list") {
         try {
             const savedJobs = loadSavedBatchJobs();
+            const deletedIds = loadDeletedJobIds();
+
             let googleBatches = [];
             try {
                 const { url: listUrl, headers: listHeaders } = getEndpoint("list");
@@ -280,7 +314,13 @@ export default async function handler(req, res) {
                 googleBatches = gData.batchPredictionJobs || gData.batches || [];
             } catch (_) {}
 
-            const updatedJobs = savedJobs.map(j => {
+            // Exclude jobs that have been deleted by user
+            googleBatches = googleBatches.filter(gb => {
+                const shortId = gb.name.split('/').pop();
+                return !deletedIds.includes(shortId) && !deletedIds.includes(gb.name);
+            });
+
+            const updatedJobs = savedJobs.filter(j => !deletedIds.includes(j.id) && !deletedIds.includes(j.batchId)).map(j => {
                 const live = googleBatches.find(gb => gb.name === j.batchId || gb.name?.endsWith(j.batchId));
                 if (live) {
                     return {
@@ -316,14 +356,30 @@ export default async function handler(req, res) {
     }
 
     // ==========================================
-    // ACTION: DELETE (Remove batch job from registry)
+    // ACTION: DELETE (Remove batch job from registry & cancel on Google)
     // ==========================================
     if (action === "delete") {
         const batchId = body.batchId || "";
+        const cleanId = String(batchId).replace(/^.*\/batchPredictionJobs\//, '').replace(/^batches\//, '');
+
+        // 1. Try to cancel/delete on Google Cloud Vertex AI
+        try {
+            const { url: deleteUrl, headers: deleteHeaders } = getEndpoint("status", "", cleanId);
+            await fetch(deleteUrl, { method: "DELETE", headers: deleteHeaders });
+        } catch (_) {}
+
+        // 2. Remove from local list
         const saved = loadSavedBatchJobs();
-        const filtered = saved.filter(j => j.batchId !== batchId && j.id !== batchId && j.batchId !== `batches/${batchId}`);
+        const filtered = saved.filter(j => j.batchId !== batchId && j.id !== batchId && j.id !== cleanId && !j.batchId?.endsWith(cleanId));
         saveBatchJobsList(filtered);
-        return res.status(200).json({ success: true, message: "Batch job deleted from registry." });
+
+        // 3. Blacklist ID so 'action: list' never resurrects it
+        const deletedIds = loadDeletedJobIds();
+        if (cleanId && !deletedIds.includes(cleanId)) deletedIds.push(cleanId);
+        if (batchId && !deletedIds.includes(batchId)) deletedIds.push(batchId);
+        saveDeletedJobIds(deletedIds);
+
+        return res.status(200).json({ success: true, message: "Batch job deleted from registry and Google Cloud." });
     }
 
     // ==========================================
