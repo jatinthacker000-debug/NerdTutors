@@ -702,7 +702,8 @@ Return STRICT JSON only (no markdown, no code blocks):
         }
 
         const projectId = process.env.GCP_PROJECT_ID || "975383880672";
-        const location = process.env.GCP_LOCATION || "us-central1";
+        const location = process.env.GCP_LOCATION || "us";
+        const host = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
 
         let authToken = null;
         try {
@@ -719,9 +720,9 @@ Return STRICT JSON only (no markdown, no code blocks):
 
             if (isVertex && authToken) {
                 headers["Authorization"] = `Bearer ${authToken}`;
-                callUrl = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent`;
+                callUrl = `https://${host}/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent`;
             } else if (isVertex) {
-                callUrl = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent?key=${currentKey}`;
+                callUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:generateContent?key=${currentKey}`;
             } else {
                 callUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${currentKey}`;
             }

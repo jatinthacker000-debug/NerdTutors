@@ -32,7 +32,7 @@ export default async function handler(req, res) {
             googleOAuth2Handshake: "AUTHENTICATED",
             tokenActive: Boolean(token),
             maskedToken: maskedToken,
-            targetCloudProvider: "Google Cloud Vertex AI (us-central1)",
+            targetCloudProvider: `Google Cloud Vertex AI (${process.env.GCP_LOCATION || 'us'})`,
             message: "🎉 Success! Vercel has successfully fetched your GCP Service Account Key and authenticated with Google Cloud."
         });
     } catch (err) {

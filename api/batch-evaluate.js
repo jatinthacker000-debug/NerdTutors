@@ -137,15 +137,17 @@ export default async function handler(req, res) {
     const action = body.action || "create";
 
     const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
-    const location = process.env.GCP_LOCATION || "us-central1";
+    const location = process.env.GCP_LOCATION || "us";
+    const host = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
 
     const authAudit = {
         serviceAccountFetched: Boolean(credsInfo.configured),
         serviceAccountEmail: credsInfo.clientEmail,
         projectId: projectId,
+        location: location,
         tokenActive: Boolean(authToken),
         hasApiKey: Boolean(apiKey),
-        cloudProvider: apiKey ? "Google Cloud Authorization Key (VERTEX_API_KEY / GEMINI_API_KEY)" : (authToken ? "Google Cloud Service Account" : "None"),
+        cloudProvider: "Google Cloud Vertex AI (projects.locations.batchPredictionJobs)",
         authError: authError
     };
 
@@ -157,7 +159,7 @@ export default async function handler(req, res) {
         };
         let url = "";
 
-        const basePath = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/batchPredictionJobs`;
+        const basePath = `https://${host}/v1/projects/${projectId}/locations/${location}/batchPredictionJobs`;
 
         if (actionName === "create" || actionName === "list") {
             url = basePath;
