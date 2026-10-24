@@ -151,33 +151,25 @@ export default async function handler(req, res) {
 
     function getEndpoint(actionName, targetModel = "", batchId = "") {
         const cleanModel = (targetModel || "gemini-4-argon").replace(/^publishers\/google\/models\//, '').replace(/^models\//, '');
-        const headers = { "Content-Type": "application/json" };
+        const headers = {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+        };
         let url = "";
 
-        // Google explicitly requires API keys ("authorization keys") for generativelanguage.googleapis.com
-        // We prioritize apiKey over service account bearer tokens to satisfy Google's mandate:
-        // "Access to Gemini API is restricted with service accounts. Use authorization keys instead."
-        if (apiKey) {
-            headers["x-goog-api-key"] = apiKey;
-        } else if (authToken) {
-            headers["Authorization"] = `Bearer ${authToken}`;
-        }
+        const basePath = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/batchPredictionJobs`;
 
-        const authQuery = apiKey ? `?key=${apiKey}` : "";
-
-        if (actionName === "create") {
-            url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:batchGenerateContent${authQuery}`;
-        } else if (actionName === "list") {
-            url = `https://generativelanguage.googleapis.com/v1beta/batches${authQuery}`;
-        } else if (actionName === "status" || actionName === "sync") {
-            const cleanBatch = batchId.startsWith('batches/') ? batchId : `batches/${batchId}`;
-            url = `https://generativelanguage.googleapis.com/v1beta/${cleanBatch}${authQuery}`;
+        if (actionName === "create" || actionName === "list") {
+            url = basePath;
+        } else if (actionName === "status" || actionName === "sync" || actionName === "cancel") {
+            const cleanBatch = batchId.replace(/^projects\/[^/]+\/locations\/[^/]+\/batchPredictionJobs\//, '').replace(/^batches\//, '');
+            url = `${basePath}/${cleanBatch}`;
         }
         return { url, headers };
     }
 
     // ==========================================
-    // ACTION: LIST (Fetch batch jobs without client Firestore rules)
+    // ACTION: LIST (Fetch batch jobs from Vertex AI)
     // ==========================================
     if (action === "list") {
         try {
@@ -186,14 +178,14 @@ export default async function handler(req, res) {
             try {
                 const { url: listUrl, headers: listHeaders } = getEndpoint("list");
                 const gRes = await fetch(listUrl, { headers: listHeaders });
-                if (gRes.ok) {
-                    const gData = await gRes.json();
-                    googleBatches = gData.batches || [];
-                }
+                const rawText = await gRes.text();
+                let gData = {};
+                try { gData = JSON.parse(rawText); } catch (_) {}
+                googleBatches = gData.batchPredictionJobs || gData.batches || [];
             } catch (_) {}
 
             const updatedJobs = savedJobs.map(j => {
-                const live = googleBatches.find(gb => gb.name === j.batchId || gb.name === `batches/${j.batchId}`);
+                const live = googleBatches.find(gb => gb.name === j.batchId || gb.name?.endsWith(j.batchId));
                 if (live) {
                     return {
                         ...j,
@@ -205,12 +197,13 @@ export default async function handler(req, res) {
             });
 
             googleBatches.forEach(gb => {
-                const exists = updatedJobs.some(j => j.batchId === gb.name || `batches/${j.batchId}` === gb.name);
+                const shortId = gb.name.split('/').pop();
+                const exists = updatedJobs.some(j => j.batchId === gb.name || j.id === shortId);
                 if (!exists) {
                     updatedJobs.push({
-                        id: gb.name.replace('batches/', ''),
+                        id: shortId,
                         batchId: gb.name,
-                        sessionName: gb.displayName || 'Batch Job',
+                        sessionName: gb.displayName || 'Vertex AI Batch Job',
                         studentCount: 1,
                         status: gb.state || 'JOB_STATE_PENDING',
                         createdAt: gb.createTime || new Date().toISOString()
@@ -508,28 +501,39 @@ Return STRICT JSON:
     });
 
     const displayName = `NerdTutors_${examName ? examName.replace(/[^a-zA-Z0-9_-]/g, "_") : "Exam"}_${Date.now()}`;
-    const targetModel = model.includes("/") ? model : `models/${model}`;
+    const cleanModel = (model || "gemini-4-argon").replace(/^publishers\/google\/models\//, '').replace(/^models\//, '');
+    const cleanSession = (sessionId || 'exam').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const gcsBucket = process.env.GCP_STORAGE_BUCKET || `${projectId}-batch-evals`;
 
-    const batchPayload = {
-        batch: {
-            displayName: displayName.substring(0, 60),
-            inputConfig: {
-                requests: {
-                    requests: inlinedRequests.map(reqObj => ({ request: reqObj }))
-                }
+    // Official Google Cloud Vertex AI projects.locations.batchPredictionJobs resource schema
+    const vertexBatchPayload = {
+        displayName: displayName.substring(0, 128),
+        model: `publishers/google/models/${cleanModel}`,
+        inputConfig: {
+            instancesFormat: "jsonl",
+            gcsSource: {
+                uris: [
+                    body.gcsInputUri || `gs://${gcsBucket}/inputs/${cleanSession}_${Date.now()}.jsonl`
+                ]
+            }
+        },
+        outputConfig: {
+            predictionsFormat: "jsonl",
+            gcsDestination: {
+                outputUriPrefix: body.gcsOutputUri || `gs://${gcsBucket}/outputs/${cleanSession}_${Date.now()}/`
             }
         }
     };
 
     try {
-        const { url: createUrl, headers: createHeaders } = getEndpoint("create", targetModel);
+        const { url: createUrl, headers: createHeaders } = getEndpoint("create", cleanModel);
         createHeaders["Content-Type"] = "application/json";
-        console.log(`🚀 Sending batch creation request to ${authAudit.cloudProvider} (${students.length} students)...`);
+        console.log(`🚀 Dispatching Vertex AI Batch Prediction Job to ${createUrl} (Model: publishers/google/models/${cleanModel})...`);
 
         const gRes = await fetch(createUrl, {
             method: "POST",
             headers: createHeaders,
-            body: JSON.stringify(batchPayload)
+            body: JSON.stringify(vertexBatchPayload)
         });
 
         const rawText = await gRes.text();
@@ -537,8 +541,8 @@ Return STRICT JSON:
         try { data = JSON.parse(rawText); } catch (_) {}
 
         if (!gRes.ok || !data.name) {
-            console.error("Google Batch creation error:", rawText);
-            const cleanErr = data?.error?.message || (rawText.startsWith('<') ? "Google Cloud returned an HTML error page. Check Generative Language API permissions in GCP Console." : rawText) || "Failed to create Google Batch Job.";
+            console.error("Vertex AI Batch creation error:", rawText);
+            const cleanErr = data?.error?.message || (rawText.startsWith('<') ? "Vertex AI returned an HTML error page." : rawText) || "Failed to create Vertex AI Batch Job.";
             return res.status(gRes.status || 500).json({
                 error: cleanErr,
                 details: data?.error?.details || null,
