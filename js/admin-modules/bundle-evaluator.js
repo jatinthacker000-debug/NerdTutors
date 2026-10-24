@@ -517,7 +517,8 @@ async function submitGoogleBatchJob() {
 
             if (data.authAudit) {
                 console.group("%c🔐 VERTEX AI SERVICE ACCOUNT AUDIT", "background: #0f172a; color: #38bdf8; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
-                console.log("%c🔑 Key Loaded in Vercel:      ", "font-weight: bold; color: " + (data.authAudit.serviceAccountFetched ? "#10b981" : "#ef4444") + ";", data.authAudit.serviceAccountFetched ? "✅ YES (Key parsed successfully)" : "❌ NO (Missing)");
+                console.log("%c🔑 SA Key Loaded in Vercel:  ", "font-weight: bold; color: " + (data.authAudit.serviceAccountFetched ? "#10b981" : "#ef4444") + ";", data.authAudit.serviceAccountFetched ? "✅ YES (Key parsed successfully)" : "❌ NO (Missing)");
+                console.log("%c🛡️ Authorization Key (API): ", "font-weight: bold; color: " + (data.authAudit.hasApiKey ? "#10b981" : "#f59e0b") + ";", data.authAudit.hasApiKey ? "✅ ACTIVE (GCP Vertex/Gemini Auth Key)" : "⚠️ Not found");
                 console.log("%c📧 Service Account Principal:", "font-weight: bold; color: #0284c7;", data.authAudit.serviceAccountEmail || "None");
                 console.log("%c🆔 GCP Project ID:          ", "font-weight: bold;", data.authAudit.projectId || "None");
                 console.log("%c🎫 OAuth2 Token Active:     ", "font-weight: bold; color: " + (data.authAudit.tokenActive ? "#10b981" : "#ef4444") + ";", data.authAudit.tokenActive ? "✅ YES (Handshake approved)" : "❌ FAILED");

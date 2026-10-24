@@ -122,13 +122,13 @@ export default async function handler(req, res) {
         authError = e.message;
     }
 
-    const rawKeys = process.env.GEMINI_API_KEY || process.env.VERTEX_API_KEY || process.env.GEMINI_KEY || "";
+    const rawKeys = process.env.GEMINI_API_KEY || process.env.VERTEX_API_KEY || process.env.GEMINI_KEY || process.env.GOOGLE_API_KEY || "";
     if (!rawKeys && !authToken) {
         return res.status(500).json({
-            error: "Neither Gemini API key nor GCP Service Account key is configured in server environment.",
+            error: "Neither Gemini/Vertex API key nor GCP Service Account key is configured in server environment.",
             authAudit: {
                 serviceAccountFetched: false,
-                error: credsInfo.error || authError || "Missing GCP_SERVICE_ACCOUNT_KEY"
+                error: credsInfo.error || authError || "Missing API Key or GCP_SERVICE_ACCOUNT_KEY"
             }
         });
     }
@@ -144,7 +144,8 @@ export default async function handler(req, res) {
         serviceAccountEmail: credsInfo.clientEmail,
         projectId: projectId,
         tokenActive: Boolean(authToken),
-        cloudProvider: authToken ? "Google Cloud Vertex AI (us-central1)" : "Google AI Studio API Key",
+        hasApiKey: Boolean(apiKey),
+        cloudProvider: apiKey ? "Google Cloud Authorization Key (VERTEX_API_KEY / GEMINI_API_KEY)" : (authToken ? "Google Cloud Service Account" : "None"),
         authError: authError
     };
 
@@ -153,11 +154,16 @@ export default async function handler(req, res) {
         const headers = { "Content-Type": "application/json" };
         let url = "";
 
-        if (authToken) {
+        // Google explicitly requires API keys ("authorization keys") for generativelanguage.googleapis.com
+        // We prioritize apiKey over service account bearer tokens to satisfy Google's mandate:
+        // "Access to Gemini API is restricted with service accounts. Use authorization keys instead."
+        if (apiKey) {
+            headers["x-goog-api-key"] = apiKey;
+        } else if (authToken) {
             headers["Authorization"] = `Bearer ${authToken}`;
         }
 
-        const authQuery = (!authToken && apiKey) ? `?key=${apiKey}` : "";
+        const authQuery = apiKey ? `?key=${apiKey}` : "";
 
         if (actionName === "create") {
             url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:batchGenerateContent${authQuery}`;
