@@ -155,23 +155,17 @@ export default async function handler(req, res) {
 
         if (authToken) {
             headers["Authorization"] = `Bearer ${authToken}`;
-            if (actionName === "create") {
-                url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${cleanModel}:batchGenerateContent`;
-            } else if (actionName === "list") {
-                url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${cleanModel}:batchGenerateContent`;
-            } else if (actionName === "status" || actionName === "sync") {
-                const cleanBatch = batchId.replace('batches/', '');
-                url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/batchPredictionJobs/${cleanBatch}`;
-            }
-        } else {
-            if (actionName === "create") {
-                url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:batchGenerateContent?key=${apiKey}`;
-            } else if (actionName === "list") {
-                url = `https://generativelanguage.googleapis.com/v1beta/batches?key=${apiKey}`;
-            } else if (actionName === "status" || actionName === "sync") {
-                const cleanBatch = batchId.startsWith('batches/') ? batchId : `batches/${batchId}`;
-                url = `https://generativelanguage.googleapis.com/v1beta/${cleanBatch}?key=${apiKey}`;
-            }
+        }
+
+        const authQuery = (!authToken && apiKey) ? `?key=${apiKey}` : "";
+
+        if (actionName === "create") {
+            url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:batchGenerateContent${authQuery}`;
+        } else if (actionName === "list") {
+            url = `https://generativelanguage.googleapis.com/v1beta/batches${authQuery}`;
+        } else if (actionName === "status" || actionName === "sync") {
+            const cleanBatch = batchId.startsWith('batches/') ? batchId : `batches/${batchId}`;
+            url = `https://generativelanguage.googleapis.com/v1beta/${cleanBatch}${authQuery}`;
         }
         return { url, headers };
     }
@@ -250,13 +244,13 @@ export default async function handler(req, res) {
         }
 
         try {
-            const { url: statusUrl, headers: statusHeaders } = getEndpoint("status", "", batchId);
-            const gRes = await fetch(statusUrl, { headers: statusHeaders });
-            const data = await gRes.json();
+            const rawText = await gRes.text();
+            let data = {};
+            try { data = JSON.parse(rawText); } catch (_) {}
 
             if (!gRes.ok) {
                 return res.status(gRes.status).json({
-                    error: data.error?.message || "Failed to fetch batch status from Google Cloud.",
+                    error: data.error?.message || (rawText.startsWith('<') ? "Google Cloud returned an HTML error page." : rawText) || "Failed to fetch batch status from Google Cloud.",
                     authAudit
                 });
             }
@@ -291,12 +285,13 @@ export default async function handler(req, res) {
 
         try {
             const { url: syncUrl, headers: syncHeaders } = getEndpoint("sync", "", batchId);
-            const gRes = await fetch(syncUrl, { headers: syncHeaders });
-            const data = await gRes.json();
+            const rawText = await gRes.text();
+            let data = {};
+            try { data = JSON.parse(rawText); } catch (_) {}
 
             if (!gRes.ok) {
                 return res.status(gRes.status).json({
-                    error: data.error?.message || "Failed to sync batch.",
+                    error: data.error?.message || (rawText.startsWith('<') ? "Google Cloud returned an HTML error page." : rawText) || "Failed to sync batch.",
                     authAudit
                 });
             }
@@ -531,13 +526,16 @@ Return STRICT JSON:
             body: JSON.stringify(batchPayload)
         });
 
-        const data = await gRes.json();
+        const rawText = await gRes.text();
+        let data = {};
+        try { data = JSON.parse(rawText); } catch (_) {}
 
-        if (!gRes.ok) {
-            console.error("Google Batch creation error:", data);
-            return res.status(gRes.status).json({
-                error: data.error?.message || "Failed to create Google Batch Job.",
-                details: data.error?.details || null,
+        if (!gRes.ok || !data.name) {
+            console.error("Google Batch creation error:", rawText);
+            const cleanErr = data?.error?.message || (rawText.startsWith('<') ? "Google Cloud returned an HTML error page. Check Generative Language API permissions in GCP Console." : rawText) || "Failed to create Google Batch Job.";
+            return res.status(gRes.status || 500).json({
+                error: cleanErr,
+                details: data?.error?.details || null,
                 authAudit
             });
         }

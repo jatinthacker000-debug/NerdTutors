@@ -58,7 +58,7 @@ export async function getVertexAccessToken() {
 
     const payload = {
         iss: credentials.client_email,
-        scope: "https://www.googleapis.com/auth/cloud-platform",
+        scope: "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/generative-language",
         aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
         iat: now

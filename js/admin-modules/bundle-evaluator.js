@@ -511,7 +511,9 @@ async function submitGoogleBatchJob() {
                 body: JSON.stringify(requestBody)
             });
 
-            const data = await res.json();
+            const rawText = await res.text();
+            let data = {};
+            try { data = JSON.parse(rawText); } catch (_) {}
 
             if (data.authAudit) {
                 console.group("%c🔐 VERTEX AI SERVICE ACCOUNT AUDIT", "background: #0f172a; color: #38bdf8; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
@@ -526,8 +528,8 @@ async function submitGoogleBatchJob() {
                 console.groupEnd();
             }
 
-            if (!res.ok) {
-                const errMsg = data.error || (typeof data.details === 'string' ? data.details : JSON.stringify(data.details)) || "Failed to submit Google Batch Job";
+            if (!res.ok || !data.batchId) {
+                const errMsg = data.error || (typeof data.details === 'string' ? data.details : JSON.stringify(data.details)) || (rawText.startsWith('<') ? "Server returned HTML error page. Check function logs." : rawText) || "Failed to submit Google Batch Job";
                 const errObj = new Error(errMsg);
                 errObj.authAudit = data.authAudit;
                 throw errObj;
