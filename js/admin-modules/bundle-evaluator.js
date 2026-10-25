@@ -553,7 +553,7 @@ async function submitGoogleBatchJob() {
 
             try {
                 const cleanDocId = String(data.batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
-                await setDoc(doc(db, 'batchJobs', cleanDocId), {
+                const jobMeta = {
                     batchId: data.batchId,
                     sessionId: selectedBundleSession?.id || null,
                     sessionName: selectedBundleSession?.name || 'Exam Assessment',
@@ -561,12 +561,12 @@ async function submitGoogleBatchJob() {
                     subject: selectedBundleSession?.subject || 'Business Studies',
                     maxMarks: Number(selectedBundleSession?.maxMarks) || 30,
                     targetGroup: selectedBundleSession?.targetGroup || 'Both',
-                    studentsMetadata: pendingStudents.map(st => ({ studentName: st.studentName || "Student" })),
-                    createdAt: serverTimestamp()
-                }, { merge: true });
-                console.log("%c💾 Batch Job metadata successfully saved to Firestore 'batchJobs' collection!", "color: #10b981; font-weight: bold;");
-            } catch (dbErr) {
-                console.warn("Notice: Firestore batchJobs cache write:", dbErr.message);
+                    studentsMetadata: pendingStudents.map(st => ({ studentName: st.studentName || "Student" }))
+                };
+                localStorage.setItem('nt_batch_job_' + cleanDocId, JSON.stringify(jobMeta));
+                console.log("%c💾 Batch Job metadata saved to persistent local storage!", "color: #10b981; font-weight: bold;");
+            } catch (storageErr) {
+                console.warn("Notice: Local storage cache:", storageErr);
             }
 
             showToast(`🎉 Batch Job created: ${data.batchId}! Track progress in registry below.`, "success");
@@ -611,20 +611,20 @@ async function submitGoogleBatchJob() {
             const data = await res.json();
             let liveJobs = (res.ok && Array.isArray(data.jobs)) ? data.jobs : [];
 
-            // Fetch persistent session metadata from Firestore 'batchJobs'
+            // Fetch persistent session metadata from localStorage
             let fsMetadataMap = {};
-            try {
-                const fsSnap = await getDocs(collection(db, 'batchJobs'));
-                fsSnap.forEach(d => {
-                    const dData = d.data();
-                    if (dData.batchId) {
-                        fsMetadataMap[dData.batchId] = dData;
-                        const shortId = dData.batchId.split('/').pop();
-                        fsMetadataMap[shortId] = dData;
-                    }
-                });
-            } catch (fsErr) {
-                console.warn("Firestore batchJobs metadata fetch notice:", fsErr.message);
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('nt_batch_job_')) {
+                    try {
+                        const parsed = JSON.parse(localStorage.getItem(key));
+                        if (parsed?.batchId) {
+                            fsMetadataMap[parsed.batchId] = parsed;
+                            const shortId = parsed.batchId.split('/').pop();
+                            fsMetadataMap[shortId] = parsed;
+                        }
+                    } catch (_) {}
+                }
             }
 
             // Merge Firestore metadata so sessionId and sessionName are NEVER lost
@@ -764,19 +764,17 @@ async function submitGoogleBatchJob() {
                 let batchJobData = cachedBatchJobs.find(j => j.batchId === batchId || j.id === batchId || j.id === docId) || {};
                 console.log("🔍 Initial Cached Batch Job Data:", batchJobData);
 
-                // If sessionId is missing, try reading directly from Firestore 'batchJobs'
+                // If sessionId is missing, try reading from localStorage
                 if (!batchJobData.sessionId) {
                     try {
                         const cleanDocId = String(batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
-                        const fsSnap = await getDoc(doc(db, 'batchJobs', cleanDocId));
-                        if (fsSnap.exists()) {
-                            const fsData = fsSnap.data();
-                            console.log("📂 Retrieved metadata from Firestore batchJobs collection:", fsData);
-                            batchJobData = { ...batchJobData, ...fsData };
+                        const localRaw = localStorage.getItem('nt_batch_job_' + cleanDocId);
+                        if (localRaw) {
+                            const localData = JSON.parse(localRaw);
+                            console.log("📂 Retrieved metadata from localStorage cache:", localData);
+                            batchJobData = { ...batchJobData, ...localData };
                         }
-                    } catch (fsErr) {
-                        console.warn("Could not retrieve batchJobs from Firestore:", fsErr);
-                    }
+                    } catch (_) {}
                 }
 
                 // If STILL missing, fallback to current session dropdown selection
@@ -877,16 +875,16 @@ async function submitGoogleBatchJob() {
                     console.groupEnd();
                 }
 
-                // Update Firestore batchJobs record to SYNCED
+                // Update batch status to SYNCED in localStorage
                 try {
                     const cleanDocId = String(batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
-                    await setDoc(doc(db, 'batchJobs', cleanDocId), {
+                    const updatedMeta = {
+                        ...batchJobData,
                         status: 'SYNCED',
                         syncedCount: syncedCount,
-                        syncedAt: serverTimestamp(),
-                        sessionId: batchJobData.sessionId || null,
-                        sessionName: batchJobData.sessionName || 'Batch Exam'
-                    }, { merge: true });
+                        syncedAt: new Date().toISOString()
+                    };
+                    localStorage.setItem('nt_batch_job_' + cleanDocId, JSON.stringify(updatedMeta));
                 } catch (_) {}
 
                 // If on Admin page, refresh resultSessionSelect if matched
