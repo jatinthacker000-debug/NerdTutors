@@ -54,7 +54,7 @@ function checkIsAdmin(email, gateToken) {
         try {
             const raw = Buffer.from(gateToken, 'base64').toString('utf8');
             if (raw.toLowerCase().includes('admin') || raw.toLowerCase().includes('jatin')) return true;
-        } catch (_) {}
+        } catch (_) { }
     }
     return false;
 }
@@ -703,14 +703,14 @@ Return STRICT JSON only (no markdown, no code blocks):
 
         const projectId = process.env.GCP_PROJECT_ID || "975383880672";
         const location = process.env.GCP_LOCATION || "global";
-        const host = location === "global" 
-            ? "aiplatform.googleapis.com" 
+        const host = location === "global"
+            ? "aiplatform.googleapis.com"
             : (location === "us" ? "aiplatform.us.rep.googleapis.com" : (location === "eu" ? "aiplatform.eu.rep.googleapis.com" : `${location}-aiplatform.googleapis.com`));
 
         let authToken = null;
         try {
             authToken = await getVertexAccessToken();
-        } catch (_) {}
+        } catch (_) { }
 
         for (let attempt = 0; attempt < apiKeys.length; attempt++) {
             const keyIndex = (preferredKeyIndex + attempt) % apiKeys.length;
@@ -1086,15 +1086,15 @@ Return the response as a strict JSON object.`;
                 }
 
                 // Check if feedback mentions wrong stance in a Defend or Refute question
-                const wrongStance = feedbackText.includes("defended instead of refut") || 
-                                    feedbackText.includes("refuted instead of defend") ||
-                                    feedbackText.includes("defended the statement instead of refuting") ||
-                                    feedbackText.includes("refuted the statement instead of defending") ||
-                                    feedbackText.includes("defend instead of refute") ||
-                                    feedbackText.includes("refute instead of defend") ||
-                                    feedbackText.includes("wrong stance") ||
-                                    feedbackText.includes("should have refuted") ||
-                                    feedbackText.includes("should have defended");
+                const wrongStance = feedbackText.includes("defended instead of refut") ||
+                    feedbackText.includes("refuted instead of defend") ||
+                    feedbackText.includes("defended the statement instead of refuting") ||
+                    feedbackText.includes("refuted the statement instead of defending") ||
+                    feedbackText.includes("defend instead of refute") ||
+                    feedbackText.includes("refute instead of defend") ||
+                    feedbackText.includes("wrong stance") ||
+                    feedbackText.includes("should have refuted") ||
+                    feedbackText.includes("should have defended");
 
                 if (wrongStance && Number(resObj.maxMarks) >= 3 && Number(resObj.score) > 1.0) {
                     console.log(`🔧 Programmatic Override: Capping ${resObj.questionNumber} from ${resObj.score} to 1.0 due to incorrect Defend/Refute stance.`);
