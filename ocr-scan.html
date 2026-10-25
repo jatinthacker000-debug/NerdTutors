@@ -527,10 +527,10 @@
         let lastPayloadString = null;
 
         // ===== Low-Internet Resilience Config (v2) =====
-        const OCR_BUILD_TAG = 'ocr-scan v2 — low-internet: upload-progress + auto-retry + resume-cache';
+        const OCR_BUILD_TAG = 'ocr-scan v2.1 — zero-retry + 1024px low-latency compression';
         const MAX_IMAGES = 10;          // hard cap on number of answer-sheet photos
         const MAX_TOTAL_MB = 4.0;       // warn before Vercel's ~4.5 MB request-body limit (base64 payload)
-        const MAX_RETRIES = 2;          // auto-retries on network/timeout/5xx errors
+        const MAX_RETRIES = 0;          // ZERO auto-retries: never spawn duplicate paid AI calls on connection timeout
         const UPLOAD_TIMEOUT_MS = 180000; // 3 min per attempt for slow connections
         console.log('%c🟢 ' + OCR_BUILD_TAG + ' — LIVE ✅', 'color:#22c55e;font-weight:bold;font-size:13px');
         console.log('%c   If you can read this line, the updated ocr-scan.html is deployed and running.', 'color:#2a5298');
@@ -1183,7 +1183,7 @@
                 reader.onload = (event) => {
                     const img = new Image();
                     img.onload = () => {
-                        const MAX_DIM = 1200;
+                        const MAX_DIM = 1024;
                         let width = img.width;
                         let height = img.height;
 
@@ -1205,7 +1205,7 @@
                         ctx.imageSmoothingQuality = 'high';
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
                         resolve({
                             data: dataUrl.split(',')[1],
                             mimeType: 'image/jpeg',

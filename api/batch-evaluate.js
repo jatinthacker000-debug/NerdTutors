@@ -572,6 +572,7 @@ export default async function handler(req, res) {
         }
 
         const isArgon = model.includes("argon") || model.includes("gemini-4");
+        const isExplicitCache = Boolean(cachedContentId && (cachedContentId.startsWith('cachedContents/') || cachedContentId.includes('/cachedContents/')));
 
     const reasoningGuardrailPrompt = `
 --- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
@@ -582,10 +583,10 @@ export default async function handler(req, res) {
 - Keep your internal thought trace crisp, concise, and decisive.
 `;
 
-    // Streamlined prompt: if cachedContentId is attached, Google already holds the entire
-    // question paper, marking scheme, and rubrics in memory!
+    // Streamlined prompt: if an explicit cachedContent resource exists, reference it.
+    // Otherwise, include full static prompt prefix to trigger Vertex AI automatic implicit caching!
     let promptBase = "";
-    if (cachedContentId) {
+    if (isExplicitCache) {
         promptBase = `Evaluate this student's handwritten answer sheet against the pre-loaded Exam Questions, Marking Scheme, Subject Directives, and Output Schema in your active cache (${cachedContentId}). Return STRICT JSON only.`;
     } else {
         const subjectDirectives = getSubjectDirectives(subject);
@@ -653,7 +654,7 @@ Return STRICT JSON:
             generationConfig: genConfig
         };
 
-        if (cachedContentId) {
+        if (isExplicitCache) {
             reqItem.cachedContent = cachedContentId;
         }
 
