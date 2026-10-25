@@ -11,6 +11,7 @@ import {
     getDocs,
     doc,
     getDoc,
+    setDoc,
     updateDoc,
     addDoc,
     deleteDoc,
@@ -550,6 +551,24 @@ async function submitGoogleBatchJob() {
             queuedBundleStudents = [];
             renderBundleQueue();
 
+            try {
+                const cleanDocId = String(data.batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
+                await setDoc(doc(db, 'batchJobs', cleanDocId), {
+                    batchId: data.batchId,
+                    sessionId: selectedBundleSession?.id || null,
+                    sessionName: selectedBundleSession?.name || 'Exam Assessment',
+                    class: selectedBundleSession?.class || 'Class 12th',
+                    subject: selectedBundleSession?.subject || 'Business Studies',
+                    maxMarks: Number(selectedBundleSession?.maxMarks) || 30,
+                    targetGroup: selectedBundleSession?.targetGroup || 'Both',
+                    studentsMetadata: pendingStudents.map(st => ({ studentName: st.studentName || "Student" })),
+                    createdAt: serverTimestamp()
+                }, { merge: true });
+                console.log("%c💾 Batch Job metadata successfully saved to Firestore 'batchJobs' collection!", "color: #10b981; font-weight: bold;");
+            } catch (dbErr) {
+                console.warn("Notice: Firestore batchJobs cache write:", dbErr.message);
+            }
+
             showToast(`🎉 Batch Job created: ${data.batchId}! Track progress in registry below.`, "success");
             await loadBatchJobs(true);
 
@@ -587,15 +606,46 @@ async function submitGoogleBatchJob() {
         if (!container) return;
 
         try {
+            console.log("🔄 Fetching batch jobs from Google Cloud Vertex AI...");
             const res = await fetch('/api/batch-evaluate?action=list');
             const data = await res.json();
-            if (res.ok && Array.isArray(data.jobs)) {
-                cachedBatchJobs = data.jobs;
-                renderBatchJobs(cachedBatchJobs);
-                if (forceToast) showToast("Batch jobs registry refreshed.", "info");
-            } else {
-                renderBatchJobs([]);
+            let liveJobs = (res.ok && Array.isArray(data.jobs)) ? data.jobs : [];
+
+            // Fetch persistent session metadata from Firestore 'batchJobs'
+            let fsMetadataMap = {};
+            try {
+                const fsSnap = await getDocs(collection(db, 'batchJobs'));
+                fsSnap.forEach(d => {
+                    const dData = d.data();
+                    if (dData.batchId) {
+                        fsMetadataMap[dData.batchId] = dData;
+                        const shortId = dData.batchId.split('/').pop();
+                        fsMetadataMap[shortId] = dData;
+                    }
+                });
+            } catch (fsErr) {
+                console.warn("Firestore batchJobs metadata fetch notice:", fsErr.message);
             }
+
+            // Merge Firestore metadata so sessionId and sessionName are NEVER lost
+            cachedBatchJobs = liveJobs.map(job => {
+                const shortId = (job.batchId || job.id || '').split('/').pop();
+                const meta = fsMetadataMap[job.batchId] || fsMetadataMap[shortId] || {};
+                return {
+                    ...job,
+                    sessionId: job.sessionId || meta.sessionId || null,
+                    sessionName: (job.sessionName && job.sessionName !== 'Vertex AI Batch Job') ? job.sessionName : (meta.sessionName || job.sessionName),
+                    class: job.class || meta.class || 'Class 12th',
+                    subject: job.subject || meta.subject || 'Business Studies',
+                    maxMarks: job.maxMarks || meta.maxMarks || 30,
+                    targetGroup: job.targetGroup || meta.targetGroup || 'Both',
+                    studentsMetadata: (job.studentsMetadata && job.studentsMetadata.length) ? job.studentsMetadata : (meta.studentsMetadata || [])
+                };
+            });
+
+            console.log("📋 Current Batch Jobs with Firestore Metadata:", cachedBatchJobs);
+            renderBatchJobs(cachedBatchJobs);
+            if (forceToast) showToast("Batch jobs registry refreshed.", "info");
         } catch (err) {
             console.warn("Batch jobs fetch error:", err.message);
             container.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load batch jobs: ${escapeHtml(err.message)}</div>`;
@@ -672,66 +722,138 @@ async function submitGoogleBatchJob() {
     }
 
     async function checkAndSyncBatch(batchId, docId) {
+        console.group(`%c🚀 BATCH SYNC PROCESSOR: ${batchId}`, "background: #1e3c72; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+        console.log("Job ID / Short ID:", docId);
+        console.log("Full Batch Resource Name:", batchId);
+
         try {
             showToast(`Checking status of ${batchId}...`, "info");
 
-            // 1. Check status
+            // 1. Check status on Google Vertex AI
+            console.log("📡 Step 1: Polling Vertex AI batch status...");
             const statusRes = await fetch(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`);
             const statusData = await statusRes.json();
+            console.log("📡 Status Response from Google Cloud:", statusData);
 
             if (!statusRes.ok) {
                 throw new Error(statusData.error || "Failed to check batch status");
             }
 
             const currentState = statusData.state || 'JOB_STATE_PENDING';
+            console.log("📊 Batch State on Google Cloud:", currentState);
 
             if (currentState === 'JOB_STATE_RUNNING' || currentState === 'JOB_STATE_PENDING') {
                 showToast(`⏳ Batch is still processing in Google's queue (${currentState}). Check back in a few minutes.`, "info");
                 await loadBatchJobs(false);
+                console.groupEnd();
                 return;
             }
 
             if (currentState === 'JOB_STATE_FAILED') {
+                console.error("❌ Batch failed on Google Cloud:", statusData.error);
                 showToast(`⚠️ Batch job failed on Google Cloud: ${statusData.error?.message || 'Unknown error'}`, "error");
                 await loadBatchJobs(false);
+                console.groupEnd();
                 return;
             }
 
             if (currentState === 'JOB_STATE_SUCCEEDED') {
                 showToast("🎉 Batch completed by Google! Syncing parsed report cards to Firestore...", "info");
 
-                const batchJobData = cachedBatchJobs.find(j => j.batchId === batchId || j.id === batchId || j.id === docId) || {};
+                // Find existing job metadata
+                let batchJobData = cachedBatchJobs.find(j => j.batchId === batchId || j.id === batchId || j.id === docId) || {};
+                console.log("🔍 Initial Cached Batch Job Data:", batchJobData);
 
+                // If sessionId is missing, try reading directly from Firestore 'batchJobs'
+                if (!batchJobData.sessionId) {
+                    try {
+                        const cleanDocId = String(batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
+                        const fsSnap = await getDoc(doc(db, 'batchJobs', cleanDocId));
+                        if (fsSnap.exists()) {
+                            const fsData = fsSnap.data();
+                            console.log("📂 Retrieved metadata from Firestore batchJobs collection:", fsData);
+                            batchJobData = { ...batchJobData, ...fsData };
+                        }
+                    } catch (fsErr) {
+                        console.warn("Could not retrieve batchJobs from Firestore:", fsErr);
+                    }
+                }
+
+                // If STILL missing, fallback to current session dropdown selection
+                if (!batchJobData.sessionId && selectedBundleSession) {
+                    console.log("⚠️ Fallback: using currently selected bundle session:", selectedBundleSession.name);
+                    batchJobData.sessionId = selectedBundleSession.id;
+                    batchJobData.sessionName = selectedBundleSession.name;
+                    batchJobData.subject = selectedBundleSession.subject;
+                    batchJobData.class = selectedBundleSession.class;
+                    batchJobData.maxMarks = Number(selectedBundleSession.maxMarks) || 30;
+                }
+
+                // Or fallback to dropdown selection on page
+                if (!batchJobData.sessionId) {
+                    const bundleSelectVal = document.getElementById('bundleSessionSelect')?.value;
+                    const resultSelectVal = document.getElementById('resultSessionSelect')?.value;
+                    const fallbackId = bundleSelectVal || resultSelectVal;
+                    if (fallbackId && Array.isArray(bundleSessionsList)) {
+                        const matchedSession = bundleSessionsList.find(s => s.id === fallbackId);
+                        if (matchedSession) {
+                            console.log("⚠️ Fallback: matched session from dropdown list:", matchedSession.name);
+                            batchJobData.sessionId = matchedSession.id;
+                            batchJobData.sessionName = matchedSession.name;
+                            batchJobData.subject = matchedSession.subject;
+                            batchJobData.class = matchedSession.class;
+                            batchJobData.maxMarks = Number(matchedSession.maxMarks) || 30;
+                        }
+                    }
+                }
+
+                console.log("📋 Resolved Job Metadata for Firestore Insertion:", {
+                    sessionId: batchJobData.sessionId,
+                    sessionName: batchJobData.sessionName,
+                    subject: batchJobData.subject,
+                    class: batchJobData.class,
+                    maxMarks: batchJobData.maxMarks
+                });
+
+                console.log("📥 Step 2: Requesting parsed results from /api/batch-evaluate (action: sync)...");
                 const syncRes = await fetch('/api/batch-evaluate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'sync',
                         batchId: batchId,
-                        maxMarks: batchJobData.maxMarks || 40,
+                        maxMarks: batchJobData.maxMarks || 30,
                         studentsMetadata: batchJobData.studentsMetadata || []
                     })
                 });
 
                 const syncData = await syncRes.json();
+                console.log("📦 Sync Response from API:", syncData);
+
                 if (!syncRes.ok) {
                     throw new Error(syncData.error || "Failed to parse batch results from Google Cloud");
                 }
 
                 const parsedResults = syncData.parsedResults || [];
+                console.log(`📑 Total Students Parsed from Batch: ${parsedResults.length}`);
+
                 let syncedCount = 0;
 
-                for (const item of parsedResults) {
+                for (let i = 0; i < parsedResults.length; i++) {
+                    const item = parsedResults[i];
+                    console.group(`👤 Processing Student [${i + 1}/${parsedResults.length}]: ${item.studentName || 'Student'}`);
+                    console.log("Student Evaluation Object:", item.result);
+
                     if (item.result) {
-                        const lockedMax = Number(batchJobData.maxMarks) || 40;
+                        const lockedMax = Number(batchJobData.maxMarks) || Number(item.result.totalMaxMarks) || 30;
                         const clampedScore = Math.min(Math.max(0, Number(item.result.totalScore) || 0), lockedMax);
 
-                        await addDoc(collection(db, 'testResults'), {
-                            studentName: item.studentName || 'Student',
+                        const payload = {
+                            studentName: item.studentName || `Student ${i + 1}`,
                             studentId: null,
                             batch: batchJobData.targetGroup || 'Both',
                             class: batchJobData.class || 'Class 12th',
-                            subject: batchJobData.subject || 'Economics',
+                            subject: batchJobData.subject || 'Business Studies',
                             sessionId: batchJobData.sessionId || null,
                             sessionName: batchJobData.sessionName || 'Batch Exam',
                             score: clampedScore,
@@ -743,17 +865,46 @@ async function submitGoogleBatchJob() {
                             isBatchEvaluated: true,
                             batchId: batchId,
                             createdAt: serverTimestamp()
-                        });
+                        };
+
+                        console.log("💾 Writing record to Firestore 'testResults':", payload);
+                        const docRef = await addDoc(collection(db, 'testResults'), payload);
+                        console.log(`%c✅ SUCCESS: Document inserted into testResults with ID: ${docRef.id}`, "color: #10b981; font-weight: bold;");
                         syncedCount++;
+                    } else if (item.error) {
+                        console.error("❌ Student evaluation contained an error:", item.error);
                     }
+                    console.groupEnd();
+                }
+
+                // Update Firestore batchJobs record to SYNCED
+                try {
+                    const cleanDocId = String(batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
+                    await setDoc(doc(db, 'batchJobs', cleanDocId), {
+                        status: 'SYNCED',
+                        syncedCount: syncedCount,
+                        syncedAt: serverTimestamp(),
+                        sessionId: batchJobData.sessionId || null,
+                        sessionName: batchJobData.sessionName || 'Batch Exam'
+                    }, { merge: true });
+                } catch (_) {}
+
+                // If on Admin page, refresh resultSessionSelect if matched
+                const resultSessionSelect = document.getElementById('resultSessionSelect');
+                if (resultSessionSelect && batchJobData.sessionId) {
+                    resultSessionSelect.value = batchJobData.sessionId;
+                    resultSessionSelect.dispatchEvent(new Event('change'));
                 }
 
                 await loadBatchJobs(false);
                 showToast(`🎉 Success! ${syncedCount} student papers successfully synced into testResults!`, "success");
+                console.log(`%c🎉 BATCH SYNC COMPLETE: ${syncedCount} records written to testResults.`, "color: #10b981; font-weight: bold; font-size: 14px;");
             }
         } catch (err) {
-            console.error("Check & sync error:", err);
+            console.error("❌ Check & sync error:", err);
             showToast(err.message, "error");
+        } finally {
+            console.groupEnd();
         }
     }
 
