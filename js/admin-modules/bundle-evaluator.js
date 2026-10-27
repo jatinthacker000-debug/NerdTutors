@@ -115,6 +115,7 @@ export function setupBundleEvaluator() {
     window.handleStudentPagesUpload = (studentId, files) => handleStudentPages(studentId, Array.from(files));
     window.removePageFromStudent = (studentId, pageId) => removePage(studentId, pageId);
     window.checkAndSyncBatchJob = (batchId, docId) => checkAndSyncBatch(batchId, docId);
+    window.downloadBatchPredictionsDoc = (batchId, docId) => downloadBatchPredictions(batchId, docId);
     window.deleteBatchJobDoc = (docId) => deleteBatchJob(docId);
 }
 
@@ -239,14 +240,13 @@ async function handleStudentPages(studentId, fileList) {
 
     for (const f of validFiles) {
         try {
-            const b64 = await readFileAsBase64(f);
-            const preview = f.type.startsWith('image/') ? `data:${f.type};base64,${b64}` : null;
+            const compressed = await readAndCompressImage(f, 1200, 0.75);
             std.pages.push({
                 id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 fileName: f.name,
-                mimeType: f.type,
-                base64: b64,
-                preview: preview
+                mimeType: compressed.mimeType,
+                base64: compressed.base64,
+                preview: compressed.preview
             });
         } catch (err) {
             console.error("Error reading student page file:", f.name, err);
@@ -267,6 +267,7 @@ function removePage(studentId, pageId) {
 }
 
 // Ingest multiple files dropped all at once
+// Ingest multiple files dropped all at once
 async function handleBulkFilesIngest(fileList) {
     if (fileList.length === 0) return;
 
@@ -278,47 +279,72 @@ async function handleBulkFilesIngest(fileList) {
 
     showToast(`Processing ${validFiles.length} file(s)...`, "info");
 
-    // Group files by student prefix (e.g. "Rohit_Sharma_Page1.jpg" and "Rohit_Sharma_Page2.jpg" -> Rohit Sharma)
+    // Helper to determine if a filename is a generic camera/whatsapp/screenshot export
+    const isGenericCaptureName = (fileName) => {
+        const lower = fileName.toLowerCase().replace(/\.[^/.]+$/, "");
+        return lower.startsWith('whatsapp') ||
+               lower.startsWith('img') ||
+               lower.startsWith('dsc') ||
+               lower.startsWith('photo') ||
+               lower.startsWith('scan') ||
+               lower.startsWith('screenshot') ||
+               lower.startsWith('camera') ||
+               /^\d+$/.test(lower) ||
+               /\d{4}[-_]\d{2}[-_]\d{2}/.test(lower);
+    };
+
+    // Check if filename has an explicit student + page pattern like "Rahul_page1.jpg", "Aman_p2.png"
+    const parseExplicitStudentPage = (fileName) => {
+        if (isGenericCaptureName(fileName)) return null;
+        const base = fileName.replace(/\.[^/.]+$/, "");
+        const match = base.match(/^(.+?)[-_\s]+(?:page|p|scan|sheet)[-_\s]*(\d+)$/i);
+        if (match && match[1].trim().length > 2) {
+            return {
+                studentName: match[1].replace(/[_-]+/g, " ").trim(),
+                pageNum: parseInt(match[2], 10)
+            };
+        }
+        return null;
+    };
+
+    // Group files: distinct student for generic files, grouped for explicit multi-page
     const groups = {};
 
     for (const file of validFiles) {
-        // Strip page identifiers like _1, _page2, _p1
-        const cleanName = file.name
-            .replace(/\.[^/.]+$/, "")
-            .replace(/[-_]?(page|p|scan|sheet)?[-_\s]*\d+$/i, "")
-            .replace(/[_-]+/g, " ")
-            .replace(/\b(sheet|paper|scan|page|answer|class|10th|12th)\b/gi, "")
-            .trim() || `Student ${queuedBundleStudents.length + 1}`;
-
-        if (!groups[cleanName]) groups[cleanName] = [];
-        groups[cleanName].push(file);
+        const explicit = parseExplicitStudentPage(file.name);
+        if (explicit) {
+            // Group by the explicit student name
+            if (!groups[explicit.studentName]) groups[explicit.studentName] = [];
+            groups[explicit.studentName].push(file);
+        } else {
+            // Generic camera/whatsapp/single file -> THIS IS A DISTINCT STUDENT!
+            const studentIdx = Object.keys(groups).length + queuedBundleStudents.length + 1;
+            const singleStudentName = `Student ${studentIdx}`;
+            groups[singleStudentName] = [file];
+        }
     }
 
     for (const [studentName, files] of Object.entries(groups)) {
-        let std = queuedBundleStudents.find(s => s.studentName.toLowerCase() === studentName.toLowerCase() && s.status === 'ready');
-        if (!std) {
-            std = {
-                id: 'std_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-                studentName: studentName,
-                pages: [],
-                status: 'ready',
-                result: null,
-                resultId: null,
-                errorMessage: null
-            };
-            queuedBundleStudents.push(std);
-        }
+        let std = {
+            id: 'std_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            studentName: studentName,
+            pages: [],
+            status: 'ready',
+            result: null,
+            resultId: null,
+            errorMessage: null
+        };
+        queuedBundleStudents.push(std);
 
         for (const f of files) {
             try {
-                const b64 = await readFileAsBase64(f);
-                const preview = f.type.startsWith('image/') ? `data:${f.type};base64,${b64}` : null;
+                const compressed = await readAndCompressImage(f, 1200, 0.75);
                 std.pages.push({
                     id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                     fileName: f.name,
-                    mimeType: f.type,
-                    base64: b64,
-                    preview: preview
+                    mimeType: compressed.mimeType,
+                    base64: compressed.base64,
+                    preview: compressed.preview
                 });
             } catch (err) {
                 console.error("Error reading bulk file:", f.name, err);
@@ -327,16 +353,60 @@ async function handleBulkFilesIngest(fileList) {
     }
 
     renderBundleQueue();
-    showToast(`Bundle queue updated: ${queuedBundleStudents.length} student segment(s) ready.`, "success");
+    showToast(`🎉 Created ${Object.keys(groups).length} distinct student segments (${validFiles.length} pages total)!`, "success");
 }
 
-function readFileAsBase64(file) {
+function readAndCompressImage(file, maxDim = 1200, quality = 0.75) {
     return new Promise((resolve, reject) => {
+        if (!file.type || !file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const res = reader.result;
+                const b64 = typeof res === 'string' ? res.split(',')[1] : '';
+                resolve({ base64: b64, mimeType: file.type || 'application/octet-stream', preview: null });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+            return;
+        }
+
         const reader = new FileReader();
-        reader.onload = () => {
-            const res = reader.result;
-            const b64 = typeof res === 'string' ? res.split(',')[1] : '';
-            resolve(b64);
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let { width, height } = img;
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                const b64 = dataUrl.split(',')[1];
+                resolve({
+                    base64: b64,
+                    mimeType: 'image/jpeg',
+                    preview: dataUrl
+                });
+            };
+            img.onerror = () => {
+                const res = e.target.result;
+                const b64 = typeof res === 'string' ? res.split(',')[1] : '';
+                resolve({ base64: b64, mimeType: file.type, preview: typeof res === 'string' ? res : null });
+            };
+            img.src = e.target.result;
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
@@ -376,12 +446,24 @@ function renderBundleQueue() {
     if (container) container.style.display = 'flex';
     if (queueCard) queueCard.style.display = 'block';
 
+    const totalBytes = queuedBundleStudents.reduce((sum, s) => {
+        return sum + s.pages.reduce((pSum, p) => pSum + (p.base64 ? p.base64.length : 0), 0);
+    }, 0);
+    const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+    const isPayloadTooLarge = totalBytes > 4.2 * 1024 * 1024;
+
     if (btnSubmitBatch) {
-        btnSubmitBatch.disabled = isEvaluatingBundle || totalPages === 0;
-        btnSubmitBatch.innerHTML = `⚡ Submit Google Batch Job (${totalStudents} Students · ${totalPages} Pages)`;
+        btnSubmitBatch.disabled = isEvaluatingBundle || totalPages === 0 || isPayloadTooLarge;
+        if (isPayloadTooLarge) {
+            btnSubmitBatch.innerHTML = `⚠️ Payload Too Large (${totalMB} MB / Max 4.2 MB) - Split Into 2 Batches`;
+            btnSubmitBatch.style.background = '#dc2626';
+        } else {
+            btnSubmitBatch.innerHTML = `⚡ Submit Google Batch Job (${totalStudents} Students · ${totalPages} Pages · ~${totalMB} MB)`;
+            btnSubmitBatch.style.background = 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)';
+        }
     }
     if (queueCountBadge) {
-        queueCountBadge.textContent = `${totalStudents} Students (${totalPages} Pages)`;
+        queueCountBadge.textContent = `${totalStudents} Students (${totalPages} Pages · ~${totalMB} MB)`;
     }
 
     let html = '';
@@ -643,6 +725,13 @@ async function submitGoogleBatchJob() {
                 };
             });
 
+            // Sort jobs chronologically in ascending order as requested (earliest test -> latest test)
+            cachedBatchJobs.sort((a, b) => {
+                const timeA = new Date(a.createdAt || a.createTime || 0).getTime();
+                const timeB = new Date(b.createdAt || b.createTime || 0).getTime();
+                return timeA - timeB;
+            });
+
             console.log("📋 Current Batch Jobs with Firestore Metadata:", cachedBatchJobs);
             renderBatchJobs(cachedBatchJobs);
             if (forceToast) showToast("Batch jobs registry refreshed.", "info");
@@ -650,6 +739,29 @@ async function submitGoogleBatchJob() {
             console.warn("Batch jobs fetch error:", err.message);
             container.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load batch jobs: ${escapeHtml(err.message)}</div>`;
         }
+    }
+
+    function formatCleanBatchSession(job) {
+        let rawName = job.sessionName || job.displayName || 'Exam Assessment';
+        let cleanTestName = rawName
+            .replace(/^NerdTutors_/i, '')
+            .replace(/__\d+$/g, '')
+            .replace(/_\d{10,}$/g, '')
+            .replace(/[_-]+/g, ' ')
+            .trim();
+        
+        let subject = job.subject || '';
+        if (!subject || subject === 'General' || subject.toLowerCase() === 'none') {
+            const lower = (rawName + ' ' + (job.displayName || '')).toLowerCase();
+            if (lower.includes('account')) subject = 'Accountancy';
+            else if (lower.includes('business')) subject = 'Business Studies';
+            else if (lower.includes('economics') || lower.includes('eco')) subject = 'Economics';
+            else if (lower.includes('social') || lower.includes('sst')) subject = 'Social Science';
+            else subject = 'General Subject';
+        }
+
+        let grade = job.class || 'Class 12th';
+        return { cleanTestName, subject, grade };
     }
 
     function renderBatchJobs(jobs) {
@@ -669,9 +781,12 @@ async function submitGoogleBatchJob() {
 
         let html = '';
         jobs.forEach(job => {
-            const batchId = job.batchId || 'batches/unknown';
-            const sessionName = job.sessionName || job.displayName || 'Exam Assessment';
+            const batchId = job.batchId || job.name || 'batches/unknown';
+            const shortId = (batchId || '').split('/').pop();
+            const { cleanTestName, subject, grade } = formatCleanBatchSession(job);
+            
             const studentCount = job.studentCount || job.studentsMetadata?.length || 0;
+            const studentsList = (job.studentsMetadata || []).map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
             const status = job.status || 'JOB_STATE_PENDING';
 
             let statusPill = `<span style="background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">⏳ PENDING</span>`;
@@ -685,32 +800,84 @@ async function submitGoogleBatchJob() {
                 statusPill = `<span style="background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">❌ FAILED</span>`;
             }
 
-            const dateStr = job.createdAt?.toDate ? job.createdAt.toDate().toLocaleString() : 'Just now';
+            // Subject Pill Color
+            let subBadgeStyle = "background: #f1f5f9; color: #334155;";
+            const sLower = subject.toLowerCase();
+            if (sLower.includes('eco')) subBadgeStyle = "background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe;";
+            else if (sLower.includes('account')) subBadgeStyle = "background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;";
+            else if (sLower.includes('business')) subBadgeStyle = "background: #fef3c7; color: #92400e; border: 1px solid #fde68a;";
+            else if (sLower.includes('social')) subBadgeStyle = "background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;";
+
+            // Clean formatted Date & Time
+            const dateRaw = job.createdAt || job.createTime;
+            let dateStr = 'Recently submitted';
+            if (dateRaw) {
+                const dateObj = new Date(dateRaw);
+                if (!isNaN(dateObj)) {
+                    dateStr = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) + ' at ' + dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                }
+            }
 
             html += `
-            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-                <div style="min-width: 260px; flex: 1;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
-                        <span style="font-family: monospace; font-size: 0.85rem; font-weight: 700; background: #f1f5f9; color: #1e293b; padding: 2px 6px; border-radius: 4px;">
-                            ${escapeHtml(batchId)}
+            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 1.15rem 1.35rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03);">
+                <div style="min-width: 280px; flex: 1;">
+                    <!-- Top Row: Subject Badge, Grade, Status, Short Batch ID -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: wrap;">
+                        <span style="${subBadgeStyle} padding: 2px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">
+                            📘 ${escapeHtml(subject)}
+                        </span>
+                        <span style="background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600;">
+                            ${escapeHtml(grade)}
                         </span>
                         ${statusPill}
+                        <span style="font-family: monospace; font-size: 0.74rem; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;" title="Google Cloud Batch ID: ${escapeHtml(batchId)}">
+                            #${escapeHtml(shortId)}
+                        </span>
                     </div>
-                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
-                        ${escapeHtml(sessionName)} · <span style="color: #64748b; font-weight: 600; font-size: 0.85rem;">${studentCount} Students</span>
+
+                    <!-- Clean Class Test Title -->
+                    <div style="font-weight: 800; color: #0f172a; font-size: 1.05rem; letter-spacing: -0.01em;">
+                        ${escapeHtml(cleanTestName)}
                     </div>
-                    <div style="color: #94a3b8; font-size: 0.78rem; margin-top: 0.2rem;">
-                        Submitted: ${dateStr}
+
+                    <!-- Students in this batch -->
+                    ${studentsList.length > 0 ? `
+                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.76rem; font-weight: 700; color: #475569;">👥 Students (${studentsList.length}):</span>
+                            ${studentsList.slice(0, 8).map(name => `
+                                <span style="background: #f8fafc; color: #1e293b; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">
+                                    ${escapeHtml(name)}
+                                </span>
+                            `).join('')}
+                            ${studentsList.length > 8 ? `<span style="font-size: 0.72rem; color: #64748b; font-weight: 600;">+${studentsList.length - 8} more</span>` : ''}
+                        </div>
+                    ` : `
+                        <div style="margin-top: 0.35rem; font-size: 0.8rem; color: #64748b; font-weight: 600;">
+                            👥 ${studentCount} Student(s)
+                        </div>
+                    `}
+
+                    <!-- Timestamp -->
+                    <div style="color: #94a3b8; font-size: 0.76rem; margin-top: 0.45rem; display: flex; align-items: center; gap: 0.35rem;">
+                        <span>🕒</span>
+                        <span>Sent: <strong style="color: #64748b;">${dateStr}</strong></span>
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <!-- Action Buttons: Download JSON, Check & Sync, Delete -->
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.25rem;">
+                    <button type="button" onclick="window.downloadBatchPredictionsDoc('${escapeHtml(batchId)}', '${job.id}')"
+                        style="background: #0284c7; color: white; border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; box-shadow: 0 1px 3px rgba(2,132,199,0.2);"
+                        title="Download raw prediction output JSON">
+                        📥 Download JSON
+                    </button>
                     <button type="button" onclick="window.checkAndSyncBatchJob('${escapeHtml(batchId)}', '${job.id}')"
-                        style="background: #4f46e5; color: white; border: none; padding: 0.45rem 0.9rem; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem;">
+                        style="background: #4f46e5; color: white; border: none; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; box-shadow: 0 1px 3px rgba(79,70,229,0.2);">
                         🔄 Check Status & Sync
                     </button>
                     <button type="button" onclick="window.deleteBatchJobDoc('${job.id}')"
-                        style="background: #f1f5f9; color: #dc2626; border: 1px solid #fee2e2; padding: 0.45rem 0.65rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                        style="background: #f8fafc; color: #dc2626; border: 1px solid #fee2e2; padding: 0.45rem 0.65rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer;"
+                        title="Delete batch record from registry">
                         🗑️
                     </button>
                 </div>
@@ -919,5 +1086,37 @@ async function submitGoogleBatchJob() {
             await loadBatchJobs(false);
         } catch (e) {
             showToast("Error deleting batch job: " + e.message, "error");
+        }
+    }
+
+    async function downloadBatchPredictions(batchId, docId) {
+        try {
+            showToast("Fetching batch prediction records...", "info");
+            const res = await fetch('/api/batch-evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'sync',
+                    batchId: batchId
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to fetch batch predictions from server");
+            }
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const shortId = (batchId || '').split('/').pop();
+            a.href = url;
+            a.download = `batch_predictions_${shortId}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("🎉 Batch predictions downloaded successfully!", "success");
+        } catch (err) {
+            console.error("❌ Download error:", err);
+            showToast("Download failed: " + err.message, "error");
         }
     }

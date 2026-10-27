@@ -166,7 +166,7 @@ export default async function handler(req, res) {
     }
 
     const apiKey = rawKeys ? rawKeys.split(",")[0].trim() : "";
-    const action = body.action || "create";
+    const action = body.action || req.query?.action || "create";
 
     const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
     const location = process.env.GCP_LOCATION || "global";
@@ -426,7 +426,7 @@ export default async function handler(req, res) {
     // ACTION: SYNC (Retrieve & parse responses)
     // ==========================================
     if (action === "sync") {
-        const batchId = body.batchId || "";
+        const batchId = body.batchId || req.query?.batchId || "";
         if (!batchId) {
             return res.status(400).json({ error: "batchId is required to sync results." });
         }
