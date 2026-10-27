@@ -11,7 +11,9 @@ import {
     orderBy,
     limit,
     getDocs,
-    onSnapshot
+    onSnapshot,
+    updateDoc,
+    doc
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { initQuestionMatrix, renderQuestionMatrix, populateMatrixSessionDropdown } from './js/matrix-manager.js';
 
@@ -1475,7 +1477,7 @@ async function init() {
         await loadSessionsForAnalyticsFilter();
 
         // Initialize Question Performance Matrix
-        initQuestionMatrix(appState, analyticsSessions);
+        initQuestionMatrix(appState, analyticsSessions, db, { updateDoc, doc });
 
         // Setup event listeners
         setupEventListeners();

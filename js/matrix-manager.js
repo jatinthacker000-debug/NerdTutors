@@ -26,9 +26,11 @@ let matrixState = {
 /**
  * Initialize Matrix Module with reference to appState
  */
-export function initQuestionMatrix(appState, sessionsList = []) {
+export function initQuestionMatrix(appState, sessionsList = [], db = null, firestoreUtils = null) {
     matrixState.results = appState.testResults || [];
     matrixState.sessions = sessionsList || [];
+    matrixState.db = db;
+    matrixState.firestoreUtils = firestoreUtils;
 
     setupMatrixDomListeners(appState);
     populateMatrixSessionDropdown();
@@ -499,6 +501,272 @@ export function renderQuestionMatrix(results) {
     matrixState.activeStudents = activeStudents;
     matrixState.activeQuestions = sortedQuestions;
     matrixState.questionIndex = questionIndex;
+
+    // Render Topic Mastery & Weakness Analysis
+    const activeSession = matrixState.sessions.find(s => s.id === sessionVal);
+    renderTopicAnalysis(activeSession, questionIndex, sortedQuestions);
+}
+
+/**
+ * Trigger AI Topic Analysis for a Test Session
+ */
+export async function triggerTopicAnalysisForSession(sessionId) {
+    const session = matrixState.sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    const btn = document.getElementById('btnTriggerTopicAnalysis');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⏳</span> Analyzing curriculum topics with AI...`;
+    }
+
+    try {
+        const res = await fetch('/api/analyze-topics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: session.id,
+                questions: session.questions || '',
+                markingScheme: session.markingScheme || '',
+                subject: session.subject || 'General',
+                classLevel: session.class || 'Class 12th'
+            })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Failed with status ${res.status}`);
+        }
+
+        const data = await res.json();
+        const analysis = data.analysis;
+
+        // Save to Firestore if available
+        if (matrixState.db && matrixState.firestoreUtils) {
+            const { updateDoc, doc } = matrixState.firestoreUtils;
+            await updateDoc(doc(matrixState.db, 'testSessions', session.id), {
+                topicMap: analysis.topicMap,
+                chaptersCovered: analysis.chaptersCovered || [],
+                curriculumSummary: analysis.curriculumSummary || ''
+            });
+        }
+
+        // Update in-memory session object
+        session.topicMap = analysis.topicMap;
+        session.chaptersCovered = analysis.chaptersCovered || [];
+        session.curriculumSummary = analysis.curriculumSummary || '';
+
+        // Re-render
+        renderTopicAnalysis(session, matrixState.questionIndex, matrixState.activeQuestions);
+    } catch (err) {
+        console.error('Topic analysis error:', err);
+        alert(`Topic Analysis Notice: ${err.message}`);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+}
+if (typeof window !== 'undefined') {
+    window.triggerTopicAnalysisForSession = triggerTopicAnalysisForSession;
+}
+
+/**
+ * Render CBSE Topic Mastery & Class Weakness Analysis Section
+ */
+function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
+    const container = document.getElementById('matrixTopicAnalysisSection');
+    if (!container) return;
+
+    if (!activeSession || activeSession.id === 'all') {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    // 1. If topicMap does NOT exist for this session:
+    if (!activeSession.topicMap || Object.keys(activeSession.topicMap).length === 0) {
+        container.innerHTML = `
+            <div style="background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%); border: 1px solid #cbd5e1; border-radius: 12px; padding: 1.25rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                <div>
+                    <div style="font-weight: 800; color: #1e3c72; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🧠</span> CBSE Topic Mastery & Weakness Analysis
+                    </div>
+                    <p style="color: #64748b; font-size: 0.85rem; margin: 0.35rem 0 0 0;">
+                        Extract NCERT syllabus topics, detect class-wide weak areas, and evaluate student misconceptions with AI.
+                    </p>
+                </div>
+                <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; border: none; padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.25); transition: all 0.2s ease;">
+                    <span>⚡</span> Analyze Curriculum Topics with AI
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    // 2. If topicMap DOES exist: calculate topic mastery
+    const topicMap = activeSession.topicMap;
+    const topicStats = new Map();
+
+    sortedQuestions.forEach(qNum => {
+        const qRec = questionIndex.get(qNum);
+        if (!qRec) return;
+
+        let tInfo = topicMap[qNum];
+        if (!tInfo) {
+            const baseQ = qNum.match(/^Q\d+/)?.[0];
+            tInfo = topicMap[baseQ] || { chapter: activeSession.subject || 'Syllabus', topic: `Question ${qNum}`, subtopic: '' };
+        }
+
+        const topicKey = `${tInfo.chapter || activeSession.subject} · ${tInfo.topic || 'General Topic'}`;
+        if (!topicStats.has(topicKey)) {
+            topicStats.set(topicKey, {
+                chapter: tInfo.chapter || activeSession.subject,
+                topic: tInfo.topic || 'General Topic',
+                subtopic: tInfo.subtopic || '',
+                type: tInfo.type || 'Subjective',
+                cognitiveSkill: tInfo.cognitiveSkill || 'Understanding',
+                earned: 0,
+                possible: 0,
+                questions: []
+            });
+        }
+
+        const stat = topicStats.get(topicKey);
+        let qEarned = 0;
+        let qPossible = 0;
+        qRec.responses.forEach(r => {
+            qEarned += r.score;
+            qPossible += r.maxMarks;
+        });
+
+        const qAcc = qPossible > 0 ? Math.round((qEarned / qPossible) * 100) : 0;
+        stat.earned += qEarned;
+        stat.possible += qPossible;
+        stat.questions.push({ qNum, accuracy: qAcc, maxMarks: qRec.maxMarks });
+    });
+
+    const topicsList = Array.from(topicStats.values()).map(t => {
+        const accuracy = t.possible > 0 ? Math.round((t.earned / t.possible) * 100) : 0;
+        return { ...t, accuracy };
+    });
+
+    const criticalWeak = topicsList.filter(t => t.accuracy < 45).sort((a, b) => a.accuracy - b.accuracy);
+    const developing = topicsList.filter(t => t.accuracy >= 45 && t.accuracy < 70).sort((a, b) => a.accuracy - b.accuracy);
+    const mastered = topicsList.filter(t => t.accuracy >= 70).sort((a, b) => b.accuracy - a.accuracy);
+
+    let html = `
+        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+                <div>
+                    <div style="font-weight: 800; color: #1e3c72; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🧠</span> CBSE Topic Mastery & Class Weakness Analysis
+                        <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">AI Diagnosed</span>
+                    </div>
+                    <p style="color: #64748b; font-size: 0.85rem; margin: 0.35rem 0 0 0;">
+                        ${escapeHtml(activeSession.curriculumSummary || `Curriculum breakdown across ${topicsList.length} distinct syllabus topics evaluated in this session.`)}
+                    </p>
+                </div>
+                <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <span>🔄</span> Re-Analyze Topics
+                </button>
+            </div>
+
+            <!-- Topic Performance Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+                
+                <!-- 🔴 Critical Weakness Column -->
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 1.1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <span style="font-weight: 800; color: #991b1b; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
+                            <span>🔴</span> Critical Weak Topics (&lt; 45%)
+                        </span>
+                        <span style="background: #fee2e2; color: #991b1b; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${criticalWeak.length}</span>
+                    </div>
+                    ${criticalWeak.length === 0 
+                        ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">🎉 No critical weaknesses detected across class!</div>`
+                        : criticalWeak.map(t => `
+                            <div style="background: white; border: 1px solid #fee2e2; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+                                    <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
+                                    <span style="background: #fee2e2; color: #991b1b; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${t.accuracy}%</span>
+                                </div>
+                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.2rem;">${escapeHtml(t.chapter)} ${t.subtopic ? `· ${escapeHtml(t.subtopic)}` : ''}</div>
+                                <div style="margin-top: 0.4rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                                    ${t.questions.map(q => `
+                                        <span style="background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 3px; font-size: 0.7rem; font-weight: 700;">
+                                            ${escapeHtml(q.qNum)} (${q.accuracy}%)
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                </div>
+
+                <!-- 🟡 Developing Column -->
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 1.1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <span style="font-weight: 800; color: #92400e; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
+                            <span>🟡</span> Developing Topics (45% – 69%)
+                        </span>
+                        <span style="background: #fef3c7; color: #92400e; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${developing.length}</span>
+                    </div>
+                    ${developing.length === 0 
+                        ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics in developing range.</div>`
+                        : developing.map(t => `
+                            <div style="background: white; border: 1px solid #fef3c7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+                                    <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
+                                    <span style="background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${t.accuracy}%</span>
+                                </div>
+                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.2rem;">${escapeHtml(t.chapter)} ${t.subtopic ? `· ${escapeHtml(t.subtopic)}` : ''}</div>
+                                <div style="margin-top: 0.4rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                                    ${t.questions.map(q => `
+                                        <span style="background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 3px; font-size: 0.7rem; font-weight: 700;">
+                                            ${escapeHtml(q.qNum)} (${q.accuracy}%)
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                </div>
+
+                <!-- 🟢 Mastered Column -->
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 1.1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <span style="font-weight: 800; color: #166534; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
+                            <span>🟢</span> Mastered Topics (≥ 70%)
+                        </span>
+                        <span style="background: #dcfce7; color: #166534; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${mastered.length}</span>
+                    </div>
+                    ${mastered.length === 0 
+                        ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics currently above 70%.</div>`
+                        : mastered.map(t => `
+                            <div style="background: white; border: 1px solid #dcfce7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+                                    <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
+                                    <span style="background: #dcfce7; color: #166534; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${t.accuracy}%</span>
+                                </div>
+                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.2rem;">${escapeHtml(t.chapter)} ${t.subtopic ? `· ${escapeHtml(t.subtopic)}` : ''}</div>
+                                <div style="margin-top: 0.4rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                                    ${t.questions.map(q => `
+                                        <span style="background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 3px; font-size: 0.7rem; font-weight: 700;">
+                                            ${escapeHtml(q.qNum)} (${q.accuracy}%)
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                </div>
+
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
 }
 
 /**

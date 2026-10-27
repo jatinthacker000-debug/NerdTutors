@@ -1188,10 +1188,19 @@ async function submitGoogleBatchJob() {
                 console.log(`📑 Total Students Parsed from Batch: ${parsedResults.length}`);
 
                 let resolvedStudentNames = [];
+                let syncedCount = 0;
                 const sessionDetails = parseBatchSessionDetails(batchJobData);
                 const resolvedSubject = (batchJobData.subject && batchJobData.subject !== 'General' && batchJobData.subject !== 'General Subject')
                     ? batchJobData.subject
                     : (sessionDetails.subject || 'Accountancy');
+
+                // Check already-synced students for this batch to prevent duplicate Firestore entries
+                const existingBatchDocs = [];
+                try {
+                    const qBatch = query(collection(db, 'testResults'), where('batchId', '==', batchId));
+                    const snap = await getDocs(qBatch);
+                    snap.forEach(d => existingBatchDocs.push({ id: d.id, ...d.data() }));
+                } catch (_) {}
 
                 for (let i = 0; i < parsedResults.length; i++) {
                     const item = parsedResults[i];
@@ -1213,32 +1222,41 @@ async function submitGoogleBatchJob() {
                     console.log("Student Evaluation Object:", item.result);
 
                     if (item.result) {
-                        const lockedMax = Number(batchJobData.maxMarks) || Number(item.result.totalMaxMarks) || 30;
-                        const clampedScore = Math.min(Math.max(0, Number(item.result.totalScore) || 0), lockedMax);
+                        const alreadySaved = existingBatchDocs.find(d => 
+                            (d.studentName || '').toLowerCase().trim() === studentName.toLowerCase().trim()
+                        );
 
-                        const payload = {
-                            studentName: studentName,
-                            studentId: null,
-                            batch: batchJobData.targetGroup || 'Both',
-                            class: batchJobData.class || 'Class 12th',
-                            subject: resolvedSubject,
-                            sessionId: batchJobData.sessionId || null,
-                            sessionName: sessionDetails.cleanTestTitle || batchJobData.sessionName || 'Batch Exam',
-                            score: clampedScore,
-                            maxMarks: lockedMax,
-                            overallFeedback: item.result.overallFeedback || '',
-                            improvements: item.result.improvements || [],
-                            breakdown: item.result.results || [],
-                            modelUsed: 'gemini-4-argon',
-                            isBatchEvaluated: true,
-                            batchId: batchId,
-                            createdAt: serverTimestamp()
-                        };
+                        if (alreadySaved) {
+                            console.log(`%cℹ️ ALREADY SYNCED: ${studentName} already exists in testResults (Doc ID: ${alreadySaved.id}). Skipping duplicate insert.`, "color: #3b82f6; font-weight: bold;");
+                            syncedCount++;
+                        } else {
+                            const lockedMax = Number(batchJobData.maxMarks) || Number(item.result.totalMaxMarks) || 30;
+                            const clampedScore = Math.min(Math.max(0, Number(item.result.totalScore) || 0), lockedMax);
 
-                        console.log("💾 Writing record to Firestore 'testResults':", payload);
-                        const docRef = await addDoc(collection(db, 'testResults'), payload);
-                        console.log(`%c✅ SUCCESS: Document inserted into testResults with ID: ${docRef.id}`, "color: #10b981; font-weight: bold;");
-                        syncedCount++;
+                            const payload = {
+                                studentName: studentName,
+                                studentId: null,
+                                batch: batchJobData.targetGroup || 'Both',
+                                class: batchJobData.class || 'Class 12th',
+                                subject: resolvedSubject,
+                                sessionId: batchJobData.sessionId || null,
+                                sessionName: sessionDetails.cleanTestTitle || batchJobData.sessionName || 'Batch Exam',
+                                score: clampedScore,
+                                maxMarks: lockedMax,
+                                overallFeedback: item.result.overallFeedback || '',
+                                improvements: item.result.improvements || [],
+                                breakdown: item.result.results || [],
+                                modelUsed: 'gemini-4-argon',
+                                isBatchEvaluated: true,
+                                batchId: batchId,
+                                createdAt: serverTimestamp()
+                            };
+
+                            console.log("💾 Writing record to Firestore 'testResults':", payload);
+                            const docRef = await addDoc(collection(db, 'testResults'), payload);
+                            console.log(`%c✅ SUCCESS: Document inserted into testResults with ID: ${docRef.id}`, "color: #10b981; font-weight: bold;");
+                            syncedCount++;
+                        }
                     } else if (item.error) {
                         console.error("❌ Student evaluation contained an error:", item.error);
                     }
