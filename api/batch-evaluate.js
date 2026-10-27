@@ -296,6 +296,20 @@ export default async function handler(req, res) {
         return allResponses;
     }
 
+    async function readGcsManifest(shortId) {
+        if (!shortId || !authToken) return null;
+        const bucket = process.env.GCP_STORAGE_BUCKET || `${projectId}-batch-evals`;
+        const manifestUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/manifests%2F${encodeURIComponent(shortId)}.json?alt=media`;
+        try {
+            const mRes = await fetch(manifestUrl, { headers: { "Authorization": `Bearer ${authToken}` } });
+            if (mRes.ok) {
+                const mText = await mRes.text();
+                return JSON.parse(mText);
+            }
+        } catch (_) {}
+        return null;
+    }
+
     // ==========================================
     // ACTION: LIST (Fetch batch jobs from Vertex AI)
     // ==========================================
@@ -332,20 +346,43 @@ export default async function handler(req, res) {
                 return j;
             });
 
-            googleBatches.forEach(gb => {
+            for (const gb of googleBatches) {
                 const shortId = gb.name.split('/').pop();
-                const exists = updatedJobs.some(j => j.batchId === gb.name || j.id === shortId);
-                if (!exists) {
+                let existing = updatedJobs.find(j => j.batchId === gb.name || j.id === shortId);
+                let manifest = null;
+                if (!existing || !existing.studentsMetadata || existing.studentsMetadata.length === 0) {
+                    manifest = await readGcsManifest(shortId);
+                }
+
+                if (!existing) {
+                    const disp = gb.displayName || '';
+                    let inferredSubject = manifest?.subject || '';
+                    if (!inferredSubject) {
+                        const dLower = disp.toLowerCase();
+                        if (dLower.includes('account')) inferredSubject = 'Accountancy';
+                        else if (dLower.includes('eco')) inferredSubject = 'Economics';
+                        else if (dLower.includes('business') || dLower.includes('bst')) inferredSubject = 'Business Studies';
+                        else if (dLower.includes('social') || dLower.includes('sst')) inferredSubject = 'Social Science';
+                    }
+
                     updatedJobs.push({
                         id: shortId,
                         batchId: gb.name,
-                        sessionName: gb.displayName || 'Vertex AI Batch Job',
-                        studentCount: 1,
+                        sessionName: manifest?.sessionName || disp || 'Vertex AI Batch Job',
+                        subject: inferredSubject,
+                        class: manifest?.class || 'Class 12th',
+                        studentCount: manifest?.studentCount || 1,
+                        studentsMetadata: manifest?.studentsMetadata || [],
                         status: gb.state || 'JOB_STATE_PENDING',
                         createdAt: gb.createTime || new Date().toISOString()
                     });
+                } else if (manifest && (!existing.studentsMetadata || existing.studentsMetadata.length === 0)) {
+                    existing.studentsMetadata = manifest.studentsMetadata || [];
+                    if (manifest.subject) existing.subject = manifest.subject;
+                    if (manifest.sessionName) existing.sessionName = manifest.sessionName;
+                    if (manifest.studentCount) existing.studentCount = manifest.studentCount;
                 }
-            });
+            }
 
             saveBatchJobsList(updatedJobs);
             return res.status(200).json({ success: true, jobs: updatedJobs });
@@ -466,7 +503,22 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: "No response objects found in Google Batch result or GCS output directory." });
             }
 
-            const studentsMetadata = body.studentsMetadata || [];
+            const shortId = (batchId || '').split('/').pop();
+            const allSaved = loadSavedBatchJobs();
+            const targetJ = allSaved.find(j => j.batchId === batchId || j.id === batchId || `batches/${j.id}` === batchId);
+            
+            let studentsMetadata = body.studentsMetadata || [];
+            if (!studentsMetadata || studentsMetadata.length === 0) {
+                if (targetJ?.studentsMetadata?.length) {
+                    studentsMetadata = targetJ.studentsMetadata;
+                } else {
+                    const gcsM = await readGcsManifest(shortId);
+                    if (gcsM?.studentsMetadata?.length) {
+                        studentsMetadata = gcsM.studentsMetadata;
+                    }
+                }
+            }
+
             const parsedResults = [];
 
             for (let i = 0; i < responsesList.length; i++) {
@@ -482,7 +534,7 @@ export default async function handler(req, res) {
 
                 if (!rawText) {
                     parsedResults.push({
-                        studentName: meta.studentName,
+                        studentName: meta.studentName || `Student ${i + 1}`,
                         error: item.error?.message || "Empty response from Google model"
                     });
                     continue;
@@ -494,6 +546,17 @@ export default async function handler(req, res) {
                     else if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```\s*/i, "").replace(/```\s*$/i, "");
 
                     const evalObj = JSON.parse(cleaned);
+
+                    // Robust student name resolution: Model Output > Manifest Meta > Student N
+                    let resolvedStudentName = evalObj.studentName || meta.studentName;
+                    if (!resolvedStudentName || /^student\s*\d+$/i.test(resolvedStudentName)) {
+                        if (evalObj.studentName && !/^student\s*\d+$/i.test(evalObj.studentName)) {
+                            resolvedStudentName = evalObj.studentName;
+                        } else if (meta.studentName && !/^student\s*\d+$/i.test(meta.studentName)) {
+                            resolvedStudentName = meta.studentName;
+                        }
+                    }
+                    if (!resolvedStudentName) resolvedStudentName = `Student ${i + 1}`;
 
                     // CBSE Safety Nets: Programmatic Mathematical Clamping & Binary MCQ Checks
                     if (Array.isArray(evalObj.results)) {
@@ -516,13 +579,13 @@ export default async function handler(req, res) {
                     }
 
                     parsedResults.push({
-                        studentName: meta.studentName,
+                        studentName: resolvedStudentName,
                         result: evalObj,
                         rawOutput: cleaned
                     });
                 } catch (pErr) {
                     parsedResults.push({
-                        studentName: meta.studentName,
+                        studentName: meta.studentName || `Student ${i + 1}`,
                         error: "JSON parse failed: " + pErr.message,
                         rawOutput: rawText
                     });
@@ -530,8 +593,6 @@ export default async function handler(req, res) {
             }
 
             // Mark job as SYNCED in server registry
-            const allSaved = loadSavedBatchJobs();
-            const targetJ = allSaved.find(j => j.batchId === batchId || j.id === batchId || `batches/${j.id}` === batchId);
             if (targetJ) {
                 targetJ.status = 'SYNCED';
                 targetJ.syncedCount = parsedResults.length;
@@ -607,6 +668,7 @@ ${otherInstructions ? `\n--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructi
 
 Return STRICT JSON:
 {
+  "studentName": "<exact student name from prompt>",
   "results": [
     { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
   ],
@@ -618,7 +680,11 @@ Return STRICT JSON:
 
     // Package each student into an inline GenerateContentRequest
     const inlinedRequests = students.map((st, idx) => {
-        const studentPrompt = `STUDENT NAME: ${st.studentName || `Student ${idx + 1}`}\n\n${promptBase}`;
+        const studentName = st.studentName || `Student ${idx + 1}`;
+        const studentPrompt = `STUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}
+(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")
+
+${promptBase}`;
         const parts = [{ text: studentPrompt }];
 
         if (Array.isArray(st.pages)) {
@@ -661,7 +727,9 @@ Return STRICT JSON:
         return reqItem;
     });
 
-    const displayName = `NerdTutors_${examName ? examName.replace(/[^a-zA-Z0-9_-]/g, "_") : "Exam"}_${Date.now()}`;
+    const cleanExam = examName ? examName.replace(/[^a-zA-Z0-9_-]/g, "_") : "Exam";
+    const cleanSubj = subject ? subject.replace(/[^a-zA-Z0-9_-]/g, "_") : "General";
+    const displayName = `NerdTutors_${cleanSubj}_${cleanExam}_${Date.now()}`;
     const cleanModel = (model || "gemini-4-argon").replace(/^publishers\/google\/models\//, '').replace(/^models\//, '');
     const cleanSession = (sessionId || 'exam').replace(/[^a-zA-Z0-9_-]/g, '_');
     const gcsBucket = process.env.GCP_STORAGE_BUCKET || `${projectId}-batch-evals`;
@@ -720,15 +788,20 @@ Return STRICT JSON:
         }
 
         console.log("🎉 Google Batch Job Created Successfully:", data.name);
+        const shortBatchId = (data.name || '').split('/').pop();
 
         const newJob = {
-            id: data.name.replace('batches/', ''),
+            id: shortBatchId,
             batchId: data.name,
             sessionId: sessionId || null,
             sessionName: examName || 'Exam Assessment',
             subject: subject || 'General',
+            class: body.class || 'Class 12th',
             studentCount: students.length,
-            studentsMetadata: students.map(s => ({ studentName: s.studentName, pageCount: Array.isArray(s.pages) ? s.pages.length : 1 })),
+            studentsMetadata: students.map((s, idx) => ({ 
+                studentName: s.studentName || `Student ${idx + 1}`, 
+                pageCount: Array.isArray(s.pages) ? s.pages.length : 1 
+            })),
             maxMarks: Number(maxMarks) || 40,
             status: data.state || "JOB_STATE_PENDING",
             gcsInputUri: gcsInputUri,
@@ -738,6 +811,14 @@ Return STRICT JSON:
         const allJobs = loadSavedBatchJobs();
         allJobs.unshift(newJob);
         saveBatchJobsList(allJobs);
+
+        // Upload manifest to GCS for permanent multi-device sync
+        try {
+            await uploadToGcs(gcsBucket, `manifests/${shortBatchId}.json`, JSON.stringify(newJob, null, 2), "application/json");
+            console.log(`✅ Uploaded batch job manifest to GCS: manifests/${shortBatchId}.json`);
+        } catch (mErr) {
+            console.warn("Notice: Manifest GCS upload:", mErr.message);
+        }
 
         return res.status(200).json({
             success: true,

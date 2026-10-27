@@ -718,7 +718,7 @@ async function submitGoogleBatchJob() {
                     sessionId: job.sessionId || meta.sessionId || null,
                     sessionName: (job.sessionName && job.sessionName !== 'Vertex AI Batch Job') ? job.sessionName : (meta.sessionName || job.sessionName),
                     class: job.class || meta.class || 'Class 12th',
-                    subject: job.subject || meta.subject || 'Business Studies',
+                    subject: job.subject || meta.subject || '',
                     maxMarks: job.maxMarks || meta.maxMarks || 30,
                     targetGroup: job.targetGroup || meta.targetGroup || 'Both',
                     studentsMetadata: (job.studentsMetadata && job.studentsMetadata.length) ? job.studentsMetadata : (meta.studentsMetadata || [])
@@ -744,22 +744,26 @@ async function submitGoogleBatchJob() {
     function parseBatchSessionDetails(job) {
         let rawName = job.sessionName || job.displayName || 'Exam Assessment';
         
-        // 1. Detect Subject
+        // 1. Detect Subject accurately from title & metadata
         let subject = job.subject || '';
         const allText = (rawName + ' ' + (job.displayName || '')).toLowerCase();
-        if (!subject || subject === 'General' || subject.toLowerCase() === 'none') {
-            if (allText.includes('account')) subject = 'Accountancy';
-            else if (allText.includes('business')) subject = 'Business Studies';
+        if (!subject || subject === 'General' || subject.toLowerCase() === 'none' || subject === 'General Subject') {
+            if (allText.includes('account') || allText.includes('acc')) subject = 'Accountancy';
             else if (allText.includes('economics') || allText.includes('eco')) subject = 'Economics';
+            else if (allText.includes('business') || allText.includes('bst')) subject = 'Business Studies';
             else if (allText.includes('social') || allText.includes('sst') || allText.includes('civic') || allText.includes('history')) subject = 'Social Science';
             else subject = 'General Subject';
         }
 
         // 2. Clean out machine wrappers & timestamps
         let clean = rawName
+            .replace(/^NT_/i, '')
             .replace(/^NerdTutors_/i, '')
+            .replace(/Class[_-]?\d+th?/i, '')
+            .replace(/\b(Accountancy|Economics|Business_Studies|Social_Science)\b/gi, '')
             .replace(/__\d+$/g, '')
             .replace(/_\d{10,}$/g, '')
+            .replace(/[-_]\d+$/, '')
             .trim();
 
         // 3. Extract Exam Date (e.g. 25_10_2026, 25.10.2026, 25-10-2026, 2026-10-25)
@@ -820,7 +824,7 @@ async function submitGoogleBatchJob() {
     function resolveStudentNames(job) {
         const shortId = (job.batchId || job.name || job.id || '').split('/').pop();
         
-        // 1. From job.studentsMetadata if present and not generic
+        // 1. From job.studentsMetadata if present and has real names
         if (Array.isArray(job.studentsMetadata) && job.studentsMetadata.length > 0) {
             const names = job.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
             if (names.length > 0 && names.some(n => !/^student\s*\d+$/i.test(n))) {
@@ -837,17 +841,31 @@ async function submitGoogleBatchJob() {
             }
         } catch (_) {}
 
-        // 3. Known names for existing tests
-        if (shortId.includes('2579675967794446336') || shortId.includes('6724984338091343872')) {
-            return ['Shivam'];
-        }
+        // 3. Check if stored in localStorage job cache
+        try {
+            const cleanDocId = String(shortId).replace(/[^a-zA-Z0-9_-]/g, '_');
+            const localRaw = localStorage.getItem('nt_batch_job_' + cleanDocId);
+            if (localRaw) {
+                const localData = JSON.parse(localRaw);
+                if (Array.isArray(localData.studentsMetadata) && localData.studentsMetadata.length > 0) {
+                    const localNames = localData.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
+                    if (localNames.length > 0) return localNames;
+                }
+            }
+        } catch (_) {}
 
-        // 4. Fallback: if studentsMetadata has names, return them
+        // 4. Fallback: if studentsMetadata has any names
         if (Array.isArray(job.studentsMetadata) && job.studentsMetadata.length > 0) {
-            return job.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
+            const names = job.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
+            if (names.length > 0) return names;
         }
 
-        return ['Shivam'];
+        // 5. Dynamic generic fallback based on student count (never hardcoded to any individual person)
+        const count = Number(job.studentCount) || 1;
+        if (count > 1) {
+            return Array.from({ length: count }, (_, i) => `Student ${i + 1}`);
+        }
+        return ['Student 1'];
     }
 
     function renderBatchJobs(jobs) {
@@ -1116,10 +1134,18 @@ async function submitGoogleBatchJob() {
                 console.log(`📑 Total Students Parsed from Batch: ${parsedResults.length}`);
 
                 let resolvedStudentNames = [];
+                const sessionDetails = parseBatchSessionDetails(batchJobData);
+                const resolvedSubject = (batchJobData.subject && batchJobData.subject !== 'General' && batchJobData.subject !== 'General Subject')
+                    ? batchJobData.subject
+                    : (sessionDetails.subject || 'Accountancy');
 
                 for (let i = 0; i < parsedResults.length; i++) {
                     const item = parsedResults[i];
                     let studentName = item.studentName || `Student ${i + 1}`;
+                    if ((/^student\s*\d+$/i.test(studentName) || !studentName) && item.result?.studentName) {
+                        studentName = item.result.studentName;
+                        item.studentName = studentName;
+                    }
                     if ((/^student\s*\d+$/i.test(studentName) || !studentName) && item.result?.overallFeedback) {
                         const nameMatch = item.result.overallFeedback.match(/^([A-Z][a-z]+)\s+(?:demonstrates|shows|has|presents|scored|performed|exhibits|struggles|excels|needs|displays)/i);
                         if (nameMatch) {
@@ -1141,9 +1167,9 @@ async function submitGoogleBatchJob() {
                             studentId: null,
                             batch: batchJobData.targetGroup || 'Both',
                             class: batchJobData.class || 'Class 12th',
-                            subject: batchJobData.subject || 'Business Studies',
+                            subject: resolvedSubject,
                             sessionId: batchJobData.sessionId || null,
-                            sessionName: batchJobData.sessionName || 'Batch Exam',
+                            sessionName: sessionDetails.cleanTestTitle || batchJobData.sessionName || 'Batch Exam',
                             score: clampedScore,
                             maxMarks: lockedMax,
                             overallFeedback: item.result.overallFeedback || '',
@@ -1165,16 +1191,20 @@ async function submitGoogleBatchJob() {
                     console.groupEnd();
                 }
 
-                // Update batch status to SYNCED in localStorage
+                // Update batch status and resolved student names in localStorage
                 try {
                     const cleanDocId = String(batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
                     const updatedMeta = {
                         ...batchJobData,
+                        subject: resolvedSubject,
                         status: 'SYNCED',
+                        studentsMetadata: resolvedStudentNames.map(name => ({ studentName: name })),
                         syncedCount: syncedCount,
                         syncedAt: new Date().toISOString()
                     };
                     localStorage.setItem('nt_batch_job_' + cleanDocId, JSON.stringify(updatedMeta));
+                    const shortId = (batchId || '').split('/').pop();
+                    localStorage.setItem('nt_batch_students_' + shortId, JSON.stringify(resolvedStudentNames));
                 } catch (_) {}
 
                 // If on Admin page, refresh resultSessionSelect if matched
