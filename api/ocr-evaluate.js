@@ -422,8 +422,11 @@ For every question, evaluate the concepts, explanations, and key value points pr
     - Example check for a 30-mark exam (${mm} = 30):
       - 6 MCQs in Section A = 6 × 1.0 mark = 6.0 marks.
       - 6 Descriptive Questions in Section B = 6 × 4.0 marks = 24.0 marks.
-      - Mathematical Total = 6.0 + 24.0 = 30.0 marks exact.
-- 🔴 MANDATORY SUB-PARTS SPLIT & CANONICAL NUMBERING: If any question contains distinct sub-parts (e.g., part a, part b, sub-part i, ii, iii), you MUST evaluate each sub-part separately as an individual entry in the "results" array. ALWAYS format sub-parts with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)", "Q31(a)", "Q31(b)". NEVER output unparenthesized strings like "Q31a", "Q2a", or "Q5i". NEVER bundle multi-part questions into a single composite block.
+- 🔴 MANDATORY SUB-PARTS SPLIT & CANONICAL NUMBERING (CRITICAL):
+  - LEAF-LEVEL ONLY: If a question contains distinct sub-parts (e.g., Q2 has parts a and b, or Q5 has sub-parts i and ii), you MUST evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output an entry for the composite parent question "Q2" when you evaluate its sub-parts!
+  - 1-TIER SUB-PARTS: ALWAYS format sub-parts with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)", "Q31(a)", "Q31(b)". NEVER output unparenthesized strings like "Q31a", "Q2a", or "Q5i".
+  - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)", or "Q17(i)(a)". NEVER skip parentheses.
+  - NEVER bundle multi-part questions into a single composite block.
 - 🔴 POINT-TO-MARK RATIO & PARTIAL MARKING: For descriptive answers, each mark requires one distinct, well-reasoned value point. Award partial marks strictly in discrete half-mark or full-mark increments (0.5, 1.0, 1.5, 2.0, etc.) mapped directly to points present in the student's answer. Keep "maxMarks" intact at its full weight.
 - 🔴 VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using their own expression or alternative valid subject reasoning, award due marks.
 - 🔴 STRICT BINARY MCQ EVALUATION (ALL-OR-NOTHING): MCQ validation is strictly ALL-OR-NOTHING. Compare the student's written option letter (A, B, C, D) directly against the correct key option letter in the marking scheme.

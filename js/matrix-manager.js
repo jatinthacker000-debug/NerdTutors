@@ -59,10 +59,16 @@ export function normalizeQuestionNumber(raw) {
         return `Q${mRoman[1]}(${mRoman[2].toLowerCase()})`;
     }
 
-    // Case 2: Q<number>(<letter>)(<roman>) e.g. Q17a(i), Q17(a)(i), Q17a.i -> Q17(a)(i)
-    const mMulti = str.match(/^Q\s*(\d+)\s*[._\s-]?\(?([a-zA-Z])\)?\s*[._\s-]?\(?([ivxIVX]+|\d+)\)?$/i);
-    if (mMulti) {
-        return `Q${mMulti[1]}(${mMulti[2].toLowerCase()})(${mMulti[3].toLowerCase()})`;
+    // Case 2a: Q<number>(<letter>)(<roman or number>) e.g. Q17a(i), Q17(a)(i), Q17(a)(1) -> Q17(a)(i), Q17(a)(1)
+    const mMulti1 = str.match(/^Q\s*(\d+)\s*[._\s-]?\(?([a-zA-Z])\)?\s*[._\s-]?\(?([ivxIVX]+|\d+)\)?$/i);
+    if (mMulti1) {
+        return `Q${mMulti1[1]}(${mMulti1[2].toLowerCase()})(${mMulti1[3].toLowerCase()})`;
+    }
+
+    // Case 2b: Q<number>(<roman>)(<letter>) e.g. Q17(i)(a), Q17i(a) -> Q17(i)(a)
+    const mMulti2 = str.match(/^Q\s*(\d+)\s*[._\s-]?\(?([ivxIVX]+)\)?\s*[._\s-]?\(?([a-zA-Z])\)?$/i);
+    if (mMulti2) {
+        return `Q${mMulti2[1]}(${mMulti2[2].toLowerCase()})(${mMulti2[3].toLowerCase()})`;
     }
 
     // Case 3: Q<number> with single letter subpart e.g. Q2a, Q2(a), Q2.a, Q2 - a, Q2A, Q2(A) -> Q2(a)

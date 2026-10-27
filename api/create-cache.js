@@ -161,8 +161,12 @@ ${subjectDirectivesText}
 5. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
 6. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
 7. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
-8. PLAIN-TEXT MANDATE: Output clean plain text only. Never use markdown bold (**text**) or hashes in feedback.
-9. CANONICAL QUESTION NUMBERING: Always use canonical numbering matching the official exam paper (e.g. "Q1", "Q2"). For sub-parts with letters, ALWAYS use parentheses: "Q2(a)", "Q2(b)". For sub-parts with roman numerals, ALWAYS use parentheses: "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i". Never bundle multi-part questions into a single composite block.
+9. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
+   - Always use canonical numbering matching the official exam paper.
+   - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
+   - 1-TIER SUB-PARTS: Format with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i".
+   - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)", or "Q17(i)(a)". NEVER skip parentheses.
+   - NEVER bundle multi-part questions into a single composite block.
 
 --- MANDATORY OUTPUT JSON SCHEMA ---
 Return STRICT JSON in the following format:

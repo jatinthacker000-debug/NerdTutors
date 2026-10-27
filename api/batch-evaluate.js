@@ -656,8 +656,16 @@ ${reasoningGuardrailPrompt}
 CRITICAL CONSTRAINTS:
 1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
-3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
-4. CANONICAL QUESTION NUMBERING: Always use canonical numbering matching the official exam paper (e.g. "Q1", "Q2"). For sub-parts with letters, ALWAYS use parentheses: "Q2(a)", "Q2(b)". For sub-parts with roman numerals, ALWAYS use parentheses: "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i". Never bundle multi-part questions into a single composite block.
+4. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
+   - Always use canonical numbering matching the official exam paper.
+   - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
+   - 1-TIER SUB-PARTS: Always format with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i".
+   - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses:
+     * Letter + Roman: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)"
+     * Roman + Letter: "Q17(i)(a)", "Q17(i)(b)"
+     * Letter + Number: "Q17(a)(1)", "Q17(a)(2)"
+     * Never drop parentheses (e.g. NEVER write "Q17a(i)" or "Q17ai").
+   - NEVER bundle multi-part questions into a single composite block.
 ${subjectDirectives}
 
 --- EXAM QUESTIONS ---
