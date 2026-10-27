@@ -718,22 +718,20 @@ async function submitGoogleBatchJob() {
                         const bId = data.batchId;
                         const sId = bId.split('/').pop();
                         if (!fsMetadataMap[bId]) fsMetadataMap[bId] = { studentsMetadata: [] };
-                        if (!fsMetadataMap[sId]) fsMetadataMap[sId] = { studentsMetadata: [] };
                         if (!fsMetadataMap[bId].studentsMetadata) fsMetadataMap[bId].studentsMetadata = [];
-                        if (!fsMetadataMap[sId].studentsMetadata) fsMetadataMap[sId].studentsMetadata = [];
 
-                        const existingNames = fsMetadataMap[bId].studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName);
-                        if (!existingNames.includes(data.studentName)) {
+                        const existingNames = fsMetadataMap[bId].studentsMetadata.map(s => (typeof s === 'string' ? s : s.studentName).toLowerCase());
+                        if (!existingNames.includes(data.studentName.toLowerCase())) {
                             fsMetadataMap[bId].studentsMetadata.push({ studentName: data.studentName });
-                            fsMetadataMap[sId].studentsMetadata.push({ studentName: data.studentName });
                         }
                         if (data.subject && !fsMetadataMap[bId].subject) {
                             fsMetadataMap[bId].subject = data.subject;
-                            fsMetadataMap[sId].subject = data.subject;
                         }
                         if (data.sessionName && !fsMetadataMap[bId].sessionName) {
                             fsMetadataMap[bId].sessionName = data.sessionName;
-                            fsMetadataMap[sId].sessionName = data.sessionName;
+                        }
+                        if (sId !== bId) {
+                            fsMetadataMap[sId] = fsMetadataMap[bId];
                         }
                     }
                 });
@@ -798,29 +796,28 @@ async function submitGoogleBatchJob() {
             .replace(/[-_]\d+$/, '')
             .trim();
 
-        // 3. Extract Exam Date (e.g. 25_10_2026, 25.10.2026, 25-10-2026, 2026-10-25)
+        // 3. Extract Exam Date (supports e.g. 25/10/2026, 25-10-2026, 25_10, 25 10)
         let examDateStr = null;
-        const dmyMatch = clean.match(/(\d{1,2})[-_. ](\d{1,2})[-_. ](\d{4})/);
-        const ymdMatch = clean.match(/(\d{4})[-_. ](\d{1,2})[-_. ](\d{1,2})/);
+        const dmyMatch = clean.match(/\b(\d{1,2})[-_.\/ ](\d{1,2})(?:[-_.\/ ](\d{2,4}))?\b/);
+        const ymdMatch = clean.match(/\b(\d{4})[-_.\/ ](\d{1,2})[-_.\/ ](\d{1,2})\b/);
 
         if (dmyMatch) {
             const day = parseInt(dmyMatch[1], 10);
-            const month = parseInt(dmyMatch[2], 10) - 1;
-            const year = parseInt(dmyMatch[3], 10);
-            const d = new Date(year, month, day);
-            if (!isNaN(d.getTime())) {
-                examDateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            const month = parseInt(dmyMatch[2], 10);
+            if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+                let year = dmyMatch[3] ? parseInt(dmyMatch[3], 10) : 2026;
+                if (year < 100) year += 2000;
+                examDateStr = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+                clean = clean.replace(dmyMatch[0], '');
             }
-            clean = clean.replace(dmyMatch[0], '');
         } else if (ymdMatch) {
             const year = parseInt(ymdMatch[1], 10);
-            const month = parseInt(ymdMatch[2], 10) - 1;
+            const month = parseInt(ymdMatch[2], 10);
             const day = parseInt(ymdMatch[3], 10);
-            const d = new Date(year, month, day);
-            if (!isNaN(d.getTime())) {
-                examDateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+                examDateStr = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+                clean = clean.replace(ymdMatch[0], '');
             }
-            clean = clean.replace(ymdMatch[0], '');
         }
 
         // 4. Remove redundant subject from title if already shown in the subject badge
@@ -856,12 +853,11 @@ async function submitGoogleBatchJob() {
     function resolveStudentNames(job) {
         const shortId = (job.batchId || job.name || job.id || '').split('/').pop();
         
-        // 1. From job.studentsMetadata if present and has real names
+        let candidateNames = [];
+
+        // 1. From job.studentsMetadata if present
         if (Array.isArray(job.studentsMetadata) && job.studentsMetadata.length > 0) {
-            const names = job.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
-            if (names.length > 0 && names.some(n => !/^student\s*\d+$/i.test(n))) {
-                return names;
-            }
+            candidateNames.push(...job.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean));
         }
 
         // 2. Check localStorage cache for this specific batch
@@ -869,7 +865,7 @@ async function submitGoogleBatchJob() {
             const cachedNamesRaw = localStorage.getItem('nt_batch_students_' + shortId);
             if (cachedNamesRaw) {
                 const cachedNames = JSON.parse(cachedNamesRaw);
-                if (Array.isArray(cachedNames) && cachedNames.length > 0) return cachedNames;
+                if (Array.isArray(cachedNames)) candidateNames.push(...cachedNames.filter(Boolean));
             }
         } catch (_) {}
 
@@ -879,20 +875,36 @@ async function submitGoogleBatchJob() {
             const localRaw = localStorage.getItem('nt_batch_job_' + cleanDocId);
             if (localRaw) {
                 const localData = JSON.parse(localRaw);
-                if (Array.isArray(localData.studentsMetadata) && localData.studentsMetadata.length > 0) {
-                    const localNames = localData.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
-                    if (localNames.length > 0) return localNames;
+                if (Array.isArray(localData.studentsMetadata)) {
+                    candidateNames.push(...localData.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean));
                 }
             }
         } catch (_) {}
 
-        // 4. Fallback: if studentsMetadata has any names
-        if (Array.isArray(job.studentsMetadata) && job.studentsMetadata.length > 0) {
-            const names = job.studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName).filter(Boolean);
-            if (names.length > 0) return names;
+        // Case-insensitive deduplication
+        const seen = new Set();
+        const uniqueNames = [];
+        for (const raw of candidateNames) {
+            const trimmed = String(raw).trim();
+            const lower = trimmed.toLowerCase();
+            if (trimmed && !seen.has(lower)) {
+                seen.add(lower);
+                uniqueNames.push(trimmed);
+            }
         }
 
-        // 5. Dynamic generic fallback based on student count (never hardcoded to any individual person)
+        // Priority 1: If real student names exist, DISCARD all generic 'Student 1' fallbacks!
+        const realNames = uniqueNames.filter(n => !/^student\s*\d+$/i.test(n));
+        if (realNames.length > 0) {
+            return realNames;
+        }
+
+        // Priority 2: Deduplicated generic fallbacks
+        if (uniqueNames.length > 0) {
+            return uniqueNames;
+        }
+
+        // Priority 3: Dynamic generic fallback based on student count
         const count = Number(job.studentCount) || 1;
         if (count > 1) {
             return Array.from({ length: count }, (_, i) => `Student ${i + 1}`);
