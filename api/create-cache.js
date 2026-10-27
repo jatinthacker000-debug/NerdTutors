@@ -162,6 +162,7 @@ ${subjectDirectivesText}
 6. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
 7. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
 8. PLAIN-TEXT MANDATE: Output clean plain text only. Never use markdown bold (**text**) or hashes in feedback.
+9. CANONICAL QUESTION NUMBERING: Always use canonical numbering matching the official exam paper (e.g. "Q1", "Q2"). For sub-parts with letters, ALWAYS use parentheses: "Q2(a)", "Q2(b)". For sub-parts with roman numerals, ALWAYS use parentheses: "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i". Never bundle multi-part questions into a single composite block.
 
 --- MANDATORY OUTPUT JSON SCHEMA ---
 Return STRICT JSON in the following format:

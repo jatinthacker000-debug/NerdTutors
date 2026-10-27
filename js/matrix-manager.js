@@ -36,6 +36,64 @@ export function initQuestionMatrix(appState, sessionsList = []) {
 }
 
 /**
+ * Canonical Normalizer for Academic Question Identifiers:
+ * Unifies formatting variances so matrix rows never fragment:
+ * - "Question 1", "Q.1", "Q 1" -> "Q1"
+ * - "Q2a", "Q2(a)", "Q2.a", "Q2-a", "Q2 A" -> "Q2(a)"
+ * - "Q2b", "Q2(b)", "Q2.b", "Q2-b" -> "Q2(b)"
+ * - "Q5i", "Q5(i)", "Q5.i", "Q5-i", "Q5 (I)" -> "Q5(i)"
+ * - "Q5ii", "Q5(ii)", "Q5.ii" -> "Q5(ii)"
+ * - "Q17a(i)", "Q17(a)(i)" -> "Q17(a)(i)"
+ */
+export function normalizeQuestionNumber(raw) {
+    if (!raw && raw !== 0) return '';
+    let str = String(raw).trim();
+    if (!str) return '';
+
+    // Standardize 'Question' prefix to 'Q'
+    str = str.replace(/^Question\s*/i, 'Q');
+
+    // Case 1: Q<number> with roman numeral subpart: Q5i, Q5(i), Q5.i, Q5-i, Q5 (ii), Q5(I), Q5II, Q5iv -> Q5(i), Q5(ii), Q5(iv)
+    const mRoman = str.match(/^Q\s*(\d+)\s*[._\s-]?\(?([ivxIVX]+)\)?$/i);
+    if (mRoman) {
+        return `Q${mRoman[1]}(${mRoman[2].toLowerCase()})`;
+    }
+
+    // Case 2: Q<number>(<letter>)(<roman>) e.g. Q17a(i), Q17(a)(i), Q17a.i -> Q17(a)(i)
+    const mMulti = str.match(/^Q\s*(\d+)\s*[._\s-]?\(?([a-zA-Z])\)?\s*[._\s-]?\(?([ivxIVX]+|\d+)\)?$/i);
+    if (mMulti) {
+        return `Q${mMulti[1]}(${mMulti[2].toLowerCase()})(${mMulti[3].toLowerCase()})`;
+    }
+
+    // Case 3: Q<number> with single letter subpart e.g. Q2a, Q2(a), Q2.a, Q2 - a, Q2A, Q2(A) -> Q2(a)
+    const mLetter = str.match(/^Q\s*(\d+)\s*[._\s-]?\(?([a-zA-Z])\)?$/);
+    if (mLetter) {
+        return `Q${mLetter[1]}(${mLetter[2].toLowerCase()})`;
+    }
+
+    // Case 4: Q<number> with numeric subpart e.g. Q10.1, Q10(1) -> Q10(1)
+    const mNumSub = str.match(/^Q\s*(\d+)\s*[._\s-]\(?(\d+)\)?$/);
+    if (mNumSub) {
+        return `Q${mNumSub[1]}(${mNumSub[2]})`;
+    }
+
+    // Case 5: Q.1, Q 1, Q-1, Q1 -> Q1
+    const mBasic = str.match(/^Q\s*[._\s-]*(\d+)$/i);
+    if (mBasic) {
+        return `Q${mBasic[1]}`;
+    }
+
+    return str;
+}
+
+const ROMAN_MAP = {
+    '(i)': 1, '(ii)': 2, '(iii)': 3, '(iv)': 4, '(v)': 5,
+    '(vi)': 6, '(vii)': 7, '(viii)': 8, '(ix)': 9, '(x)': 10,
+    'i': 1, 'ii': 2, 'iii': 3, 'iv': 4, 'v': 5,
+    'vi': 6, 'vii': 7, 'viii': 8, 'ix': 9, 'x': 10
+};
+
+/**
  * Natural sort for academic question numbers:
  * Handles Q1, Q2 ... Q10, Q17(i), Q17(ii), Q34b(i), Section A, Section B
  */
@@ -46,7 +104,7 @@ export function naturalQuestionSort(a, b) {
         return {
             prefix: (match[1] || '').toUpperCase(),
             num: match[2] ? parseInt(match[2], 10) : 0,
-            sub: match[3] || ''
+            sub: (match[3] || '').trim().toLowerCase()
         };
     };
 
@@ -59,6 +117,14 @@ export function naturalQuestionSort(a, b) {
     if (pa.num !== pb.num) {
         return pa.num - pb.num;
     }
+
+    // Roman numeral sub-parts comparison (e.g. (iv) before (v), (ix) before (x))
+    const romanA = ROMAN_MAP[pa.sub];
+    const romanB = ROMAN_MAP[pb.sub];
+    if (romanA !== undefined && romanB !== undefined) {
+        return romanA - romanB;
+    }
+
     return pa.sub.localeCompare(pb.sub);
 }
 
@@ -212,7 +278,8 @@ export function renderQuestionMatrix(results) {
         const items = studentResult.breakdown || studentResult.results || studentResult.answers || [];
         if (Array.isArray(items)) {
             items.forEach(qItem => {
-                const qNum = String(qItem.questionNumber || qItem.qNum || qItem.number || '').trim();
+                const rawQ = qItem.questionNumber || qItem.qNum || qItem.number || '';
+                const qNum = normalizeQuestionNumber(rawQ);
                 if (!qNum) return;
 
                 if (!questionIndex.has(qNum)) {

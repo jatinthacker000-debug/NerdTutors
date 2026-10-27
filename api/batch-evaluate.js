@@ -657,6 +657,7 @@ CRITICAL CONSTRAINTS:
 1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
 3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
+4. CANONICAL QUESTION NUMBERING: Always use canonical numbering matching the official exam paper (e.g. "Q1", "Q2"). For sub-parts with letters, ALWAYS use parentheses: "Q2(a)", "Q2(b)". For sub-parts with roman numerals, ALWAYS use parentheses: "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i". Never bundle multi-part questions into a single composite block.
 ${subjectDirectives}
 
 --- EXAM QUESTIONS ---
