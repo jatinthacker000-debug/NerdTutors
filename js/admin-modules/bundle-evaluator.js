@@ -709,6 +709,38 @@ async function submitGoogleBatchJob() {
                 }
             }
 
+            // Check Firestore testResults for already synced batch evaluations across devices
+            try {
+                const resultsSnap = await getDocs(collection(db, 'testResults'));
+                resultsSnap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    if (data?.batchId && data?.studentName) {
+                        const bId = data.batchId;
+                        const sId = bId.split('/').pop();
+                        if (!fsMetadataMap[bId]) fsMetadataMap[bId] = { studentsMetadata: [] };
+                        if (!fsMetadataMap[sId]) fsMetadataMap[sId] = { studentsMetadata: [] };
+                        if (!fsMetadataMap[bId].studentsMetadata) fsMetadataMap[bId].studentsMetadata = [];
+                        if (!fsMetadataMap[sId].studentsMetadata) fsMetadataMap[sId].studentsMetadata = [];
+
+                        const existingNames = fsMetadataMap[bId].studentsMetadata.map(s => typeof s === 'string' ? s : s.studentName);
+                        if (!existingNames.includes(data.studentName)) {
+                            fsMetadataMap[bId].studentsMetadata.push({ studentName: data.studentName });
+                            fsMetadataMap[sId].studentsMetadata.push({ studentName: data.studentName });
+                        }
+                        if (data.subject && !fsMetadataMap[bId].subject) {
+                            fsMetadataMap[bId].subject = data.subject;
+                            fsMetadataMap[sId].subject = data.subject;
+                        }
+                        if (data.sessionName && !fsMetadataMap[bId].sessionName) {
+                            fsMetadataMap[bId].sessionName = data.sessionName;
+                            fsMetadataMap[sId].sessionName = data.sessionName;
+                        }
+                    }
+                });
+            } catch (fsErr) {
+                console.warn("Notice: testResults batch sync check:", fsErr.message);
+            }
+
             // Merge Firestore metadata so sessionId and sessionName are NEVER lost
             cachedBatchJobs = liveJobs.map(job => {
                 const shortId = (job.batchId || job.id || '').split('/').pop();
@@ -981,11 +1013,21 @@ async function submitGoogleBatchJob() {
                         <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; letter-spacing: 0.02em; text-transform: uppercase;">
                             👥 Students Enrolled:
                         </span>
-                        ${studentNames.map(name => `
-                            <span style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); color: #0f172a; border: 1.5px solid #cbd5e1; padding: 3px 11px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
-                                <span style="font-size: 0.9rem;">🧑‍🎓</span> ${escapeHtml(name)}
-                            </span>
-                        `).join('')}
+                        ${studentNames.map(name => {
+                            const isFallback = /^student\s*\d+$/i.test(name);
+                            if (isFallback) {
+                                return `
+                                    <span style="background: #f8fafc; color: #64748b; border: 1.5px dashed #cbd5e1; padding: 3px 11px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;" title="Awaiting real name from batch sync">
+                                        <span style="font-size: 0.85rem;">📝</span> ${escapeHtml(name)} <small style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">(Pending Sync)</small>
+                                    </span>
+                                `;
+                            }
+                            return `
+                                <span style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); color: #0f172a; border: 1.5px solid #cbd5e1; padding: 3px 11px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                                    <span style="font-size: 0.9rem;">🧑‍🎓</span> ${escapeHtml(name)}
+                                </span>
+                            `;
+                        }).join('')}
                     </div>
 
                     <!-- Dispatch Timestamp -->
