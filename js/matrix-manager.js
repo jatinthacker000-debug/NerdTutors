@@ -615,10 +615,27 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
         const qRec = questionIndex.get(qNum);
         if (!qRec) return;
 
-        let tInfo = topicMap[qNum];
+        let tInfo = topicMap[qNum] || topicMap[qNum.toUpperCase()] || topicMap[qNum.toLowerCase()];
+        if (!tInfo) {
+            const digits = qNum.match(/\d+/)?.[0];
+            if (digits) {
+                tInfo = topicMap[`Q${digits}`] || topicMap[digits] || topicMap[`Question ${digits}`];
+            }
+        }
         if (!tInfo) {
             const baseQ = qNum.match(/^Q\d+/)?.[0];
-            tInfo = topicMap[baseQ] || { chapter: activeSession.subject || 'Syllabus', topic: `Question ${qNum}`, subtopic: '' };
+            tInfo = baseQ ? (topicMap[baseQ] || topicMap[baseQ.toLowerCase()] || topicMap[baseQ.toUpperCase()]) : null;
+        }
+        if (!tInfo) {
+            // Fuzzy search any key containing the question number
+            const digits = qNum.match(/\d+/)?.[0];
+            if (digits) {
+                const foundK = Object.keys(topicMap).find(k => k.match(new RegExp(`(^|\\D)${digits}(\\D|$)`)));
+                if (foundK) tInfo = topicMap[foundK];
+            }
+        }
+        if (!tInfo) {
+            tInfo = { chapter: activeSession.subject || 'Syllabus', topic: `Question ${qNum}`, subtopic: '' };
         }
 
         const topicKey = `${tInfo.chapter || activeSession.subject} · ${tInfo.topic || 'General Topic'}`;

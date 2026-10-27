@@ -80,12 +80,13 @@ ${questions}
 ${markingScheme}
 
 YOUR TASK:
-For EVERY individual question and leaf-level sub-part (e.g. Q1, Q2(a), Q2(b), Q5(i), Q5(ii), Q17(a)(i)...):
-1. Use CANONICAL LEAF-LEVEL NUMBERING matching the paper (e.g. "Q1", "Q2(a)", "Q2(b)"). Never output composite parent questions like "Q2" if sub-parts (a) and (b) exist!
-2. Map to official CBSE / NCERT Curriculum:
-   - "chapter": The exact NCERT textbook chapter name (e.g. "Admission of a Partner", "Financial Management", "National Income", "Sectors of the Indian Economy").
-   - "topic": The core CBSE topic or mechanism tested (e.g. "Revaluation of Assets & Liabilities", "Capital Structure Decision", "Expenditure Method of GDP").
-   - "subtopic": Specific nuance or concept tested (e.g. "Unrecorded Asset adjustment", "Trading on Equity", "Net Factor Income from Abroad").
+For EVERY individual question and leaf-level sub-part (e.g. Q1, Q2(a), Q2(b), Q5(i), Q5(ii), Q10, Q11, Q12...):
+1. CRITICAL COMPLETENESS: You MUST include EVERY question present in the paper from the first to the very last (e.g. Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12...). DO NOT OMIT Question 10 or ANY question under any circumstances!
+2. CANONICAL LEAF-LEVEL NUMBERING: Use canonical numbering matching the paper (e.g. "Q1", "Q2(a)", "Q2(b)", "Q10"). Never output composite parent questions like "Q2" if sub-parts (a) and (b) exist!
+3. STRICT NCERT CURRICULUM MAPPING:
+   - "chapter": The exact NCERT textbook chapter name. NEVER output broad subject names like "Economics", "Business Studies", or "General". Provide the actual chapter title (e.g. "Marketing", "Principles of Management", "Financial Markets", "Money and Banking", "Government Budget and the Economy", "Accounting for Partnership").
+   - "topic": The core CBSE topic or mechanism tested (e.g. "Taylor's Scientific Principles", "Difference between Marketing and Selling", "Expenditure Method of GDP").
+   - "subtopic": Specific nuance or concept tested (e.g. "Mental Revolution", "Place Mix", "Net Factor Income from Abroad").
    - "type": "MCQ" | "Numerical" | "Case Study" | "Theory" | "Assertion-Reason"
    - "cognitiveSkill": "Remembering" | "Understanding" | "Applying" | "Analysing" | "Evaluating"
 
@@ -97,7 +98,7 @@ Return STRICT JSON ONLY in this format:
   "chaptersCovered": ["<chapter 1>", "<chapter 2>"],
   "topicMap": {
     "Q1": {
-      "chapter": "<Chapter Name>",
+      "chapter": "<Exact NCERT Chapter>",
       "topic": "<Core Topic>",
       "subtopic": "<Specific Concept>",
       "type": "MCQ",
@@ -163,6 +164,26 @@ Return STRICT JSON ONLY in this format:
             parsed = JSON.parse(rawContent.trim().replace(/^```json/i, '').replace(/```$/i, '').trim());
         } catch (e) {
             return res.status(500).json({ error: "Failed to parse topic analysis model JSON.", rawContent });
+        }
+
+        // Canonical Key Normalization for topicMap
+        if (parsed.topicMap && typeof parsed.topicMap === 'object') {
+            const canonicalMap = {};
+            for (const [rawK, v] of Object.entries(parsed.topicMap)) {
+                const cleanK = String(rawK).trim();
+                canonicalMap[cleanK] = v;
+
+                const matchQ = cleanK.match(/^(?:question|q)?\s*\.?\s*(\d+)(\s*\(?[a-z0-9ivxlcdm]+\)?.*)?$/i);
+                if (matchQ) {
+                    const num = matchQ[1];
+                    const sub = matchQ[2] ? matchQ[2].trim() : '';
+                    const normK = `Q${num}${sub}`;
+                    canonicalMap[normK] = v;
+                    canonicalMap[`Q${num}`] = canonicalMap[`Q${num}`] || v;
+                    canonicalMap[num] = canonicalMap[num] || v;
+                }
+            }
+            parsed.topicMap = canonicalMap;
         }
 
         return res.status(200).json({

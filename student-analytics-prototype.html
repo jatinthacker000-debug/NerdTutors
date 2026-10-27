@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Analytics - Nerd Tutors</title>
+
+    <!-- Google Fonts: Inter & Plus Jakarta Sans for premium typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-body: #f4f6fa;
+            --bg-card: #ffffff;
+            --sidebar-bg: #0f172a;
+            --sidebar-nav-active: #1e293b;
+            --text-primary: #111827;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --border-light: #f1f5f9;
+
+            --primary: #3b82f6;
+            --primary-light: #eff6ff;
+            --success: #10b981;
+            --success-light: #ecfdf5;
+            --warning: #f59e0b;
+            --warning-light: #fffbeb;
+            --danger: #ef4444;
+            --danger-light: #fef2f2;
+            --purple: #8b5cf6;
+            --purple-light: #f5f3ff;
+
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ================= SIDEBAR ================= */
+        .sidebar {
+            width: 240px;
+            background-color: var(--sidebar-bg);
+            color: #94a3b8;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem 1rem;
+            flex-shrink: 0;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            color: #ffffff;
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin-bottom: 2rem;
+            padding-left: 0.5rem;
+        }
+
+        .brand-icon {
+            font-size: 1.4rem;
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.85rem;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.15s ease;
+        }
+
+        .nav-item:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .nav-item.active {
+            color: #ffffff;
+            background-color: #2563eb;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .nav-icon {
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* ================= MAIN CONTENT ================= */
+        .main-container {
+            flex: 1;
+            padding: 1.75rem 2.25rem;
+            overflow-y: auto;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header Bar */
+        .analytics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.75rem;
+            flex-wrap: wrap;
+            gap: 1.25rem;
+        }
+
+        .page-headings h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .page-headings p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #334155;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .filter-select:hover {
+            border-color: #cbd5e1;
+        }
+
+        .last-updated-text {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: right;
+            margin-left: 0.5rem;
+            line-height: 1.2;
+        }
+
+        .last-updated-text strong {
+            display: block;
+            color: #475569;
+            font-size: 0.8rem;
+        }
+
+        .user-profile-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding-left: 0.75rem;
+            border-left: 1px solid #e2e8f0;
+        }
+
+        .user-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e2e8f0;
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.1;
+        }
+
+        .user-role {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* ================= 5 KPI STAT CARDS ================= */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1.15rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .kpi-card {
+            background-color: var(--bg-card);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            padding: 1.15rem 1.25rem;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .kpi-header {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .kpi-icon-bubble {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+        }
+
+        .kpi-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .kpi-value-row {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .kpi-value {
+            font-size: 1.85rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+            line-height: 1;
+        }
+
+        .kpi-trend {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.2rem 0.45rem;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+
+        .kpi-trend.positive {
+            background-color: var(--success-light);
+            color: var(--success);
+        }
+
+        .kpi-trend.negative {
+            background-color: var(--danger-light);
+            color: var(--danger);
+        }
+
+        .kpi-subtext {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.4rem;
+        }
+
+        /* ================= ROW 2: TOPIC-WISE + STRONGEST/WEAKEST ================= */
+        .section-row-2 {
+            display: grid;
+            grid-template-columns: 1.6fr 1fr;
+            gap: 1.15rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.4rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .card-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .chart-custom-legend {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.3rem;
+        }
+
+        /* Strongest vs Weakest Topics split */
+        .topics-split-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+
+        .topic-column-header {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.85rem;
+            font-weight: 800;
+            margin-bottom: 0.85rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border-light);
+        }
+
+        .topic-column-header.strongest {
+            color: var(--success);
+            border-color: #d1fae5;
+        }
+
+        .topic-column-header.weakest {
+            color: var(--danger);
+            border-color: #fee2e2;
+        }
+
+        .topic-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+
+        .topic-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            color: #334155;
+            padding: 0.45rem 0.5rem;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+
+        .topic-item:hover {
+            background-color: #f8fafc;
+        }
+
+        .topic-item-left {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .topic-rank {
+            font-weight: 700;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            min-width: 14px;
+        }
+
+        .topic-name {
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .topic-percent {
+            font-weight: 800;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .topic-percent.high {
+            color: var(--success);
+        }
+
+        .topic-percent.low {
+            color: var(--danger);
+        }
+
+        /* ================= ROW 3: THREE CARDS (DISTRIBUTION, TREND, BATCH) ================= */
+        .section-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.15rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .donut-wrapper {
+            position: relative;
+            height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .donut-center-label {
+            position: absolute;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .donut-center-label .count {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        .donut-center-label .sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .donut-legend-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-top: 0.85rem;
+        }
+
+        .donut-legend-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .donut-legend-left {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-weight: 600;
+        }
+
+        .donut-legend-val {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* ================= ROW 4: STUDENT ANALYSIS TABLE + KEY INSIGHTS ================= */
+        .section-row-4 {
+            display: grid;
+            grid-template-columns: 1.75fr 1fr;
+            gap: 1.15rem;
+        }
+
+        .table-search-input {
+            border: 1px solid var(--border-color);
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            outline: none;
+            width: 200px;
+            color: var(--text-primary);
+        }
+
+        .btn-export-csv {
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            color: #334155;
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all 0.15s;
+        }
+
+        .btn-export-csv:hover {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+        }
+
+        .student-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            text-align: left;
+        }
+
+        .student-table th {
+            color: var(--text-muted);
+            font-weight: 700;
+            padding: 0.65rem 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.03em;
+        }
+
+        .student-table td {
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid var(--border-light);
+            color: #334155;
+        }
+
+        .student-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .perf-pill {
+            display: inline-block;
+            padding: 0.2rem 0.55rem;
+            border-radius: 9999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .perf-pill.excellent {
+            background-color: var(--success-light);
+            color: var(--success);
+        }
+
+        .perf-pill.good {
+            background-color: #f0fdf4;
+            color: #16a34a;
+        }
+
+        .perf-pill.average {
+            background-color: var(--warning-light);
+            color: #d97706;
+        }
+
+        .perf-pill.needs-support {
+            background-color: #fff7ed;
+            color: #ea580c;
+        }
+
+        .perf-pill.at-risk {
+            background-color: var(--danger-light);
+            color: var(--danger);
+        }
+
+        .btn-view-action {
+            background-color: #f8fafc;
+            border: 1px solid var(--border-color);
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-view-action:hover {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            border-color: #bfdbfe;
+        }
+
+        /* Key Insights Callouts */
+        .insights-card-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .insight-callout {
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-start;
+        }
+
+        .insight-callout.weakest-alert {
+            background-color: #fff5f5;
+            border: 1px solid #fed7d7;
+        }
+
+        .insight-callout.strength-note {
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+        }
+
+        .insight-callout.attention-note {
+            background-color: #f5f3ff;
+            border: 1px solid #ddd6fe;
+        }
+
+        .insight-callout.improvement-note {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+        }
+
+        .insight-icon {
+            font-size: 1.15rem;
+            line-height: 1.2;
+        }
+
+        .insight-text h5 {
+            font-size: 0.82rem;
+            font-weight: 800;
+            margin-bottom: 0.2rem;
+            color: var(--text-primary);
+        }
+
+        .insight-text p {
+            font-size: 0.75rem;
+            color: #64748b;
+            line-height: 1.35;
+        }
+
+        /* Responsive Layout Adjustments */
+        @media (max-width: 1200px) {
+            .kpi-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .section-row-2,
+            .section-row-3,
+            .section-row-4 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                padding: 1rem;
+            }
+            .main-container {
+                padding: 1rem;
+            }
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+            .topics-split-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ==================== SIDEBAR ==================== -->
+    <aside class="sidebar">
+        <div class="brand-logo">
+            <span class="brand-icon">🎓</span>
+            <span>Nerd Tutors</span>
+        </div>
+        <ul class="nav-list">
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">👥</span>
+                    <span>Students</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item active">
+                    <span class="nav-icon">📈</span>
+                    <span>Analytics</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">📝</span>
+                    <span>Tests & Marks</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">⬡</span>
+                    <span>Topics</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">📅</span>
+                    <span>Attendance</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">📑</span>
+                    <span>Notes</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">💬</span>
+                    <span>Messages</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-item">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <main class="main-container">
+
+        <!-- Top Header & Filters -->
+        <header class="analytics-header">
+            <div class="page-headings">
+                <h1>Student Analytics</h1>
+                <p>Track performance, identify strengths and weaknesses, and help every student improve.</p>
+            </div>
+
+            <div class="header-controls">
+                <!-- Class -->
+                <select class="filter-select" id="classSelect">
+                    <option value="12" selected>Class 12</option>
+                    <option value="10">Class 10</option>
+                </select>
+
+                <!-- Subject -->
+                <select class="filter-select" id="subjectSelect">
+                    <option value="Economics" selected>Economics</option>
+                    <option value="Business Studies">Business Studies</option>
+                    <option value="Accountancy">Accountancy</option>
+                </select>
+
+                <!-- Test -->
+                <select class="filter-select" id="testSelect">
+                    <option value="Monthly Test 2" selected>Monthly Test 2</option>
+                    <option value="Unit Test 1">Unit Test 1</option>
+                    <option value="Pre-Board Exam">Pre-Board Exam</option>
+                </select>
+
+                <!-- Batch -->
+                <select class="filter-select" id="batchSelect">
+                    <option value="All Batches" selected>All Batches</option>
+                    <option value="Ignite">Ignite</option>
+                    <option value="Velocity">Velocity</option>
+                    <option value="Achievers">Achievers</option>
+                </select>
+
+                <!-- Last updated -->
+                <div class="last-updated-text">
+                    Last updated
+                    <strong>24 Oct 2026</strong>
+                </div>
+
+                <!-- Teacher Avatar -->
+                <div class="user-profile-badge">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Jatin Thacker" class="user-avatar">
+                    <div class="user-info">
+                        <span class="user-name">Jatin Thacker</span>
+                        <span class="user-role">Teacher</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ================= 5 KPI STAT CARDS ================= -->
+        <section class="kpi-grid">
+            <!-- 1. Total Students -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div class="kpi-icon-bubble" style="background-color: #eff6ff; color: #3b82f6;">👥</div>
+                    <span class="kpi-title">Total Students</span>
+                </div>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">48</span>
+                    <span class="kpi-trend positive">↑ +4</span>
+                </div>
+                <div class="kpi-subtext">vs last test</div>
+            </div>
+
+            <!-- 2. Average Score -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div class="kpi-icon-bubble" style="background-color: #fef3c7; color: #d97706;">🏆</div>
+                    <span class="kpi-title">Average Score</span>
+                </div>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">72%</span>
+                    <span class="kpi-trend positive">↑ +6%</span>
+                </div>
+                <div class="kpi-subtext">vs last test</div>
+            </div>
+
+            <!-- 3. Need Intervention -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div class="kpi-icon-bubble" style="background-color: #fee2e2; color: #ef4444;">⚠️</div>
+                    <span class="kpi-title">Need Intervention</span>
+                </div>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">9</span>
+                    <span class="kpi-trend negative">↓ -3</span>
+                </div>
+                <div class="kpi-subtext">Below 50%</div>
+            </div>
+
+            <!-- 4. Highest Score -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div class="kpi-icon-bubble" style="background-color: #fef9c3; color: #ca8a04;">⭐</div>
+                    <span class="kpi-title">Highest Score</span>
+                </div>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">96%</span>
+                </div>
+                <div class="kpi-subtext">Aarav Sharma</div>
+            </div>
+
+            <!-- 5. Topic Mastery -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div class="kpi-icon-bubble" style="background-color: #f3e8ff; color: #9333ea;">📊</div>
+                    <span class="kpi-title">Topic Mastery</span>
+                </div>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">6/10</span>
+                </div>
+                <div class="kpi-subtext">Topics above 70%</div>
+            </div>
+        </section>
+
+        <!-- ================= ROW 2: TOPIC-WISE + STRONGEST/WEAKEST ================= -->
+        <section class="section-row-2">
+            <!-- Left: Topic-wise Performance -->
+            <div class="card-panel">
+                <div class="card-header-row">
+                    <h3 class="card-title">Topic-wise Performance</h3>
+                    <div class="chart-custom-legend">
+                        <span><span class="legend-dot" style="background-color: #3b82f6;"></span>Class Average</span>
+                        <span><span class="legend-dot" style="background-color: #10b981;"></span>Top Performer</span>
+                        <span><span class="legend-dot" style="background-color: #ef4444;"></span>Lowest Performer</span>
+                    </div>
+                </div>
+                <div style="height: 260px; position: relative;">
+                    <canvas id="topicWiseChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Right: Strongest vs Weakest Topics -->
+            <div class="card-panel">
+                <div class="card-header-row">
+                    <h3 class="card-title">Strongest vs Weakest Topics</h3>
+                </div>
+                <div class="topics-split-container">
+                    <!-- Top 5 Strongest -->
+                    <div>
+                        <div class="topic-column-header strongest">
+                            <span>↗️</span> Top 5 Strongest Topics
+                        </div>
+                        <ul class="topic-list">
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">1</span>
+                                    <span class="topic-name">Money & Banking</span>
+                                </div>
+                                <span class="topic-percent high">86%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">2</span>
+                                    <span class="topic-name">National Income</span>
+                                </div>
+                                <span class="topic-percent high">82%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">3</span>
+                                    <span class="topic-name">Indian Economic Dev.</span>
+                                </div>
+                                <span class="topic-percent high">78%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">4</span>
+                                    <span class="topic-name">Human Capital</span>
+                                </div>
+                                <span class="topic-percent high">76%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">5</span>
+                                    <span class="topic-name">Environment & Dev.</span>
+                                </div>
+                                <span class="topic-percent high">72%</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Top 5 Weakest -->
+                    <div>
+                        <div class="topic-column-header weakest">
+                            <span>↘️</span> Top 5 Weakest Topics
+                        </div>
+                        <ul class="topic-list">
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">1</span>
+                                    <span class="topic-name">Government Budget</span>
+                                </div>
+                                <span class="topic-percent low">52%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">2</span>
+                                    <span class="topic-name">Balance of Payments</span>
+                                </div>
+                                <span class="topic-percent low">58%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">3</span>
+                                    <span class="topic-name">Rural Development</span>
+                                </div>
+                                <span class="topic-percent low">60%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">4</span>
+                                    <span class="topic-name">Poverty</span>
+                                </div>
+                                <span class="topic-percent low">63%</span>
+                            </li>
+                            <li class="topic-item">
+                                <div class="topic-item-left">
+                                    <span class="topic-rank">5</span>
+                                    <span class="topic-name">Employment</span>
+                                </div>
+                                <span class="topic-percent low">65%</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= ROW 3: THREE CARDS (DISTRIBUTION, TREND, BATCH) ================= -->
+        <section class="section-row-3">
+            <!-- 1. Student Performance Distribution -->
+            <div class="card-panel">
+                <div class="card-header-row">
+                    <h3 class="card-title">Student Performance Distribution</h3>
+                </div>
+                <div class="donut-wrapper">
+                    <canvas id="performanceDonutChart"></canvas>
+                    <div class="donut-center-label">
+                        <div class="count">48</div>
+                        <div class="sub">Students</div>
+                    </div>
+                </div>
+                <div class="donut-legend-grid">
+                    <div class="donut-legend-item">
+                        <div class="donut-legend-left">
+                            <span class="legend-dot" style="background-color: #10b981;"></span> 90 - 100%
+                        </div>
+                        <span class="donut-legend-val">6 (12%)</span>
+                    </div>
+                    <div class="donut-legend-item">
+                        <div class="donut-legend-left">
+                            <span class="legend-dot" style="background-color: #34d399;"></span> 75 - 89%
+                        </div>
+                        <span class="donut-legend-val">14 (29%)</span>
+                    </div>
+                    <div class="donut-legend-item">
+                        <div class="donut-legend-left">
+                            <span class="legend-dot" style="background-color: #f59e0b;"></span> 60 - 74%
+                        </div>
+                        <span class="donut-legend-val">16 (33%)</span>
+                    </div>
+                    <div class="donut-legend-item">
+                        <div class="donut-legend-left">
+                            <span class="legend-dot" style="background-color: #fb923c;"></span> 50 - 59%
+                        </div>
+                        <span class="donut-legend-val">7 (15%)</span>
+                    </div>
+                    <div class="donut-legend-item">
+                        <div class="donut-legend-left">
+                            <span class="legend-dot" style="background-color: #ef4444;"></span> Below 50%
+                        </div>
+                        <span class="donut-legend-val">5 (10%)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Score Trend (Class Average) -->
+            <div class="card-panel">
+                <div class="card-header-row">
+                    <h3 class="card-title">Score Trend (Class Average)</h3>
+                </div>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="scoreTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 3. Performance by Batch -->
+            <div class="card-panel">
+                <div class="card-header-row">
+                    <h3 class="card-title">Performance by Batch</h3>
+                    <div class="chart-custom-legend">
+                        <span><span class="legend-dot" style="background-color: #3b82f6;"></span>Avg Score</span>
+                        <span><span class="legend-dot" style="background-color: #c7d2fe;"></span>Students</span>
+                    </div>
+                </div>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="batchPerformanceChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= ROW 4: STUDENT ANALYSIS TABLE + KEY INSIGHTS ================= -->
+        <section class="section-row-4">
+            <!-- Left: Student-wise Analysis Table -->
+            <div class="card-panel">
+                <div class="card-header-row">
+                    <h3 class="card-title">Student-wise Analysis</h3>
+                    <div style="display: flex; gap: 0.65rem; align-items: center;">
+                        <input type="text" id="studentSearchInput" class="table-search-input" placeholder="🔍 Search student name...">
+                        <button class="btn-export-csv" onclick="alert('Exporting student analysis CSV...')">
+                            <span>📥</span> Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table class="student-table" id="studentTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Batch</th>
+                                <th>Total Score</th>
+                                <th>Performance</th>
+                                <th>Strongest Topics</th>
+                                <th>Weakest Topics</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td><strong>Aarav Sharma</strong></td>
+                                <td>Ignite</td>
+                                <td><strong>96%</strong></td>
+                                <td><span class="perf-pill excellent">Excellent</span></td>
+                                <td>Money & Banking</td>
+                                <td>Government Budget</td>
+                                <td><button class="btn-view-action" onclick="alert('Viewing Aarav Sharma profile')">View</button></td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td><strong>Krisha Patel</strong></td>
+                                <td>Velocity</td>
+                                <td><strong>88%</strong></td>
+                                <td><span class="perf-pill excellent">Excellent</span></td>
+                                <td>National Income</td>
+                                <td>Poverty</td>
+                                <td><button class="btn-view-action" onclick="alert('Viewing Krisha Patel profile')">View</button></td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td><strong>Dhruv Mehta</strong></td>
+                                <td>Ignite</td>
+                                <td><strong>82%</strong></td>
+                                <td><span class="perf-pill good">Good</span></td>
+                                <td>Indian Eco. Dev.</td>
+                                <td>Balance of Payments</td>
+                                <td><button class="btn-view-action" onclick="alert('Viewing Dhruv Mehta profile')">View</button></td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td><strong>Riya Joshi</strong></td>
+                                <td>Achievers</td>
+                                <td><strong>76%</strong></td>
+                                <td><span class="perf-pill good">Good</span></td>
+                                <td>Environment & Dev.</td>
+                                <td>Government Budget</td>
+                                <td><button class="btn-view-action" onclick="alert('Viewing Riya Joshi profile')">View</button></td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td><strong>Mann Shah</strong></td>
+                                <td>Velocity</td>
+                                <td><strong>65%</strong></td>
+                                <td><span class="perf-pill average">Average</span></td>
+                                <td>Human Capital</td>
+                                <td>Rural Development</td>
+                                <td><button class="btn-view-action" onclick="alert('Viewing Mann Shah profile')">View</button></td>
+                            </tr>
+                            <tr>
+                                <td>6</td>
+                                <td><strong>Tanya Singh</strong></td>
+                                <td>Ignite</td>
+                                <td><strong>58%</strong></td>
+                                <td><span class="perf-pill needs-support">Needs Support</span></td>
+                                <td>National Income</td>
+                                <td>Government Budget</td>
+                                <td><button class="btn-view-action" onclick="alert('Viewing Tanya Singh profile')">View</button></td>
+                            </tr>
+                            <tr>
+                                <td>7</td>
+                                <td><strong>Karan Desai</strong></td>
+                                <td>Achievers</td>
+                                <td><strong>46%</strong></td>
+                                <td><span class="perf-pill at-risk">At Risk</span></td>
+                                <td>Money & Banking</td>
+                                <td>Balance of Payments</td>
+                                <td><button class="btn-view-action" onclick="alert('Viewing Karan Desai profile')">View</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right: Key Insights Callouts -->
+            <div class="card-panel">
+                <div class="card-header-row">
+                    <h3 class="card-title">💡 Key Insights</h3>
+                    <a href="#" style="color: #3b82f6; font-size: 0.78rem; font-weight: 700; text-decoration: none;">View Full Report</a>
+                </div>
+
+                <div class="insights-card-list">
+                    <!-- 1. Weakest Alert -->
+                    <div class="insight-callout weakest-alert">
+                        <span class="insight-icon" style="color: #ef4444;">📊</span>
+                        <div class="insight-text">
+                            <h5>Government Budget is the weakest topic</h5>
+                            <p>Class average is 52%. Plan a revision session and more practice questions.</p>
+                        </div>
+                    </div>
+
+                    <!-- 2. Strength Note -->
+                    <div class="insight-callout strength-note">
+                        <span class="insight-icon" style="color: #10b981;">↗️</span>
+                        <div class="insight-text">
+                            <h5>Strong performance in Money & Banking</h5>
+                            <p>86% average. Students are comfortable with this topic.</p>
+                        </div>
+                    </div>
+
+                    <!-- 3. Attention Note -->
+                    <div class="insight-callout attention-note">
+                        <span class="insight-icon" style="color: #8b5cf6;">👥</span>
+                        <div class="insight-text">
+                            <h5>9 students need immediate attention</h5>
+                            <p>These students scored below 50%. Consider small group sessions.</p>
+                        </div>
+                    </div>
+
+                    <!-- 4. Improvement Note -->
+                    <div class="insight-callout improvement-note">
+                        <span class="insight-icon" style="color: #3b82f6;">📈</span>
+                        <div class="insight-text">
+                            <h5>Overall improvement</h5>
+                            <p>Class average increased by 6% compared to last test.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==================== CHART SCRIPTS ==================== -->
+    <script>
+        // Set Chart.js Defaults
+        Chart.defaults.font.family = "'Plus Jakarta Sans', 'Inter', sans-serif";
+        Chart.defaults.color = '#64748b';
+
+        // 1. Topic-wise Performance Grouped Bar Chart
+        const topicCtx = document.getElementById('topicWiseChart').getContext('2d');
+        new Chart(topicCtx, {
+            type: 'bar',
+            data: {
+                labels: [
+                    'National Income',
+                    'Money & Banking',
+                    'Government Budget',
+                    'Balance of Payments',
+                    'Indian Eco. Dev.',
+                    'Rural Development',
+                    'Human Capital',
+                    'Environment & Dev.'
+                ],
+                datasets: [
+                    {
+                        label: 'Class Average',
+                        data: [70, 72, 44, 58, 68, 58, 55, 58],
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.7
+                    },
+                    {
+                        label: 'Top Performer',
+                        data: [88, 90, 68, 75, 85, 74, 74, 74],
+                        backgroundColor: '#10b981',
+                        borderRadius: 4,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.7
+                    },
+                    {
+                        label: 'Lowest Performer',
+                        data: [45, 68, 40, 42, 55, 44, 40, 40],
+                        backgroundColor: '#ef4444',
+                        borderRadius: 4,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.7
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${ctx.raw}%`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            font: { size: 10, weight: '600' },
+                            maxRotation: 20,
+                            minRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: (val) => val + '%'
+                        },
+                        grid: {
+                            color: '#f1f5f9'
+                        }
+                    }
+                }
+            }
+        });
+
+        // 2. Student Performance Distribution Donut Chart
+        const donutCtx = document.getElementById('performanceDonutChart').getContext('2d');
+        new Chart(donutCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['90 - 100%', '75 - 89%', '60 - 74%', '50 - 59%', 'Below 50%'],
+                datasets: [{
+                    data: [6, 14, 16, 7, 5],
+                    backgroundColor: [
+                        '#10b981', // green
+                        '#34d399', // emerald
+                        '#f59e0b', // amber
+                        '#fb923c', // orange
+                        '#ef4444'  // red
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '72%',
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // 3. Score Trend Line Chart
+        const trendCtx = document.getElementById('scoreTrendChart').getContext('2d');
+        const trendGradient = trendCtx.createLinearGradient(0, 0, 0, 240);
+        trendGradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+        trendGradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: ['Test 1', 'Test 2', 'Test 3', 'Test 4'],
+                datasets: [{
+                    label: 'Class Average',
+                    data: [58, 65, 72, 76],
+                    borderColor: '#3b82f6',
+                    backgroundColor: trendGradient,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.35,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `Class Average: ${ctx.raw}%`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { weight: '600' } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: (val) => val + '%'
+                        },
+                        grid: { color: '#f1f5f9' }
+                    }
+                }
+            }
+        });
+
+        // 4. Performance by Batch Dual Bar Chart
+        const batchCtx = document.getElementById('batchPerformanceChart').getContext('2d');
+        new Chart(batchCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Ignite', 'Velocity', 'Achievers'],
+                datasets: [
+                    {
+                        label: 'Average Score',
+                        data: [74, 68, 77],
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 6,
+                        barPercentage: 0.5,
+                        categoryPercentage: 0.6
+                    },
+                    {
+                        label: 'Students',
+                        data: [18, 16, 14],
+                        backgroundColor: '#c7d2fe',
+                        borderRadius: 6,
+                        barPercentage: 0.5,
+                        categoryPercentage: 0.6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.datasetIndex === 0 
+                                    ? `Avg Score: ${ctx.raw}%` 
+                                    : `Students: ${ctx.raw}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { weight: '700' } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: (val) => val + '%'
+                        },
+                        grid: { color: '#f1f5f9' }
+                    }
+                }
+            }
+        });
+
+        // Interactive Table Search Filter
+        document.getElementById('studentSearchInput').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase().trim();
+            const rows = document.querySelectorAll('#studentTable tbody tr');
+            rows.forEach(row => {
+                const name = row.children[1].textContent.toLowerCase();
+                const batch = row.children[2].textContent.toLowerCase();
+                if (name.includes(query) || batch.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
