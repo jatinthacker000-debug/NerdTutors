@@ -257,15 +257,8 @@ export function resolveQuestionTopic(qNum, qRecord, activeSession, allSessions =
         }
     }
 
-    // 3. Fallback to question text snippet
-    if (qRecord && qRecord.text && qRecord.text.trim()) {
-        const clean = qRecord.text.replace(/^(?:Question|Q\.?)\s*\d+[\s:\-\.]*/i, '').trim();
-        if (clean.length > 0) {
-            return clean.length <= 35 ? clean : clean.substring(0, 32) + '...';
-        }
-    }
-
-    return 'General Concept';
+    // 3. Fallback: If topic data is unavailable, display a clean dash '-' instead of question text
+    return '-';
 }
 
 /**
@@ -457,19 +450,26 @@ export function renderQuestionMatrix(results) {
             if (resp) {
                 const score = resp.score;
                 const max = resp.maxMarks || maxM;
+                const qPct = max > 0 ? (score / max) * 100 : 0;
                 questionTotalEarned += score;
                 questionTotalPossible += max;
                 studentCountForQ++;
 
-                let pillClass = 'score-partial';
-                let symbol = '!';
+                let pillClass = 'score-white';
+                let symbol = '✓';
 
-                if (score >= max && max > 0) {
-                    pillClass = 'score-full';
+                if (qPct <= 30) {
+                    // <= 30% marks: Highlighted with RED
+                    pillClass = 'score-red';
+                    symbol = score <= 0 ? '✗' : '!';
+                } else if (qPct <= 60) {
+                    // 31% to 60% marks: Light color (soft pastel amber)
+                    pillClass = 'score-light';
+                    symbol = '!';
+                } else {
+                    // > 60% marks: WHITE background
+                    pillClass = 'score-white';
                     symbol = '✓';
-                } else if (score <= 0) {
-                    pillClass = 'score-zero';
-                    symbol = '✗';
                 }
 
                 // Attach payload for drawer on click
@@ -507,15 +507,17 @@ export function renderQuestionMatrix(results) {
             else avgColor = '#b91c1c';
         }
 
+        const topicCellHtml = topicName && topicName !== '-'
+            ? `<td class="td-topic" title="${escapeHtml(topicName)}"><span class="matrix-topic-pill">${escapeHtml(topicName)}</span></td>`
+            : `<td class="td-topic" style="text-align: center; color: #94a3b8; font-weight: normal;">-</td>`;
+
         tbodyHtml += `
             <tr>
                 <td class="td-question">
                     <span style="font-weight: 800; color: #1e293b;">${escapeHtml(qNum)}</span>
                     <span style="background: #f1f5f9; color: #475569; padding: 2px 5px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-left: 4px;">${maxM}M</span>
                 </td>
-                <td class="td-topic" title="${escapeHtml(topicName)}">
-                    <span class="matrix-topic-pill">${escapeHtml(topicName)}</span>
-                </td>
+                ${topicCellHtml}
                 ${rowCells}
                 <td class="td-avg">
                     <span style="color: ${avgColor}; font-weight: 800; font-size: 0.88rem;">${avgPct}%</span>
