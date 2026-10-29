@@ -585,13 +585,18 @@
                         <div class="head">
                             <div>
                                 <h3 class="progress-heading">
-                                    <span>📈</span> <span id="progressChartTitle">Aarav Shah’s Multi-Exam Progress</span>
+                                    <span>📈</span> <span id="progressChartTitle">Student Multi-Exam Progress</span>
                                 </h3>
                                 <div class="sub">Hover over any block to view granular subject marks and score deltas.</div>
                             </div>
-                            <div class="tog">
-                                <button id="progressBtnPct" class="on">Percentage</button>
-                                <button id="progressBtnMarks">Marks</button>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <select id="progressStudentSelect" style="padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-weight: 700; color: #1e3c72; background: white; cursor: pointer; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                    <option value="">Loading students...</option>
+                                </select>
+                                <div class="tog">
+                                    <button id="progressBtnPct" class="on">Percentage</button>
+                                    <button id="progressBtnMarks">Marks</button>
+                                </div>
                             </div>
                         </div>
                         <div class="legend" id="progressLegend"></div>

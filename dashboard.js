@@ -16,7 +16,7 @@ import {
     doc
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { initQuestionMatrix, renderQuestionMatrix, populateMatrixSessionDropdown } from './js/matrix-manager.js';
-import { initStudentProgressChart } from './js/student-progress-chart.js';
+import { initStudentProgressChart, loadRealDataIntoProgressChart } from './js/student-progress-chart.js';
 
 // ==================== APP STATE ==================== 
 const appState = {
@@ -162,6 +162,9 @@ async function loadTestResults() {
 
         // Update Question Performance Matrix
         renderQuestionMatrix(appState.testResults);
+
+        // Update Student Progress Chart with real data
+        loadRealDataIntoProgressChart(appState.testResults);
 
     } catch (error) {
         console.error('❌ Error loading results:', error);
@@ -1491,8 +1494,8 @@ async function init() {
         // Initialize Question Performance Matrix
         initQuestionMatrix(appState, analyticsSessions, db, { updateDoc, doc });
 
-        // Initialize Student Multi-Exam Progress Chart
-        initStudentProgressChart();
+        // Initialize Student Multi-Exam Progress Chart with real data
+        initStudentProgressChart(appState.testResults);
 
         // Setup event listeners
         setupEventListeners();

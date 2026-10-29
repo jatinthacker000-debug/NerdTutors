@@ -1149,105 +1149,12 @@ export function getReportCardPrintCss() {
     `;
 }
 
-export async function generateStudentPdfBlob(res, markingSchemeText = '') {
-    const offscreen = document.createElement('div');
-    offscreen.className = 'report-pdf-page';
-    offscreen.style.position = 'fixed';
-    offscreen.style.left = '-9999px';
-    offscreen.style.top = '0';
-    offscreen.style.width = '800px';
-    offscreen.style.background = '#ffffff';
-    offscreen.style.zIndex = '-9999';
-
-    const innerHtml = buildReportCardContent(res, markingSchemeText);
-    offscreen.innerHTML = `
-        <style>
-            ${getReportCardPrintCss()}
-        </style>
-        ${innerHtml}
-    `;
-
-    document.body.appendChild(offscreen);
-
-    const cleanName = (res.studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const cleanSub = (res.subject || 'Subject').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const cleanClass = (res.class || '').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `Report_${cleanName}_${cleanSub}${cleanClass ? '_' + cleanClass : ''}.pdf`;
-
-    const opt = {
-        margin: [8, 8, 8, 8],
-        filename: fileName,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-
-    try {
-        if (window.html2pdf) {
-            const blob = await window.html2pdf().set(opt).from(offscreen).outputPdf('blob');
-            return { blob, fileName };
-        } else if (window.jspdf && window.jspdf.jsPDF) {
-            const doc = new window.jspdf.jsPDF('p', 'mm', 'a4');
-            await doc.html(offscreen, {
-                x: 8,
-                y: 8,
-                width: 194,
-                windowWidth: 800
-            });
-            const blob = doc.output('blob');
-            return { blob, fileName };
-        } else {
-            const fullHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${fileName}</title><style>${getReportCardPrintCss()}</style></head><body>${innerHtml}</body></html>`;
-            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-            return { blob, fileName: fileName.replace('.pdf', '.html') };
-        }
-    } finally {
-        if (offscreen.parentNode) {
-            offscreen.parentNode.removeChild(offscreen);
-        }
-    }
-}
-
-// Download single student PDF directly
+// Download single student PDF directly (opens printable card formatted for Save as PDF)
 window.downloadSingleStudentPdf = async function(resultId) {
-    let res = window.currentResults?.find(r => r.id === resultId);
-    if (!res) {
-        try {
-            const snap = await getDoc(doc(db, 'testResults', resultId));
-            if (snap.exists()) {
-                res = { id: snap.id, ...snap.data() };
-            }
-        } catch (_) {}
-    }
-    if (!res) {
-        showToast("Student result not found", "error");
-        return;
-    }
-
-    let markingSchemeText = '';
-    const sessionId = res.sessionId;
-    const sessionObj = allTestSessions.find(s => s.id === sessionId);
-    if (sessionObj) markingSchemeText = sessionObj.markingScheme || '';
-
-    showToast(`Generating PDF for ${res.studentName}...`, 'info');
-    try {
-        const { blob, fileName } = await generateStudentPdfBlob(res, markingSchemeText);
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(link.href), 15000);
-        showToast(`Downloaded PDF for ${res.studentName}`, 'success');
-    } catch (err) {
-        console.error("Single PDF download error:", err);
-        showToast("Failed to download PDF: " + err.message, "error");
-    }
+    return window.printReportCard(resultId);
 };
 
-// Download ALL student reports as INDIVIDUAL separate PDF files simultaneously
+// Download / Print ALL student reports in one unified, page-separated, board-grade layout
 export async function downloadAllReportsForCurrentSession() {
     const results = window.currentResults;
     if (!results || results.length === 0) {
@@ -1267,51 +1174,160 @@ export async function downloadAllReportsForCurrentSession() {
         } catch (_) {}
     }
 
+    const sessionTitle = session?.name || results[0]?.sessionName || 'Exam Assessment';
+    const sessionClass = session?.class || results[0]?.class || '';
     const markingSchemeText = session?.markingScheme || '';
-    const dlBtn = document.getElementById('btnDownloadAllReports');
-    const originalText = dlBtn ? dlBtn.innerHTML : '';
-    if (dlBtn) dlBtn.disabled = true;
 
-    showToast(`🚀 Starting simultaneous download of ${results.length} individual PDFs...`, 'info');
-
-    let successCount = 0;
-    for (let i = 0; i < results.length; i++) {
-        const res = results[i];
-        if (dlBtn) {
-            dlBtn.innerHTML = `⏳ Downloading ${i + 1}/${results.length} PDFs...`;
-        }
-        try {
-            const { blob, fileName } = await generateStudentPdfBlob(res, markingSchemeText);
-
-            // Trigger individual PDF download
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(link.href), 15000);
-
-            successCount++;
-            // Short 250ms stagger so browser download queue handles all simultaneous files smoothly
-            await new Promise(r => setTimeout(r, 250));
-        } catch (err) {
-            console.error(`Failed to download PDF for ${res.studentName}:`, err);
-        }
+    // Open print window synchronously to prevent popup blockers
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert("Please allow popups for this site to download and print all reports.");
+        return;
     }
 
-    if (dlBtn) {
-        dlBtn.disabled = false;
-        dlBtn.innerHTML = `✅ Downloaded ${successCount} PDFs!`;
+    try {
+        const reportsHtml = results.map((res) => `
+            <div class="student-report-page">
+                ${buildReportCardContent(res, markingSchemeText)}
+            </div>
+        `).join('\n');
+
+        const fullDoc = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${escapeHtml(sessionTitle)} - All Student Report Cards (${results.length})</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        @page {
+            size: auto;
+            margin: 0;
+        }
+        *, *:before, *:after {
+            box-sizing: border-box !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        body { 
+            font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0;
+            padding: 0;
+            background: #f1f5f9;
+            color: #2d3748; 
+            line-height: 1.5; 
+        }
+        .student-report-page {
+            background: #ffffff;
+            padding: 10mm 15mm !important;
+            margin: 15px auto;
+            max-width: 960px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+            page-break-after: always !important;
+            break-after: page !important;
+        }
+        .student-report-page:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            margin-bottom: 0;
+        }
+        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
+        .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
+        .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+        
+        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
+        .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-item .value { font-weight: 700; color: #2d3748; }
+
+        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; }
+        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; }
+        
+        .card-title { font-weight: 700; font-size: 0.8rem; color: #c53030; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+        .score-display { font-size: 2.75rem; font-weight: 900; color: #c53030; line-height: 1; margin: 0.25rem 0 0.5rem 0; text-align: center; }
+        
+        .score-stats { width: 100%; border-top: 1px solid #edf2f7; padding-top: 0.5rem; margin-bottom: 0.75rem; }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; font-size: 0.85rem; color: #4a5568; }
+        
+        .badge-row { display: flex; gap: 0.4rem; width: 100%; justify-content: space-between; margin-top: auto; }
+        .badge-box { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 0.4rem 0.2rem; border-radius: 8px; font-size: 0.7rem; font-weight: 600; text-align: center; }
+        .badge-box.correct { background-color: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
+        .badge-box.partial { background-color: #fffaf0; border: 1px solid #fef3c7; color: #b7791f; }
+        .badge-box.incorrect { background-color: #fff5f5; border: 1px solid #fed7d7; color: #c53030; }
+        .badge-num { font-size: 1rem; font-weight: 900; margin-bottom: 0.1rem; }
+
+        .perf-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; margin-bottom: 0.75rem; }
+        .perf-badge { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid transparent; padding: 0.4rem 0.2rem; font-size: 0.7rem; }
+        .perf-badge.correct { background-color: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .perf-badge.partial { background-color: #fffaf0; border-color: #fef3c7; color: #b7791f; }
+        .perf-badge.incorrect { background-color: #fff5f5; border-color: #fed7d7; color: #c53030; }
+        
+        .legend-row { display: flex; gap: 0.5rem; font-size: 0.68rem; font-weight: 600; color: #718096; margin-top: auto; border-top: 1px solid #edf2f7; padding-top: 0.5rem; flex-wrap: wrap; }
+        .info-note { background-color: #f0f4f8; border: 1px solid #d0d7de; border-left: 4px solid #1e3c72; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #3182ce; line-height: 1.3; display: flex; align-items: flex-start; gap: 0.35rem; margin-top: 0.75rem; text-align: left; }
+
+        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; }
+        ul { padding-left: 1.25rem; }
+        li { margin-bottom: 0.4rem; font-size: 0.9rem; color: #4a5568; }
+        p { font-size: 0.9rem; color: #4a5568; }
+        
+        .report-block {
+            display: inline-block;
+            width: 100%;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+        }
+
+        @media print {
+            .no-print, .no-print * {
+                display: none !important;
+                visibility: hidden !important;
+            }
+            body {
+                background: #ffffff !important;
+                padding: 0 !important;
+            }
+            .student-report-page {
+                box-shadow: none !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="position: fixed; top: 14px; right: 18px; z-index: 99999; display: flex; gap: 10px; background: rgba(255,255,255,0.95); padding: 8px 14px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); border: 1px solid #cbd5e1;">
+        <button onclick="window.print()" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(30,60,114,0.3);">
+            🖨️ Print / Save All as PDF (${results.length} Students)
+        </button>
+        <button onclick="window.close()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;">
+            ✕ Close
+        </button>
+    </div>
+
+    ${reportsHtml}
+</body>
+</html>`;
+
+        printWindow.document.open();
+        printWindow.document.write(fullDoc);
+        printWindow.document.close();
+        printWindow.focus();
+
         setTimeout(() => {
-            dlBtn.innerHTML = originalText || `📥 Download All Reports (${results.length} Individual PDFs)`;
-        }, 3500);
-    }
+            try {
+                printWindow.focus();
+                printWindow.print();
+            } catch (_) {}
+        }, 600);
 
-    showToast(`✅ Successfully downloaded ${successCount} separate student PDFs!`, 'success');
+        showToast(`✅ Opened all ${results.length} student reports in printable layout!`, 'success');
+    } catch (err) {
+        console.error("Bulk print error:", err);
+        showToast("Error generating reports: " + err.message, "error");
+    }
 }
 
-// Download ALL student reports zipped into one file
+// Download ALL student reports zipped into one file (stand-alone board-grade HTML files)
 export async function downloadZipReportsForCurrentSession() {
     const results = window.currentResults;
     if (!results || results.length === 0) {
@@ -1338,7 +1354,7 @@ export async function downloadZipReportsForCurrentSession() {
     const originalText = zipBtn ? zipBtn.innerHTML : '';
     if (zipBtn) zipBtn.disabled = true;
 
-    showToast(`📦 Packaging ${results.length} individual PDFs into ZIP archive...`, 'info');
+    showToast(`📦 Packaging ${results.length} student reports into ZIP archive...`, 'info');
 
     const zip = new window.JSZip();
     let successCount = 0;
@@ -1349,8 +1365,34 @@ export async function downloadZipReportsForCurrentSession() {
             zipBtn.innerHTML = `⏳ Adding ${i + 1}/${results.length} to ZIP...`;
         }
         try {
-            const { blob, fileName } = await generateStudentPdfBlob(res, markingSchemeText);
-            zip.file(fileName, blob);
+            const cleanName = (res.studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
+            const cleanSub = (res.subject || 'Subject').replace(/[^a-zA-Z0-9_-]/g, '_');
+            const fileName = `Report_${cleanName}_${cleanSub}.html`;
+            
+            const cardHtml = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Report Card - ${escapeHtml(res.studentName || 'Student')}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        @page { size: auto; margin: 0; }
+        *, *:before, *:after { box-sizing: border-box !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        body { font-family: 'Poppins', sans-serif; padding: 10mm 15mm !important; margin: 0; color: #2d3748; line-height: 1.5; }
+        ${getReportCardPrintCss()}
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="position: fixed; top: 14px; right: 18px; z-index: 99999;">
+        <button onclick="window.print()" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer;">
+            🖨️ Print / Save PDF
+        </button>
+    </div>
+    ${buildReportCardContent(res, markingSchemeText)}
+</body>
+</html>`;
+            zip.file(fileName, cardHtml);
             successCount++;
         } catch (err) {
             console.error(`Error adding ${res.studentName} to ZIP:`, err);
@@ -1364,20 +1406,20 @@ export async function downloadZipReportsForCurrentSession() {
         const safeName = sessionTitle.replace(/[^a-zA-Z0-9_-]/g, '_');
         const link = document.createElement('a');
         link.href = URL.createObjectURL(zipBlob);
-        link.download = `${safeName}_All_${successCount}_Student_PDFs.zip`;
+        link.download = `${safeName}_All_${successCount}_Student_Reports.zip`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(link.href), 15000);
 
-        showToast(`✅ Downloaded ZIP with ${successCount} separate student PDFs!`, 'success');
+        showToast(`✅ Downloaded ZIP with ${successCount} separate student reports!`, 'success');
     } catch (err) {
         console.error("ZIP creation error:", err);
         showToast("Failed to create ZIP: " + err.message, "error");
     } finally {
         if (zipBtn) {
             zipBtn.disabled = false;
-            zipBtn.innerHTML = originalText || `📦 Download ZIP (All PDFs)`;
+            zipBtn.innerHTML = originalText || `📦 Download ZIP (All Reports)`;
         }
     }
 }

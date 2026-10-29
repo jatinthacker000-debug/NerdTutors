@@ -680,9 +680,11 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
         return;
     }
 
-    // 2. If topicMap DOES exist: calculate topic mastery
+    // 2. If topicMap DOES exist: calculate question-specific topic mastery
+    // Each question is rendered as an INDEPENDENT card categorized strictly by its own
+    // un-averaged accuracy percentage (eliminating score-averaging across different questions).
     const topicMap = activeSession.topicMap;
-    const topicStats = new Map();
+    const questionItems = [];
 
     sortedQuestions.forEach(qNum => {
         const qRec = questionIndex.get(qNum);
@@ -711,42 +713,33 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
             tInfo = { chapter: activeSession.subject || 'Syllabus', topic: `Question ${qNum}`, subtopic: '' };
         }
 
-        const topicKey = `${tInfo.chapter || activeSession.subject} · ${tInfo.topic || 'General Topic'}`;
-        if (!topicStats.has(topicKey)) {
-            topicStats.set(topicKey, {
-                chapter: tInfo.chapter || activeSession.subject,
-                topic: tInfo.topic || 'General Topic',
-                subtopic: tInfo.subtopic || '',
-                type: tInfo.type || 'Subjective',
-                cognitiveSkill: tInfo.cognitiveSkill || 'Understanding',
-                earned: 0,
-                possible: 0,
-                questions: []
-            });
-        }
-
-        const stat = topicStats.get(topicKey);
         let qEarned = 0;
         let qPossible = 0;
+        let responsesCount = 0;
         qRec.responses.forEach(r => {
             qEarned += r.score;
             qPossible += r.maxMarks;
+            responsesCount++;
         });
 
-        const qAcc = qPossible > 0 ? Math.round((qEarned / qPossible) * 100) : 0;
-        stat.earned += qEarned;
-        stat.possible += qPossible;
-        stat.questions.push({ qNum, accuracy: qAcc, maxMarks: qRec.maxMarks });
+        const accuracy = qPossible > 0 ? Math.round((qEarned / qPossible) * 100) : 0;
+
+        questionItems.push({
+            qNum,
+            maxMarks: qRec.maxMarks,
+            chapter: tInfo.chapter || activeSession.subject || 'Syllabus',
+            topic: tInfo.topic || 'General Topic',
+            subtopic: tInfo.subtopic || '',
+            accuracy,
+            earned: qEarned,
+            possible: qPossible,
+            responsesCount
+        });
     });
 
-    const topicsList = Array.from(topicStats.values()).map(t => {
-        const accuracy = t.possible > 0 ? Math.round((t.earned / t.possible) * 100) : 0;
-        return { ...t, accuracy };
-    });
-
-    const criticalWeak = topicsList.filter(t => t.accuracy < 60).sort((a, b) => a.accuracy - b.accuracy);
-    const developing = topicsList.filter(t => t.accuracy >= 60 && t.accuracy <= 90).sort((a, b) => a.accuracy - b.accuracy);
-    const mastered = topicsList.filter(t => t.accuracy > 90).sort((a, b) => b.accuracy - a.accuracy);
+    const criticalWeak = questionItems.filter(q => q.accuracy < 60).sort((a, b) => a.accuracy - b.accuracy);
+    const developing = questionItems.filter(q => q.accuracy >= 60 && q.accuracy <= 90).sort((a, b) => a.accuracy - b.accuracy);
+    const mastered = questionItems.filter(q => q.accuracy > 90).sort((a, b) => b.accuracy - a.accuracy);
 
     let html = `
         <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
@@ -757,7 +750,7 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                         <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">AI Diagnosed</span>
                     </div>
                     <p style="color: #64748b; font-size: 0.85rem; margin: 0.35rem 0 0 0;">
-                        ${escapeHtml(activeSession.curriculumSummary || `Curriculum breakdown across ${topicsList.length} distinct syllabus topics evaluated in this session.`)}
+                        ${escapeHtml(activeSession.curriculumSummary || `Curriculum breakdown across ${questionItems.length} evaluated questions mapped to syllabus topics.`)}
                     </p>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
@@ -777,25 +770,29 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 1.1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                         <span style="font-weight: 800; color: #991b1b; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🔴</span> Critical Topics (&lt; 60%)
+                            <span>🔴</span> Critical Questions (&lt; 60%)
                         </span>
                         <span style="background: #fee2e2; color: #991b1b; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${criticalWeak.length}</span>
                     </div>
                     ${criticalWeak.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">🎉 No critical topic weaknesses (&lt; 60%) detected across class!</div>`
-            : criticalWeak.map(t => `
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">🎉 No critical question weaknesses (&lt; 60%) detected across class!</div>`
+            : criticalWeak.map(q => `
                             <div style="background: white; border: 1px solid #fee2e2; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
-                                    <span style="background: #fee2e2; color: #991b1b; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${t.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.2rem;">${escapeHtml(t.chapter)} ${t.subtopic ? `· ${escapeHtml(t.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.4rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                                    ${t.questions.map(q => `
-                                        <span style="background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 3px; font-size: 0.7rem; font-weight: 700;">
-                                            ${escapeHtml(q.qNum)} (${q.accuracy}%)
+                                    <div>
+                                        <span style="background: #ef4444; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
+                                            ${escapeHtml(q.qNum)}
                                         </span>
-                                    `).join('')}
+                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
+                                            ${escapeHtml(q.topic)}
+                                        </span>
+                                    </div>
+                                    <span style="background: #fee2e2; color: #991b1b; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
+                                </div>
+                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
+                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
+                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
                                 </div>
                             </div>
                         `).join('')}
@@ -810,20 +807,24 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                         <span style="background: #fef3c7; color: #92400e; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${developing.length}</span>
                     </div>
                     ${developing.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics in 60% – 90% range.</div>`
-            : developing.map(t => `
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No questions in 60% – 90% range.</div>`
+            : developing.map(q => `
                             <div style="background: white; border: 1px solid #fef3c7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
-                                    <span style="background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${t.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.2rem;">${escapeHtml(t.chapter)} ${t.subtopic ? `· ${escapeHtml(t.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.4rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                                    ${t.questions.map(q => `
-                                        <span style="background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 3px; font-size: 0.7rem; font-weight: 700;">
-                                            ${escapeHtml(q.qNum)} (${q.accuracy}%)
+                                    <div>
+                                        <span style="background: #f59e0b; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
+                                            ${escapeHtml(q.qNum)}
                                         </span>
-                                    `).join('')}
+                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
+                                            ${escapeHtml(q.topic)}
+                                        </span>
+                                    </div>
+                                    <span style="background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
+                                </div>
+                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
+                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
+                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
                                 </div>
                             </div>
                         `).join('')}
@@ -833,25 +834,29 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 1.1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                         <span style="font-weight: 800; color: #166534; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🟢</span> Strong Topics (&gt; 90%)
+                            <span>🟢</span> Strong Questions (&gt; 90%)
                         </span>
                         <span style="background: #dcfce7; color: #166534; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${mastered.length}</span>
                     </div>
                     ${mastered.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics currently above 90%.</div>`
-            : mastered.map(t => `
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No questions currently above 90%.</div>`
+            : mastered.map(q => `
                             <div style="background: white; border: 1px solid #dcfce7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
-                                    <span style="background: #dcfce7; color: #166534; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${t.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.2rem;">${escapeHtml(t.chapter)} ${t.subtopic ? `· ${escapeHtml(t.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.4rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                                    ${t.questions.map(q => `
-                                        <span style="background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 3px; font-size: 0.7rem; font-weight: 700;">
-                                            ${escapeHtml(q.qNum)} (${q.accuracy}%)
+                                    <div>
+                                        <span style="background: #10b981; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
+                                            ${escapeHtml(q.qNum)}
                                         </span>
-                                    `).join('')}
+                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
+                                            ${escapeHtml(q.topic)}
+                                        </span>
+                                    </div>
+                                    <span style="background: #dcfce7; color: #166534; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
+                                </div>
+                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
+                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
+                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
                                 </div>
                             </div>
                         `).join('')}
