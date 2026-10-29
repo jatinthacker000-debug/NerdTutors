@@ -579,6 +579,35 @@
                             <p style="color: #64748b; font-size: 0.9rem; margin-top: 0.25rem;">Select a different test session or adjust the filters above to populate the question matrix.</p>
                         </div>
                     </div>
+
+                    <!-- ==================== STUDENT PROGRESS CHART SECTION ==================== -->
+                    <div class="student-progress-wrap" id="studentProgressChartSection">
+                        <div class="head">
+                            <div>
+                                <h3 class="progress-heading">
+                                    <span>📈</span> <span id="progressChartTitle">Aarav Shah’s Multi-Exam Progress</span>
+                                </h3>
+                                <div class="sub">Hover over any block to view granular subject marks and score deltas.</div>
+                            </div>
+                            <div class="tog">
+                                <button id="progressBtnPct" class="on">Percentage</button>
+                                <button id="progressBtnMarks">Marks</button>
+                            </div>
+                        </div>
+                        <div class="legend" id="progressLegend"></div>
+                        <div class="plot" id="progressPlot"></div>
+                        <div class="foot"></div>
+                        <details>
+                            <summary>⚙️ Edit Student &amp; Multi-Exam Performance Data</summary>
+                            <div style="margin-top: 10px; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Student Name:</label>
+                                <input id="progressStudentInput" value="Aarav Shah" style="padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1e293b; font: inherit; font-size: 0.85rem;">
+                            </div>
+                            <div class="scroll"><table id="progressTbl"></table></div>
+                            <button class="progress-mini" id="progressAddExam">+ Add Exam</button>
+                        </details>
+                    </div>
+                    <div class="progress-tip" id="progressTip"></div>
                 </div>
             </div>
 

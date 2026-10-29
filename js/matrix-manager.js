@@ -414,7 +414,7 @@ export function renderQuestionMatrix(results) {
         const totalScored = st.score !== undefined ? st.score : (st.totalScore || 0);
         const maxMarks = st.maxMarks || 40;
         theadHtml += `
-            <th class="th-student">
+            <th class="th-student" onclick="window.setStudentProgressName &amp;&amp; window.setStudentProgressName('${escapeHtml(st.studentName)}')" style="cursor: pointer;" title="Click to load progress chart for ${escapeHtml(st.studentName)}">
                 <div style="font-size: 0.95rem; font-weight: 700; color: #1e293b;">${escapeHtml(st.studentName)}</div>
                 <div style="margin-top: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
                     <span style="background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">${escapeHtml(batchTag)}</span>
@@ -455,20 +455,20 @@ export function renderQuestionMatrix(results) {
                 questionTotalPossible += max;
                 studentCountForQ++;
 
-                let pillClass = 'score-white';
+                let tdClass = 'td-score-white';
                 let symbol = '✓';
 
                 if (qPct <= 30) {
-                    // <= 30% marks: Highlighted with RED
-                    pillClass = 'score-red';
+                    // <= 30% marks: ENTIRE BOX IS RED
+                    tdClass = 'td-score-red';
                     symbol = score <= 0 ? '✗' : '!';
                 } else if (qPct <= 60) {
-                    // 31% to 60% marks: Light color (soft pastel amber)
-                    pillClass = 'score-light';
+                    // 31% to 60% marks: ENTIRE BOX IS LIGHT (soft pastel amber/yellow)
+                    tdClass = 'td-score-light';
                     symbol = '!';
                 } else {
-                    // > 60% marks: WHITE background
-                    pillClass = 'score-white';
+                    // > 60% marks: ENTIRE BOX IS WHITE
+                    tdClass = 'td-score-white';
                     symbol = '✓';
                 }
 
@@ -482,15 +482,16 @@ export function renderQuestionMatrix(results) {
                 };
 
                 rowCells += `
-                    <td>
-                        <span class="matrix-score-pill ${pillClass}" onclick="window.openMatrixDrawerByKey('${payloadKey}')" title="Click to view evaluation details">
-                            <span>${symbol}</span> <span>${score}/${max}</span>
-                        </span>
+                    <td class="matrix-cell ${tdClass}" onclick="window.openMatrixDrawerByKey('${payloadKey}')" title="Click to view details: ${score}/${max} (${qPct.toFixed(0)}%)">
+                        <div class="matrix-cell-content">
+                            <span class="cell-symbol">${symbol}</span>
+                            <span class="cell-score">${score}/${max}</span>
+                        </div>
                     </td>
                 `;
             } else {
                 rowCells += `
-                    <td>
+                    <td class="matrix-cell td-score-empty">
                         <span class="score-empty" title="Question not in evaluated paper">-</span>
                     </td>
                 `;

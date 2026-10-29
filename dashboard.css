@@ -1105,7 +1105,69 @@
             border-left: 2px solid #cbd5e1;
         }
 
-        /* Cell Score Badges */
+        /* Entire Cell Box Color-Coding */
+        .matrix-table tbody td.matrix-cell {
+            padding: 0.75rem 0.5rem !important;
+            text-align: center !important;
+            cursor: pointer;
+            user-select: none;
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: all 0.15s ease;
+        }
+
+        .matrix-table tbody td.matrix-cell:hover {
+            filter: brightness(0.95);
+            box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.2);
+            z-index: 3;
+        }
+
+        /* <= 30% marks: The ENTIRE BOX is RED */
+        .matrix-table tbody td.td-score-red {
+            background-color: #fee2e2 !important;
+            color: #991b1b !important;
+            border: 1px solid #fca5a5 !important;
+        }
+
+        /* 31% - 60% marks: The ENTIRE BOX is LIGHT (soft pastel amber) */
+        .matrix-table tbody td.td-score-light {
+            background-color: #fef9c3 !important;
+            color: #854d0e !important;
+            border: 1px solid #fde047 !important;
+        }
+
+        /* > 60% marks: The ENTIRE BOX is WHITE */
+        .matrix-table tbody td.td-score-white {
+            background-color: #ffffff !important;
+            color: #1e293b !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+
+        .matrix-table tbody td.td-score-empty {
+            background-color: #f8fafc !important;
+            color: #94a3b8 !important;
+            border: 1px solid #f1f5f9 !important;
+        }
+
+        .matrix-cell-content {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+            width: 100%;
+        }
+
+        .cell-symbol {
+            font-size: 0.85rem;
+            font-weight: 800;
+        }
+
+        .cell-score {
+            font-weight: 800;
+            font-size: 0.85rem;
+        }
+
+        /* Cell Score Badges (legacy & drawer support) */
         .matrix-score-pill {
             display: inline-flex;
             align-items: center;
@@ -1224,4 +1286,297 @@
             .matrix-table tbody td.td-avg {
                 position: static !important;
             }
+        }
+
+        /* ==================== STUDENT PROGRESS CHART ==================== */
+        .student-progress-wrap {
+            margin-top: 2rem;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+        }
+
+        .student-progress-wrap .head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .student-progress-wrap h3.progress-heading {
+            font-size: 1.25rem;
+            margin: 0;
+            font-weight: 700;
+            color: #1e3c72;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .student-progress-wrap .sub {
+            color: #64748b;
+            font-size: 0.85rem;
+            margin-top: 3px;
+        }
+
+        .student-progress-wrap .tog {
+            display: inline-flex;
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 3px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .student-progress-wrap .tog button {
+            border: 0;
+            background: transparent;
+            color: #64748b;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .student-progress-wrap .tog button.on {
+            background: #ffffff;
+            color: #1e3c72;
+            box-shadow: 0 1px 4px rgba(0,0,0,.12);
+            font-weight: 700;
+        }
+
+        .student-progress-wrap .legend {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin: 14px 0 8px;
+            font-size: 0.82rem;
+            color: #64748b;
+        }
+
+        .student-progress-wrap .legend i {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .student-progress-wrap .plot {
+            position: relative;
+            height: 340px;
+            margin: 26px 0 0 40px;
+            padding-top: 26px;
+        }
+
+        .student-progress-wrap .grid {
+            position: absolute;
+            left: 0;
+            right: 0;
+            border-top: 1px dashed #e2e8f0;
+        }
+
+        .student-progress-wrap .grid span {
+            position: absolute;
+            left: -40px;
+            top: -8px;
+            font-size: 0.72rem;
+            color: #94a3b8;
+            width: 34px;
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .student-progress-wrap .cols {
+            position: absolute;
+            inset: 26px 0 0 0;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            gap: 14px;
+        }
+
+        .student-progress-wrap .col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            height: 100%;
+            position: relative;
+        }
+
+        .student-progress-wrap .tot {
+            font-weight: 800;
+            font-size: 0.95rem;
+            text-align: center;
+            margin-bottom: 6px;
+            line-height: 1.2;
+            color: #1e293b;
+        }
+
+        .student-progress-wrap .delta {
+            font-size: 0.72rem;
+            font-weight: 800;
+            margin-top: 2px;
+        }
+
+        .student-progress-wrap .delta.up { color: #12a26b; }
+        .student-progress-wrap .delta.down { color: #d64545; }
+
+        .student-progress-wrap .stack {
+            width: 100%;
+            max-width: 84px;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 3px;
+            transition: height 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .student-progress-wrap .seg {
+            border-radius: 7px;
+            cursor: pointer;
+            transition: filter 0.15s, opacity 0.15s, transform 0.15s;
+            min-height: 3px;
+        }
+
+        .student-progress-wrap .stack:hover .seg {
+            opacity: 0.45;
+        }
+
+        .student-progress-wrap .stack .seg:hover {
+            opacity: 1;
+            transform: scaleX(1.06);
+            filter: brightness(1.08);
+        }
+
+        .student-progress-wrap .lbl {
+            position: absolute;
+            top: 100%;
+            margin-top: 10px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-align: center;
+            white-space: nowrap;
+            color: #334155;
+        }
+
+        .student-progress-wrap .lbl small {
+            display: block;
+            color: #94a3b8;
+            font-weight: 500;
+            font-size: 0.72rem;
+        }
+
+        svg.progress-trend {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+        }
+
+        .progress-tip {
+            position: fixed;
+            z-index: 99999;
+            pointer-events: none;
+            background: #0f172a;
+            color: #ffffff;
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 0.82rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+            opacity: 0;
+            transition: opacity 0.12s;
+            min-width: 140px;
+        }
+
+        .progress-tip b {
+            display: block;
+            font-size: 0.95rem;
+            margin-top: 3px;
+            color: #38bdf8;
+        }
+
+        .progress-tip span {
+            opacity: 0.8;
+            font-size: 0.75rem;
+        }
+
+        .student-progress-wrap .foot {
+            height: 48px;
+        }
+
+        .student-progress-wrap details {
+            margin-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 12px;
+        }
+
+        .student-progress-wrap summary {
+            cursor: pointer;
+            color: #64748b;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .student-progress-wrap .scroll {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        .student-progress-wrap table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.85rem;
+        }
+
+        .student-progress-wrap th,
+        .student-progress-wrap td {
+            border: 1px solid #e2e8f0;
+            padding: 6px 8px;
+            text-align: center;
+        }
+
+        .student-progress-wrap th {
+            background: #f8fafc;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .student-progress-wrap td input {
+            width: 64px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #1e293b;
+            font: inherit;
+            padding: 3px 4px;
+        }
+
+        .student-progress-wrap td input.name {
+            width: 120px;
+            text-align: left;
+        }
+
+        button.progress-mini {
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #334155;
+            border-radius: 6px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        button.progress-mini:hover {
+            background: #e2e8f0;
         }
