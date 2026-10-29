@@ -26,6 +26,8 @@ import {
 import {
     createTestSession,
     loadResultsForSession,
+    downloadAllReportsForCurrentSession,
+    exportCurrentSessionCSV,
     loadTestSessionsForDropdown,
     loadTestSessionsForManagement,
     populateMockData,
@@ -166,12 +168,25 @@ function setupEventListeners() {
         } else {
             document.getElementById('resultsTableBody').innerHTML = `
                 <tr>
-                    <td colspan="6" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
+                    <td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
                         Select a session to load student results.
                     </td>
                 </tr>
             `;
+            const actionsBar = document.getElementById('resultsActionsBar');
+            if (actionsBar) actionsBar.style.display = 'none';
         }
+    });
+
+    // Bulk Download All Reports & Export CSV Buttons
+    const btnDownloadAllReports = document.getElementById('btnDownloadAllReports');
+    btnDownloadAllReports?.addEventListener('click', () => {
+        downloadAllReportsForCurrentSession();
+    });
+
+    const btnExportSessionCSV = document.getElementById('btnExportSessionCSV');
+    btnExportSessionCSV?.addEventListener('click', () => {
+        exportCurrentSessionCSV();
     });
 
     // Populate Mock Data Button
@@ -198,6 +213,18 @@ function setupEventListeners() {
             switchTab(tabName);
         });
     });
+
+    // Check URL hash on load (e.g., admin.html#view-results or admin.html#results)
+    const handleHashTab = () => {
+        const hash = window.location.hash.replace('#', '').trim();
+        if (hash === 'results' || hash === 'view-results') {
+            switchTab('view-results');
+        } else if (hash && document.querySelector(`.tab-btn[data-tab="${hash}"]`)) {
+            switchTab(hash);
+        }
+    };
+    window.addEventListener('hashchange', handleHashTab);
+    handleHashTab();
 
     // Bypassing Authentication back-door (Ctrl + Alt + B) for local debugging
     window.addEventListener('keydown', (e) => {

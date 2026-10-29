@@ -65,6 +65,9 @@
                 <h1>📚 NerdTutors Question Admin</h1>
                 <div class="user-info">
                     <a href="index.html" class="btn-dashboard" style="text-decoration:none;">← Home</a>
+                    <button class="btn-dashboard" id="btnHeaderViewResults" onclick="document.querySelector('[data-tab=\'view-results\']')?.click()">
+                        📋 View Results
+                    </button>
                     <button class="btn-dashboard" onclick="window.open('dashboard.html', '_blank')">
                         📊 Student Dashboard
                     </button>
@@ -346,11 +349,27 @@
                     </div>
                     <p style="color: #666; margin-bottom: 1.5rem; margin-top: 0.5rem;">Select a Test Session below to view all student evaluations, scores, and print their report cards.</p>
                     
-                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
                         <label for="resultSessionSelect">Select Test Session</label>
                         <select id="resultSessionSelect" style="padding: 0.75rem; font-size: 1rem; width: 100%;">
                             <option value="">-- Load sessions... --</option>
                         </select>
+                    </div>
+
+                    <!-- Action Bar for Selected Session Results -->
+                    <div id="resultsActionsBar" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; padding: 0.85rem 1.15rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; flex-wrap: wrap; gap: 0.75rem;">
+                        <div id="resultsCountBadge" style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; color: #4a5568;">
+                            <span id="resultsCountText" style="background: #e0e7ff; color: #3730a3; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem;">0 Submissions</span>
+                            <span id="sessionDetailsBadge" style="color: #64748b; font-weight: 600; font-size: 0.85rem;"></span>
+                        </div>
+                        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                            <button id="btnDownloadAllReports" type="button" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 0.55rem 1.15rem; border-radius: 7px; font-size: 0.88rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.45rem; box-shadow: 0 2px 8px rgba(30,60,114,0.22); transition: transform 0.15s ease;">
+                                📥 Download All Reports (Bulk PDF)
+                            </button>
+                            <button id="btnExportSessionCSV" type="button" style="background: #2f855a; color: white; border: none; padding: 0.55rem 1rem; border-radius: 7px; font-size: 0.88rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 2px 6px rgba(47,133,90,0.2); transition: transform 0.15s ease;">
+                                📊 Export CSV
+                            </button>
+                        </div>
                     </div>
 
                     <div class="results-table-container" style="overflow-x: auto; background: white; border-radius: 8px; border: 1px solid #e0e0e0; margin-top: 1rem;">
