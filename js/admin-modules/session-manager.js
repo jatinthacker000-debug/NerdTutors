@@ -503,6 +503,12 @@ window.viewReportCard = function(resultId) {
 function cleanModelAnswer(raw, isMcq = false) {
     if (!raw) return 'Refer to marking scheme guidelines.';
     let clean = String(raw).trim();
+
+    // Strip marking scheme summary / grand total footer contamination
+    clean = clean.replace(/(?:^|\n)\s*(?:MARKS\s*SUMMARY|GRAND\s*TOTAL|TOTAL\s*MARKS|Section\s+[A-Z].*Total)[\s\S]*$/i, '');
+    clean = clean.replace(/(?:^|\n)\s*={3,}[\s\S]*$/g, '');
+    clean = clean.replace(/(?:^|\n)\s*-{3,}[\s\S]*$/g, '');
+
     clean = clean.replace(/^-{3,}|^\*{3,}|^_{3,}/gm, '');
     clean = clean.replace(/(?:^|\n)\s*#{1,6}\s*$/gm, '');
     clean = clean.replace(/#{1,6}\s*$/g, '');

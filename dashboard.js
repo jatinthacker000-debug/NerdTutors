@@ -1268,17 +1268,46 @@ function setupRealtimeUpdates() {
 
 // ==================== EVENT LISTENERS ====================
 function setupEventListeners() {
-    // Mobile menu
+    // Desktop sidebar collapse toggle
+    const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
+    const toggleDesktopSidebar = () => {
+        const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+        try {
+            localStorage.setItem('nt_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+        } catch (_) {}
+        const collapseIcon = document.getElementById('collapseIcon');
+        if (collapseIcon) {
+            collapseIcon.textContent = isCollapsed ? '▶' : '◀';
+        }
+    };
+
+    if (sidebarCollapseBtn) {
+        sidebarCollapseBtn.addEventListener('click', toggleDesktopSidebar);
+    }
+
+    // Mobile & Desktop menu toggle button
     elements.mobileMenuBtn.addEventListener('click', () => {
-        elements.sidebar.classList.toggle('active');
-        elements.mobileMenuOverlay.classList.toggle('active');
-        // Change icon between hamburger and close
-        if (elements.sidebar.classList.contains('active')) {
-            elements.menuIcon.textContent = '✕';
+        if (window.innerWidth <= 1024) {
+            elements.sidebar.classList.toggle('active');
+            elements.mobileMenuOverlay.classList.toggle('active');
+            if (elements.sidebar.classList.contains('active')) {
+                elements.menuIcon.textContent = '✕';
+            } else {
+                elements.menuIcon.textContent = '☰';
+            }
         } else {
-            elements.menuIcon.textContent = '☰';
+            toggleDesktopSidebar();
         }
     });
+
+    // Restore saved sidebar preference
+    try {
+        if (localStorage.getItem('nt_sidebar_collapsed') === 'true' && window.innerWidth > 1024) {
+            document.body.classList.add('sidebar-collapsed');
+            const collapseIcon = document.getElementById('collapseIcon');
+            if (collapseIcon) collapseIcon.textContent = '▶';
+        }
+    } catch (_) {}
 
     // Close menu when clicking on overlay
     elements.mobileMenuOverlay.addEventListener('click', () => {

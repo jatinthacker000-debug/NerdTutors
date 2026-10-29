@@ -37,21 +37,48 @@
             overflow-y: auto;
             box-shadow: var(--shadow-lg);
             z-index: 100;
-            transition: transform 0.3s;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .sidebar-header {
-            padding: 2rem 1.5rem;
-            background: rgba(0, 0, 0, 0.1);
+            padding: 1.5rem 1.25rem;
+            background: rgba(0, 0, 0, 0.12);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .sidebar-header h1 {
-            font-size: 1.5rem;
+        .sidebar-title {
+            font-size: 1.35rem;
             font-weight: 700;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .sidebar-toggle-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: white;
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .sidebar-toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
         }
 
         .nav-menu {
@@ -91,6 +118,16 @@
             margin-left: 260px;
             min-height: 100vh;
             background: var(--light-bg);
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Collapsed Sidebar on Large Screens for Maximum View */
+        body.sidebar-collapsed .sidebar {
+            transform: translateX(-100%);
+        }
+
+        body.sidebar-collapsed .main-content {
+            margin-left: 0 !important;
         }
 
         /* ==================== HEADER ==================== */
@@ -599,15 +636,25 @@
             font-size: 0.875rem;
         }
 
-        /* ==================== MOBILE MENU ==================== */
+        /* ==================== MOBILE & DESKTOP MENU TOGGLE ==================== */
         .mobile-menu-btn {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 1.5rem;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            width: 38px;
+            height: 38px;
+            font-size: 1.15rem;
             cursor: pointer;
             color: var(--dark-color);
-            transition: transform 0.3s ease;
+            transition: all 0.2s ease;
+        }
+
+        .mobile-menu-btn:hover {
+            background: #e2e8f0;
+            transform: scale(1.05);
         }
 
         .mobile-menu-overlay {
@@ -960,6 +1007,47 @@
             background: #f1f5f9;
             text-align: left;
             min-width: 130px;
+        }
+
+        .matrix-table thead th.th-topic {
+            min-width: 170px;
+            max-width: 250px;
+            text-align: left;
+            background: #f8fafc;
+            color: #334155;
+            font-weight: 700;
+            border-right: 1px solid #e2e8f0;
+        }
+
+        .matrix-table tbody td.td-topic {
+            text-align: left;
+            padding: 0.65rem 0.85rem;
+            font-size: 0.82rem;
+            color: #475569;
+            max-width: 250px;
+            border-right: 1px solid #f1f5f9;
+            white-space: nowrap;
+        }
+
+        .matrix-table tfoot td.td-topic {
+            text-align: left;
+            background: #f1f5f9;
+            border-right: 1px solid #e2e8f0;
+        }
+
+        .matrix-topic-pill {
+            display: inline-block;
+            max-width: 230px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            font-size: 0.78rem;
+            font-weight: 600;
         }
 
         .matrix-table thead th.th-student {

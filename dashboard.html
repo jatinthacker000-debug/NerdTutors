@@ -18,36 +18,42 @@
     <!-- ==================== SIDEBAR ==================== -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <h1>📊 Admin Dashboard</h1>
+            <h1 class="sidebar-title">
+                <span class="sidebar-icon">📊</span>
+                <span class="sidebar-text">Admin Dashboard</span>
+            </h1>
+            <button class="sidebar-toggle-btn" id="sidebarCollapseBtn" title="Toggle Sidebar (Expand/Collapse)">
+                <span id="collapseIcon">◀</span>
+            </button>
         </div>
         <nav class="nav-menu">
-            <a href="#dashboard" class="nav-item active">
+            <a href="#dashboard" class="nav-item active" title="Dashboard">
                 <span class="nav-icon">🏠</span>
-                <span>Dashboard</span>
+                <span class="nav-label">Dashboard</span>
             </a>
-            <a href="#students" class="nav-item">
+            <a href="#students" class="nav-item" title="Students">
                 <span class="nav-icon">👥</span>
-                <span>Students</span>
+                <span class="nav-label">Students</span>
             </a>
-            <a href="#results" class="nav-item">
+            <a href="#results" class="nav-item" title="Test Results">
                 <span class="nav-icon">📝</span>
-                <span>Test Results</span>
+                <span class="nav-label">Test Results</span>
             </a>
-            <a href="#analytics" class="nav-item">
+            <a href="#analytics" class="nav-item" title="Analytics">
                 <span class="nav-icon">📈</span>
-                <span>Analytics</span>
+                <span class="nav-label">Analytics</span>
             </a>
-            <a href="#matrix" class="nav-item">
+            <a href="#matrix" class="nav-item" title="Question Matrix">
                 <span class="nav-icon">🔢</span>
-                <span>Question Matrix</span>
+                <span class="nav-label">Question Matrix</span>
             </a>
-            <a href="#export" class="nav-item">
+            <a href="#export" class="nav-item" title="Export Data">
                 <span class="nav-icon">💾</span>
-                <span>Export Data</span>
+                <span class="nav-label">Export Data</span>
             </a>
-            <a href="index.html" class="nav-item">
+            <a href="index.html" class="nav-item" title="Back to Home">
                 <span class="nav-icon">🏠</span>
-                <span>Back to Home</span>
+                <span class="nav-label">Back to Home</span>
             </a>
         </nav>
     </aside>

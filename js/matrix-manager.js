@@ -206,6 +206,69 @@ export function syncMatrixSubjectFilter() {
 }
 
 /**
+ * Resolves curriculum topic for a question from AI topicMap, metadata, or text
+ */
+export function resolveQuestionTopic(qNum, qRecord, activeSession, allSessions = []) {
+    if (!qNum) return 'General Concept';
+
+    // 1. Direct on question record
+    if (qRecord && qRecord.topic) return qRecord.topic;
+
+    // 2. Lookup helper in a topicMap
+    const checkTopicMap = (tMap) => {
+        if (!tMap || typeof tMap !== 'object') return null;
+        let tInfo = tMap[qNum] || tMap[qNum.toUpperCase()] || tMap[qNum.toLowerCase()];
+        if (!tInfo) {
+            const digits = qNum.match(/\d+/)?.[0];
+            if (digits) {
+                tInfo = tMap[`Q${digits}`] || tMap[digits] || tMap[`Question ${digits}`];
+            }
+        }
+        if (!tInfo) {
+            const baseQ = qNum.match(/^Q\d+/)?.[0];
+            tInfo = baseQ ? (tMap[baseQ] || tMap[baseQ.toLowerCase()] || tMap[baseQ.toUpperCase()]) : null;
+        }
+        if (!tInfo) {
+            const digits = qNum.match(/\d+/)?.[0];
+            if (digits) {
+                const foundK = Object.keys(tMap).find(k => k.match(new RegExp(`(^|\\D)${digits}(\\D|$)`)));
+                if (foundK) tInfo = tMap[foundK];
+            }
+        }
+        if (tInfo) {
+            if (typeof tInfo === 'string') return tInfo;
+            if (tInfo.topic) return tInfo.topic;
+            if (tInfo.chapter) return tInfo.chapter;
+        }
+        return null;
+    };
+
+    if (activeSession && activeSession.topicMap) {
+        const found = checkTopicMap(activeSession.topicMap);
+        if (found) return found;
+    }
+
+    if (Array.isArray(allSessions)) {
+        for (const sess of allSessions) {
+            if (sess && sess.topicMap) {
+                const found = checkTopicMap(sess.topicMap);
+                if (found) return found;
+            }
+        }
+    }
+
+    // 3. Fallback to question text snippet
+    if (qRecord && qRecord.text && qRecord.text.trim()) {
+        const clean = qRecord.text.replace(/^(?:Question|Q\.?)\s*\d+[\s:\-\.]*/i, '').trim();
+        if (clean.length > 0) {
+            return clean.length <= 35 ? clean : clean.substring(0, 32) + '...';
+        }
+    }
+
+    return 'General Concept';
+}
+
+/**
  * Master Render Engine for Question Matrix
  */
 export function renderQuestionMatrix(results) {
@@ -344,10 +407,13 @@ export function renderQuestionMatrix(results) {
     // Update KPI Cards
     updateMatrixKpis(activeStudents, sortedQuestions, questionIndex);
 
+    const activeSession = matrixState.sessions.find(s => s.id === sessionVal);
+
     // 7. Render Matrix Header (<thead>)
     let theadHtml = `
         <tr>
             <th class="th-question">Question No.</th>
+            <th class="th-topic">Topic</th>
     `;
 
     activeStudents.forEach(st => {
@@ -377,6 +443,7 @@ export function renderQuestionMatrix(results) {
     sortedQuestions.forEach(qNum => {
         const qRecord = questionIndex.get(qNum);
         const maxM = qRecord.maxMarks;
+        const topicName = resolveQuestionTopic(qNum, qRecord, activeSession, matrixState.sessions);
 
         let questionTotalEarned = 0;
         let questionTotalPossible = 0;
@@ -446,6 +513,9 @@ export function renderQuestionMatrix(results) {
                     <span style="font-weight: 800; color: #1e293b;">${escapeHtml(qNum)}</span>
                     <span style="background: #f1f5f9; color: #475569; padding: 2px 5px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-left: 4px;">${maxM}M</span>
                 </td>
+                <td class="td-topic" title="${escapeHtml(topicName)}">
+                    <span class="matrix-topic-pill">${escapeHtml(topicName)}</span>
+                </td>
                 ${rowCells}
                 <td class="td-avg">
                     <span style="color: ${avgColor}; font-weight: 800; font-size: 0.88rem;">${avgPct}%</span>
@@ -460,6 +530,7 @@ export function renderQuestionMatrix(results) {
     let tfootHtml = `
         <tr>
             <td class="td-question" style="font-weight: 800; color: #1e3c72;">TOTAL SCORE</td>
+            <td class="td-topic" style="font-weight: 700; color: #64748b; font-size: 0.8rem;">All Topics</td>
     `;
 
     let totalClassScored = 0;
@@ -503,7 +574,6 @@ export function renderQuestionMatrix(results) {
     matrixState.questionIndex = questionIndex;
 
     // Render Topic Mastery & Weakness Analysis
-    const activeSession = matrixState.sessions.find(s => s.id === sessionVal);
     renderTopicAnalysis(activeSession, questionIndex, sortedQuestions);
 }
 
@@ -671,9 +741,9 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
         return { ...t, accuracy };
     });
 
-    const criticalWeak = topicsList.filter(t => t.accuracy < 45).sort((a, b) => a.accuracy - b.accuracy);
-    const developing = topicsList.filter(t => t.accuracy >= 45 && t.accuracy < 70).sort((a, b) => a.accuracy - b.accuracy);
-    const mastered = topicsList.filter(t => t.accuracy >= 70).sort((a, b) => b.accuracy - a.accuracy);
+    const criticalWeak = topicsList.filter(t => t.accuracy < 60).sort((a, b) => a.accuracy - b.accuracy);
+    const developing = topicsList.filter(t => t.accuracy >= 60 && t.accuracy <= 90).sort((a, b) => a.accuracy - b.accuracy);
+    const mastered = topicsList.filter(t => t.accuracy > 90).sort((a, b) => b.accuracy - a.accuracy);
 
     let html = `
         <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
@@ -687,25 +757,30 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                         ${escapeHtml(activeSession.curriculumSummary || `Curriculum breakdown across ${topicsList.length} distinct syllabus topics evaluated in this session.`)}
                     </p>
                 </div>
-                <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
-                    <span>🔄</span> Re-Analyze Topics
-                </button>
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <button id="btnToggleTopicCollapse" onclick="window.toggleTopicAnalysisCollapse()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+                        <span id="topicCollapseIcon">▲</span> <span id="topicCollapseText">Collapse View</span>
+                    </button>
+                    <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+                        <span>🔄</span> Re-Analyze Topics
+                    </button>
+                </div>
             </div>
 
             <!-- Topic Performance Grid -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+            <div id="topicAnalysisGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
                 
                 <!-- 🔴 Critical Weakness Column -->
                 <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 1.1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                         <span style="font-weight: 800; color: #991b1b; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🔴</span> Critical Weak Topics (&lt; 45%)
+                            <span>🔴</span> Critical Topics (&lt; 60%)
                         </span>
                         <span style="background: #fee2e2; color: #991b1b; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${criticalWeak.length}</span>
                     </div>
-                    ${criticalWeak.length === 0 
-                        ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">🎉 No critical weaknesses detected across class!</div>`
-                        : criticalWeak.map(t => `
+                    ${criticalWeak.length === 0
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">🎉 No critical topic weaknesses (&lt; 60%) detected across class!</div>`
+            : criticalWeak.map(t => `
                             <div style="background: white; border: 1px solid #fee2e2; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
                                     <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
@@ -727,13 +802,13 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 1.1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                         <span style="font-weight: 800; color: #92400e; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🟡</span> Developing Topics (45% – 69%)
+                            <span>🟡</span> Need Improvement (60% – 90%)
                         </span>
                         <span style="background: #fef3c7; color: #92400e; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${developing.length}</span>
                     </div>
-                    ${developing.length === 0 
-                        ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics in developing range.</div>`
-                        : developing.map(t => `
+                    ${developing.length === 0
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics in 60% – 90% range.</div>`
+            : developing.map(t => `
                             <div style="background: white; border: 1px solid #fef3c7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
                                     <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
@@ -755,13 +830,13 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 1.1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                         <span style="font-weight: 800; color: #166534; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🟢</span> Mastered Topics (≥ 70%)
+                            <span>🟢</span> Strong Topics (&gt; 90%)
                         </span>
                         <span style="background: #dcfce7; color: #166534; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${mastered.length}</span>
                     </div>
-                    ${mastered.length === 0 
-                        ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics currently above 70%.</div>`
-                        : mastered.map(t => `
+                    ${mastered.length === 0
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No topics currently above 90%.</div>`
+            : mastered.map(t => `
                             <div style="background: white; border: 1px solid #dcfce7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
                                     <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${escapeHtml(t.topic)}</div>
@@ -784,6 +859,19 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
     `;
 
     container.innerHTML = html;
+}
+
+if (typeof window !== 'undefined') {
+    window.toggleTopicAnalysisCollapse = function() {
+        const grid = document.getElementById('topicAnalysisGrid');
+        const icon = document.getElementById('topicCollapseIcon');
+        const txt = document.getElementById('topicCollapseText');
+        if (!grid) return;
+        const isHidden = grid.style.display === 'none';
+        grid.style.display = isHidden ? 'grid' : 'none';
+        if (icon) icon.textContent = isHidden ? '▲' : '▼';
+        if (txt) txt.textContent = isHidden ? 'Collapse View' : 'Expand View';
+    };
 }
 
 /**
@@ -848,7 +936,7 @@ function updateMatrixKpis(students, questions, questionIndex) {
  * Open Detail Slide-Over Drawer for a specific student's question score
  */
 if (typeof window !== 'undefined') {
-    window.openMatrixDrawerByKey = function(key) {
+    window.openMatrixDrawerByKey = function (key) {
         const data = window._matrixDrawerCache?.[key];
         if (!data) return;
 
@@ -988,10 +1076,13 @@ export function exportMatrixCsv() {
         return;
     }
 
+    const sessionVal = document.getElementById('matrixSessionFilter')?.value || 'all';
+    const activeSession = matrixState.sessions.find(s => s.id === sessionVal);
+
     let csv = '';
 
-    // CSV Header Row: Question Number, Student 1, Student 2, ..., Class Average (%)
-    const headers = ['Question Number'];
+    // CSV Header Row: Question Number, Topic, Student 1, Student 2, ..., Class Average (%)
+    const headers = ['Question Number', 'Topic'];
     students.forEach(st => {
         headers.push(`"${st.studentName.replace(/"/g, '""')} (${st.batch || 'Both'})"`);
     });
@@ -1001,7 +1092,11 @@ export function exportMatrixCsv() {
     // CSV Question Rows
     questions.forEach(qNum => {
         const qRec = qIndex.get(qNum);
-        const row = [`"${qNum} (${qRec.maxMarks} Marks)"`];
+        const topicName = resolveQuestionTopic(qNum, qRec, activeSession, matrixState.sessions);
+        const row = [
+            `"${qNum} (${qRec.maxMarks} Marks)"`,
+            `"${topicName.replace(/"/g, '""')}"`
+        ];
         let earned = 0;
         let possible = 0;
 
@@ -1022,7 +1117,7 @@ export function exportMatrixCsv() {
     });
 
     // CSV Total Score Row
-    const totalRow = ['"TOTAL SCORE"'];
+    const totalRow = ['"TOTAL SCORE"', '"All Topics"'];
     let grandEarned = 0;
     let grandPossible = 0;
     students.forEach(st => {
