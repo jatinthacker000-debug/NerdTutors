@@ -178,6 +178,9 @@ export async function loadResultsForSession(sessionId) {
                         <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #3182ce; margin-right: 0.35rem; width: auto;" onclick="window.viewReportCard('${res.id}')">
                             👁️ View Card
                         </button>
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #4f46e5; margin-right: 0.35rem; width: auto;" onclick="window.downloadSingleStudentPdf('${res.id}')" title="Download single PDF">
+                            📥 PDF
+                        </button>
                         <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #2f855a; margin-right: 0.35rem; width: auto;" onclick="window.printReportCard('${res.id}')">
                             🖨️ Print
                         </button>
@@ -206,9 +209,14 @@ export async function loadResultsForSession(sessionId) {
                 sessionDetails.innerHTML = `&bull; <strong>${escapeHtml(sTitle)}</strong> (${escapeHtml(sCls)}${sSub ? ' - ' + escapeHtml(sSub) : ''})`;
             }
 
+            const zipBtn = document.getElementById('btnDownloadZipReports');
             if (dlBtn) {
-                dlBtn.innerHTML = `📥 Download All Reports (${results.length} Students - Bulk PDF)`;
+                dlBtn.innerHTML = `📥 Download All (${results.length} Individual PDFs)`;
                 dlBtn.onclick = () => window.downloadAllReportsForCurrentSession();
+            }
+            if (zipBtn) {
+                zipBtn.innerHTML = `📦 Download ZIP (${results.length} PDFs)`;
+                zipBtn.onclick = () => window.downloadZipReportsForCurrentSession();
             }
             if (csvBtn) {
                 csvBtn.onclick = () => window.exportCurrentSessionCSV();
@@ -1069,83 +1077,22 @@ window.printReportCard = async function(resultId) {
     }
 };
 
-export async function downloadAllReportsForCurrentSession() {
-    const results = window.currentResults;
-    if (!results || results.length === 0) {
-        showToast("No student results loaded to download. Please select a session with evaluations.", "warning");
-        return;
-    }
-
-    const sessionId = window.currentSelectedSessionId || results[0]?.sessionId;
-    let session = allTestSessions.find(s => s.id === sessionId);
-
-    if (!session && sessionId) {
-        try {
-            const sSnap = await getDoc(doc(db, 'testSessions', sessionId));
-            if (sSnap.exists()) {
-                session = { id: sSnap.id, ...sSnap.data() };
-            }
-        } catch (_) {}
-    }
-
-    const sessionTitle = session?.name || results[0]?.sessionName || 'Exam Assessment';
-    const sessionClass = session?.class || results[0]?.class || '';
-    const sessionSubject = session?.subject || results[0]?.subject || '';
-    const markingSchemeText = session?.markingScheme || '';
-
-    // Open print window synchronously to prevent popup blockers
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        alert("Please allow popups for this site to download and print all reports.");
-        return;
-    }
-
-    try {
-        const reportsHtml = results.map((res) => `
-            <div class="student-report-page">
-                ${buildReportCardContent(res, markingSchemeText)}
-            </div>
-        `).join('\n');
-
-        const safeFileName = `${sessionTitle.replace(/[^a-zA-Z0-9_-]/g, '_')}_Class_${sessionClass}_All_Reports`;
-
-        const fullDoc = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>${escapeHtml(sessionTitle)} - All Student Report Cards (${results.length})</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        @page {
-            size: auto;
-            margin: 0;
-        }
+export function getReportCardPrintCss() {
+    return `
         *, *:before, *:after {
             box-sizing: border-box !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
-        body { 
-            font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0;
-            padding: 0;
-            background: #f1f5f9;
-            color: #2d3748; 
-            line-height: 1.5; 
-        }
-        .student-report-page {
+        .report-pdf-page {
+            font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #2d3748;
             background: #ffffff;
-            padding: 10mm 15mm !important;
-            margin: 15px auto;
-            max-width: 960px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-            page-break-after: always !important;
-            break-after: page !important;
-        }
-        .student-report-page:last-child {
-            page-break-after: avoid !important;
-            break-after: avoid !important;
-            margin-bottom: 0;
+            line-height: 1.5;
+            padding: 10mm 14mm;
+            width: 800px;
+            margin: 0 auto;
+            box-sizing: border-box;
         }
         .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
         .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
@@ -1193,74 +1140,239 @@ export async function downloadAllReportsForCurrentSession() {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
         }
+    `;
+}
 
-        @media print {
-            body {
-                background: white !important;
-            }
-            .no-print, .no-print * {
-                display: none !important;
-                visibility: hidden !important;
-            }
-            .student-report-page {
-                max-width: 100% !important;
-                margin: 0 !important;
-                box-shadow: none !important;
-                padding: 10mm 15mm !important;
-            }
+export async function generateStudentPdfBlob(res, markingSchemeText = '') {
+    const offscreen = document.createElement('div');
+    offscreen.className = 'report-pdf-page';
+    offscreen.style.position = 'fixed';
+    offscreen.style.left = '-9999px';
+    offscreen.style.top = '0';
+    offscreen.style.width = '800px';
+    offscreen.style.background = '#ffffff';
+    offscreen.style.zIndex = '-9999';
+
+    const innerHtml = buildReportCardContent(res, markingSchemeText);
+    offscreen.innerHTML = `
+        <style>
+            ${getReportCardPrintCss()}
+        </style>
+        ${innerHtml}
+    `;
+
+    document.body.appendChild(offscreen);
+
+    const cleanName = (res.studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanSub = (res.subject || 'Subject').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanClass = (res.class || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `Report_${cleanName}_${cleanSub}${cleanClass ? '_' + cleanClass : ''}.pdf`;
+
+    const opt = {
+        margin: [8, 8, 8, 8],
+        filename: fileName,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    try {
+        if (window.html2pdf) {
+            const blob = await window.html2pdf().set(opt).from(offscreen).outputPdf('blob');
+            return { blob, fileName };
+        } else if (window.jspdf && window.jspdf.jsPDF) {
+            const doc = new window.jspdf.jsPDF('p', 'mm', 'a4');
+            await doc.html(offscreen, {
+                x: 8,
+                y: 8,
+                width: 194,
+                windowWidth: 800
+            });
+            const blob = doc.output('blob');
+            return { blob, fileName };
+        } else {
+            const fullHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${fileName}</title><style>${getReportCardPrintCss()}</style></head><body>${innerHtml}</body></html>`;
+            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+            return { blob, fileName: fileName.replace('.pdf', '.html') };
         }
-    </style>
-</head>
-<body>
-    <div class="no-print" style="position: sticky; top: 0; left: 0; right: 0; z-index: 99999; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.97); backdrop-filter: blur(8px); padding: 10px 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); border-bottom: 1px solid #e2e8f0;">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <span style="font-size: 1.5rem;">📚</span>
-            <div>
-                <div style="font-weight: 800; color: #1e3c72; font-size: 1.05rem;">${escapeHtml(sessionTitle)}</div>
-                <div style="font-size: 0.8rem; color: #64748b; font-weight: 600;">${results.length} Student Reports Ready &bull; Class ${escapeHtml(sessionClass)} &bull; ${escapeHtml(sessionSubject)}</div>
-            </div>
-        </div>
-        <div style="display: flex; gap: 0.75rem; align-items: center;">
-            <button onclick="window.print()" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(30,60,114,0.3);">
-                🖨️ Save All as PDF / Print All
-            </button>
-            <button onclick="downloadAsHtml()" style="background: #2f855a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                💾 Download HTML File
-            </button>
-            <button onclick="window.close()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;">
-                ✕ Close
-            </button>
-        </div>
-    </div>
-
-    ${reportsHtml}
-
-    <script>
-        function downloadAsHtml() {
-            const docHtml = '<!DOCTYPE html>\\n' + document.documentElement.outerHTML;
-            const blob = new Blob([docHtml], { type: 'text/html;charset=utf-8' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = ${JSON.stringify(safeFileName)} + '.html';
-            a.click();
+    } finally {
+        if (offscreen.parentNode) {
+            offscreen.parentNode.removeChild(offscreen);
         }
-        setTimeout(() => {
-            try {
-                window.focus();
-                window.print();
-            } catch (_) {}
-        }, 600);
-    </script>
-</body>
-</html>`;
+    }
+}
 
-        printWindow.document.open();
-        printWindow.document.write(fullDoc);
-        printWindow.document.close();
+// Download single student PDF directly
+window.downloadSingleStudentPdf = async function(resultId) {
+    let res = window.currentResults?.find(r => r.id === resultId);
+    if (!res) {
+        try {
+            const snap = await getDoc(doc(db, 'testResults', resultId));
+            if (snap.exists()) {
+                res = { id: snap.id, ...snap.data() };
+            }
+        } catch (_) {}
+    }
+    if (!res) {
+        showToast("Student result not found", "error");
+        return;
+    }
+
+    let markingSchemeText = '';
+    const sessionId = res.sessionId;
+    const sessionObj = allTestSessions.find(s => s.id === sessionId);
+    if (sessionObj) markingSchemeText = sessionObj.markingScheme || '';
+
+    showToast(`Generating PDF for ${res.studentName}...`, 'info');
+    try {
+        const { blob, fileName } = await generateStudentPdfBlob(res, markingSchemeText);
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(link.href), 15000);
+        showToast(`Downloaded PDF for ${res.studentName}`, 'success');
     } catch (err) {
-        console.error("Bulk report generation error:", err);
-        showToast("Failed to generate bulk reports: " + err.message, "error");
-        if (printWindow) printWindow.close();
+        console.error("Single PDF download error:", err);
+        showToast("Failed to download PDF: " + err.message, "error");
+    }
+};
+
+// Download ALL student reports as INDIVIDUAL separate PDF files simultaneously
+export async function downloadAllReportsForCurrentSession() {
+    const results = window.currentResults;
+    if (!results || results.length === 0) {
+        showToast("No student results loaded to download. Please select a session with evaluations.", "warning");
+        return;
+    }
+
+    const sessionId = window.currentSelectedSessionId || results[0]?.sessionId;
+    let session = allTestSessions.find(s => s.id === sessionId);
+
+    if (!session && sessionId) {
+        try {
+            const sSnap = await getDoc(doc(db, 'testSessions', sessionId));
+            if (sSnap.exists()) {
+                session = { id: sSnap.id, ...sSnap.data() };
+            }
+        } catch (_) {}
+    }
+
+    const markingSchemeText = session?.markingScheme || '';
+    const dlBtn = document.getElementById('btnDownloadAllReports');
+    const originalText = dlBtn ? dlBtn.innerHTML : '';
+    if (dlBtn) dlBtn.disabled = true;
+
+    showToast(`🚀 Starting simultaneous download of ${results.length} individual PDFs...`, 'info');
+
+    let successCount = 0;
+    for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        if (dlBtn) {
+            dlBtn.innerHTML = `⏳ Downloading ${i + 1}/${results.length} PDFs...`;
+        }
+        try {
+            const { blob, fileName } = await generateStudentPdfBlob(res, markingSchemeText);
+
+            // Trigger individual PDF download
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(link.href), 15000);
+
+            successCount++;
+            // Short 250ms stagger so browser download queue handles all simultaneous files smoothly
+            await new Promise(r => setTimeout(r, 250));
+        } catch (err) {
+            console.error(`Failed to download PDF for ${res.studentName}:`, err);
+        }
+    }
+
+    if (dlBtn) {
+        dlBtn.disabled = false;
+        dlBtn.innerHTML = `✅ Downloaded ${successCount} PDFs!`;
+        setTimeout(() => {
+            dlBtn.innerHTML = originalText || `📥 Download All Reports (${results.length} Individual PDFs)`;
+        }, 3500);
+    }
+
+    showToast(`✅ Successfully downloaded ${successCount} separate student PDFs!`, 'success');
+}
+
+// Download ALL student reports zipped into one file
+export async function downloadZipReportsForCurrentSession() {
+    const results = window.currentResults;
+    if (!results || results.length === 0) {
+        showToast("No student results loaded to download.", "warning");
+        return;
+    }
+
+    if (!window.JSZip) {
+        return downloadAllReportsForCurrentSession();
+    }
+
+    const sessionId = window.currentSelectedSessionId || results[0]?.sessionId;
+    let session = allTestSessions.find(s => s.id === sessionId);
+    if (!session && sessionId) {
+        try {
+            const sSnap = await getDoc(doc(db, 'testSessions', sessionId));
+            if (sSnap.exists()) session = { id: sSnap.id, ...sSnap.data() };
+        } catch (_) {}
+    }
+
+    const sessionTitle = session?.name || results[0]?.sessionName || 'Exam';
+    const markingSchemeText = session?.markingScheme || '';
+    const zipBtn = document.getElementById('btnDownloadZipReports');
+    const originalText = zipBtn ? zipBtn.innerHTML : '';
+    if (zipBtn) zipBtn.disabled = true;
+
+    showToast(`📦 Packaging ${results.length} individual PDFs into ZIP archive...`, 'info');
+
+    const zip = new window.JSZip();
+    let successCount = 0;
+
+    for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        if (zipBtn) {
+            zipBtn.innerHTML = `⏳ Adding ${i + 1}/${results.length} to ZIP...`;
+        }
+        try {
+            const { blob, fileName } = await generateStudentPdfBlob(res, markingSchemeText);
+            zip.file(fileName, blob);
+            successCount++;
+        } catch (err) {
+            console.error(`Error adding ${res.studentName} to ZIP:`, err);
+        }
+    }
+
+    if (zipBtn) zipBtn.innerHTML = `⏳ Compressing ZIP...`;
+
+    try {
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const safeName = sessionTitle.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(zipBlob);
+        link.download = `${safeName}_All_${successCount}_Student_PDFs.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(link.href), 15000);
+
+        showToast(`✅ Downloaded ZIP with ${successCount} separate student PDFs!`, 'success');
+    } catch (err) {
+        console.error("ZIP creation error:", err);
+        showToast("Failed to create ZIP: " + err.message, "error");
+    } finally {
+        if (zipBtn) {
+            zipBtn.disabled = false;
+            zipBtn.innerHTML = originalText || `📦 Download ZIP (All PDFs)`;
+        }
     }
 }
 
@@ -1329,6 +1441,7 @@ export function exportCurrentSessionCSV() {
 
 // Global hooks
 window.downloadAllReportsForCurrentSession = downloadAllReportsForCurrentSession;
+window.downloadZipReportsForCurrentSession = downloadZipReportsForCurrentSession;
 window.exportCurrentSessionCSV = exportCurrentSessionCSV;
 
 export async function populateMockData() {

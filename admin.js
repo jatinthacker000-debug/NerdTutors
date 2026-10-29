@@ -27,6 +27,7 @@ import {
     createTestSession,
     loadResultsForSession,
     downloadAllReportsForCurrentSession,
+    downloadZipReportsForCurrentSession,
     exportCurrentSessionCSV,
     loadTestSessionsForDropdown,
     loadTestSessionsForManagement,
@@ -178,10 +179,15 @@ function setupEventListeners() {
         }
     });
 
-    // Bulk Download All Reports & Export CSV Buttons
+    // Bulk Download All Reports, ZIP & Export CSV Buttons
     const btnDownloadAllReports = document.getElementById('btnDownloadAllReports');
     btnDownloadAllReports?.addEventListener('click', () => {
         downloadAllReportsForCurrentSession();
+    });
+
+    const btnDownloadZipReports = document.getElementById('btnDownloadZipReports');
+    btnDownloadZipReports?.addEventListener('click', () => {
+        downloadZipReportsForCurrentSession();
     });
 
     const btnExportSessionCSV = document.getElementById('btnExportSessionCSV');
