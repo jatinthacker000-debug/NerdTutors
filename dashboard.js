@@ -125,10 +125,10 @@ async function loadTestResults() {
         snapshot.forEach((doc) => {
             const data = doc.data();
             const dateObj = data.submittedAt || data.createdAt;
-            
+
             let pct = data.percentage;
             let totScore = data.totalScore;
-            
+
             // Standardize OCR score fields
             if (pct === undefined && data.score !== undefined && data.maxMarks) {
                 pct = `${Math.round((data.score / data.maxMarks) * 100)}%`;
@@ -406,7 +406,7 @@ function viewDetails(resultId) {
 
             // Get student answer — handle both text and OCR field names
             const studentAnswer = item.studentAnswer || item.extractedAnswer || item.studentAnswerText || 'No answer provided';
-            
+
             // Handle score/marks mapping (MCQ uses earnedMarks/marks, OCR uses score/maxMarks)
             const earned = item.earnedMarks !== undefined ? item.earnedMarks : (item.score || 0);
             const max = item.marks !== undefined ? item.marks : (item.maxMarks || 1);
@@ -772,7 +772,7 @@ async function loadSessionsForAnalyticsFilter() {
         querySnapshot.forEach(docSnap => {
             analyticsSessions.push({ id: docSnap.id, ...docSnap.data() });
         });
-        
+
         syncAnalyticsSubjectFilter();
         updateAnalyticsSessionDropdown();
         populateMatrixSessionDropdown(analyticsSessions);
@@ -893,7 +893,7 @@ function initAnalyticsCharts() {
             const percentage = parseFloat(r.percentage) || 0;
             const score = parseFloat(r.score) || 0;
             const maxMarks = parseFloat(r.maxMarks) || 100;
-            
+
             // Keep the latest score of each student
             if (!studentMap[sName] || studentMap[sName].percentage < percentage) {
                 studentMap[sName] = { score, maxMarks, percentage };
@@ -902,8 +902,8 @@ function initAnalyticsCharts() {
 
         const labels = Object.keys(studentMap);
         const dataValues = labels.map(label => {
-            return appState.chartMetric === 'percentage' 
-                ? studentMap[label].percentage 
+            return appState.chartMetric === 'percentage'
+                ? studentMap[label].percentage
                 : studentMap[label].score;
         });
 
@@ -928,7 +928,7 @@ function initAnalyticsCharts() {
                     legend: { display: true, position: 'top' },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 const name = context.label;
                                 const val = context.parsed.y;
                                 if (appState.chartMetric === 'percentage') {
@@ -946,7 +946,7 @@ function initAnalyticsCharts() {
                         beginAtZero: true,
                         max: appState.chartMetric === 'percentage' ? 100 : undefined,
                         ticks: {
-                            callback: function(value) {
+                            callback: function (value) {
                                 return appState.chartMetric === 'percentage' ? value + '%' : value;
                             }
                         }
@@ -1108,9 +1108,9 @@ function renderLeaderboardAndDetailedTable(filteredResults) {
     });
 
     const sortedStudents = Object.entries(studentMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    
-    leaderboardBody.innerHTML = sortedStudents.length === 0 
-        ? '<tr><td colspan="3" style="text-align:center;">No data available</td></tr>' 
+
+    leaderboardBody.innerHTML = sortedStudents.length === 0
+        ? '<tr><td colspan="3" style="text-align:center;">No data available</td></tr>'
         : sortedStudents.map((s, index) => {
             let medal = '';
             if (index === 0) medal = '🥇 ';
@@ -1127,8 +1127,8 @@ function renderLeaderboardAndDetailedTable(filteredResults) {
 
     // 2. Detailed Data Table (Sorted by Date Desc)
     const sortedDetails = [...filteredResults].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-    
-    detailedBody.innerHTML = sortedDetails.length === 0 
+
+    detailedBody.innerHTML = sortedDetails.length === 0
         ? '<tr><td colspan="7" style="text-align:center;">No data available</td></tr>'
         : sortedDetails.map(r => {
             const date = new Date(r.submittedAt);
@@ -1282,7 +1282,7 @@ function setupEventListeners() {
             const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
             try {
                 localStorage.setItem('nt_sidebar_collapsed', isCollapsed ? 'true' : 'false');
-            } catch (_) {}
+            } catch (_) { }
         }
     };
 
@@ -1293,7 +1293,7 @@ function setupEventListeners() {
         if (localStorage.getItem('nt_sidebar_collapsed') === 'true' && window.innerWidth > 1024) {
             document.body.classList.add('sidebar-collapsed');
         }
-    } catch (_) {}
+    } catch (_) { }
 
     // Close menu when clicking on overlay
     elements.mobileMenuOverlay.addEventListener('click', () => {

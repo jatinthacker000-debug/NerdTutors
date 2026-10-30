@@ -150,7 +150,7 @@ function drawTrend(plot) {
 function getStudentExams(studentName) {
     if (!cachedResults || cachedResults.length === 0 || !studentName) return [];
 
-    const studentRecords = cachedResults.filter(r => 
+    const studentRecords = cachedResults.filter(r =>
         r.studentName && r.studentName.trim().toLowerCase() === studentName.trim().toLowerCase()
     );
 
@@ -162,7 +162,7 @@ function getStudentExams(studentName) {
         const score = Number(r.score) || 0;
         const maxMarks = Number(r.maxMarks) || 40;
         const pct = maxMarks > 0 ? (score / maxMarks) * 100 : 0;
-        
+
         let dateStr = '';
         let time = 0;
         if (r.submittedAt) {
@@ -224,8 +224,8 @@ function render() {
     renderSubjectTabs(availableSubjects, subjectCounts, allStudentExams.length);
 
     // 3. Filter exams by subject
-    const subjectExams = activeSubject === "ALL" 
-        ? allStudentExams 
+    const subjectExams = activeSubject === "ALL"
+        ? allStudentExams
         : allStudentExams.filter(e => e.subject === activeSubject);
 
     // 4. Render Exam Comparison Filter Chips
@@ -296,7 +296,7 @@ function renderSubjectTabs(subjectsList, counts, totalCount) {
     container.innerHTML = html;
 
     container.querySelectorAll(".progress-subject-pill").forEach(btn => {
-        btn.onclick = function() {
+        btn.onclick = function () {
             activeSubject = this.dataset.subject;
             deselectedExamIds.clear(); // Reset exam selection on subject switch
             render();
@@ -329,7 +329,7 @@ function renderExamChips(examsList) {
     }).join('');
 
     container.querySelectorAll(".progress-exam-chip").forEach(chip => {
-        chip.onclick = function() {
+        chip.onclick = function () {
             const id = this.dataset.id;
             if (deselectedExamIds.has(id)) {
                 deselectedExamIds.delete(id);
@@ -521,10 +521,10 @@ export function loadRealDataIntoProgressChart(testResults, targetStudent = null)
     // Extract all unique real student names
     const availableStudents = [...new Set(cachedResults.map(r => r.studentName).filter(Boolean))].sort();
     const selectEl = document.getElementById("progressStudentSelect");
-    
+
     if (selectEl && availableStudents.length > 0) {
         const currentVal = targetStudent || selectEl.value;
-        selectEl.innerHTML = availableStudents.map(s => 
+        selectEl.innerHTML = availableStudents.map(s =>
             `<option value="${s}" ${s === currentVal ? 'selected' : ''}>${s}</option>`
         ).join('');
     }
