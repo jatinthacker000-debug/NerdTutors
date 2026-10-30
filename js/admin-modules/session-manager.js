@@ -857,9 +857,9 @@ export function buildReportCardContent(res, markingSchemeText = '') {
         ` : ''}
 
         ${wrongQuestions.length > 0 ? `
-        <div class="report-block">
+        <div class="mistakes-section-wrapper" style="margin-top: 1.25rem;">
             <h3 class="section-title">🔍 Detailed Question-by-Question Mistakes</h3>
-            <div style="margin-top: 1rem;">
+            <div style="margin-top: 0.85rem;">
                 ${wrongQuestions.map((q, idx) => {
                     const originalIndex = questionsArr.findIndex(x => x.questionNumber === q.questionNumber || x.questionText === q.questionText);
                     const earned = q.earnedMarks !== undefined ? q.earnedMarks : (q.score || 0);
@@ -871,7 +871,7 @@ export function buildReportCardContent(res, markingSchemeText = '') {
                     const correctAns = cleanModelAnswer(rawAns, isMcq);
                     
                     return `
-                    <div class="report-block" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: inline-block; width: 100%; break-inside: avoid; page-break-inside: avoid;">
+                    <div class="question-mistake-card report-block" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 0.85rem; display: block; width: 100%; break-inside: avoid; page-break-inside: avoid; box-sizing: border-box;">
                         <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #edf2f7; padding-bottom: 0.5rem; margin-bottom: 0.5rem; gap: 1rem; align-items: flex-start;">
                             <strong>${formatDisplayText(qText)}</strong>
                             <span style="font-weight: bold; background: #fed7d7; color: #9b2c2c; padding: 0.25rem 0.75rem; border-radius: 12px; white-space: nowrap; flex-shrink: 0;">${earned} / ${max}</span>
@@ -966,8 +966,8 @@ window.printReportCard = async function(resultId) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         @page {
-            size: auto;
-            margin: 0;
+            size: A4 portrait;
+            margin: 8mm 10mm;
         }
         *, *:before, *:after {
             box-sizing: border-box !important;
@@ -976,23 +976,23 @@ window.printReportCard = async function(resultId) {
         }
         body { 
             font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            padding: 10mm 15mm !important;
+            padding: 10mm 15mm;
             margin: 0;
             color: #2d3748; 
             line-height: 1.5; 
         }
-        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
+        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; break-inside: avoid !important; page-break-inside: avoid !important; }
         .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
         .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
         
-        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; break-inside: avoid !important; page-break-inside: avoid !important; }
         .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
         .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
         .meta-item .value { font-weight: 700; color: #2d3748; }
 
-        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; }
-        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; }
+        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; break-inside: avoid !important; page-break-inside: avoid !important; }
         
         .card-title { font-weight: 700; font-size: 0.8rem; color: #c53030; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
         .score-display { font-size: 2.75rem; font-weight: 900; color: #c53030; line-height: 1; margin: 0.25rem 0 0.5rem 0; text-align: center; }
@@ -1016,22 +1016,28 @@ window.printReportCard = async function(resultId) {
         .legend-row { display: flex; gap: 0.5rem; font-size: 0.68rem; font-weight: 600; color: #718096; margin-top: auto; border-top: 1px solid #edf2f7; padding-top: 0.5rem; flex-wrap: wrap; }
         .info-note { background-color: #f0f4f8; border: 1px solid #d0d7de; border-left: 4px solid #1e3c72; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #3182ce; line-height: 1.3; display: flex; align-items: flex-start; gap: 0.35rem; margin-top: 0.75rem; text-align: left; }
 
-        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; }
+        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; break-after: avoid !important; page-break-after: avoid !important; }
         ul { padding-left: 1.25rem; }
         li { margin-bottom: 0.4rem; font-size: 0.9rem; color: #4a5568; }
         p { font-size: 0.9rem; color: #4a5568; }
         
         .report-block {
-            display: inline-block;
+            display: block;
             width: 100%;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+            box-sizing: border-box !important;
         }
 
         @media print {
             .no-print, .no-print * {
                 display: none !important;
                 visibility: hidden !important;
+            }
+            body {
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #ffffff !important;
             }
         }
     </style>
@@ -1095,23 +1101,23 @@ export function getReportCardPrintCss() {
             color: #2d3748;
             background: #ffffff;
             line-height: 1.5;
-            padding: 10mm 14mm;
-            width: 800px;
+            padding: 0;
+            width: 100%;
             margin: 0 auto;
             box-sizing: border-box;
         }
-        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
+        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; break-inside: avoid !important; page-break-inside: avoid !important; }
         .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
         .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
         
-        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; break-inside: avoid !important; page-break-inside: avoid !important; }
         .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
         .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
         .meta-item .value { font-weight: 700; color: #2d3748; }
 
-        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; }
-        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; }
+        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; break-inside: avoid !important; page-break-inside: avoid !important; }
         
         .card-title { font-weight: 700; font-size: 0.8rem; color: #c53030; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
         .score-display { font-size: 2.75rem; font-weight: 900; color: #c53030; line-height: 1; margin: 0.25rem 0 0.5rem 0; text-align: center; }
@@ -1135,16 +1141,17 @@ export function getReportCardPrintCss() {
         .legend-row { display: flex; gap: 0.5rem; font-size: 0.68rem; font-weight: 600; color: #718096; margin-top: auto; border-top: 1px solid #edf2f7; padding-top: 0.5rem; flex-wrap: wrap; }
         .info-note { background-color: #f0f4f8; border: 1px solid #d0d7de; border-left: 4px solid #1e3c72; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #3182ce; line-height: 1.3; display: flex; align-items: flex-start; gap: 0.35rem; margin-top: 0.75rem; text-align: left; }
 
-        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; }
+        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; break-after: avoid !important; page-break-after: avoid !important; }
         ul { padding-left: 1.25rem; }
         li { margin-bottom: 0.4rem; font-size: 0.9rem; color: #4a5568; }
         p { font-size: 0.9rem; color: #4a5568; }
         
         .report-block {
-            display: inline-block;
+            display: block;
             width: 100%;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+            box-sizing: border-box !important;
         }
     `;
 }
@@ -1200,8 +1207,8 @@ export async function downloadAllReportsForCurrentSession() {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         @page {
-            size: auto;
-            margin: 0;
+            size: A4 portrait;
+            margin: 8mm 10mm;
         }
         *, *:before, *:after {
             box-sizing: border-box !important;
@@ -1211,37 +1218,42 @@ export async function downloadAllReportsForCurrentSession() {
         body { 
             font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             margin: 0;
-            padding: 0;
+            padding: 20px 10px;
             background: #f1f5f9;
             color: #2d3748; 
             line-height: 1.5; 
         }
         .student-report-page {
             background: #ffffff;
-            padding: 10mm 15mm !important;
-            margin: 15px auto;
-            max-width: 960px;
+            padding: 10mm 15mm;
+            margin: 20px auto;
+            max-width: 900px;
             box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-            page-break-after: always !important;
-            break-after: page !important;
+            page-break-before: always !important;
+            break-before: page !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+        .student-report-page:first-child {
+            page-break-before: avoid !important;
+            break-before: avoid !important;
+            margin-top: 0;
         }
         .student-report-page:last-child {
-            page-break-after: avoid !important;
-            break-after: avoid !important;
             margin-bottom: 0;
         }
-        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
+        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; break-inside: avoid !important; page-break-inside: avoid !important; }
         .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
         .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
         
-        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; break-inside: avoid !important; page-break-inside: avoid !important; }
         .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
         .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
         .meta-item .value { font-weight: 700; color: #2d3748; }
 
-        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; }
-        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; }
+        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; break-inside: avoid !important; page-break-inside: avoid !important; }
         
         .card-title { font-weight: 700; font-size: 0.8rem; color: #c53030; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
         .score-display { font-size: 2.75rem; font-weight: 900; color: #c53030; line-height: 1; margin: 0.25rem 0 0.5rem 0; text-align: center; }
@@ -1265,16 +1277,17 @@ export async function downloadAllReportsForCurrentSession() {
         .legend-row { display: flex; gap: 0.5rem; font-size: 0.68rem; font-weight: 600; color: #718096; margin-top: auto; border-top: 1px solid #edf2f7; padding-top: 0.5rem; flex-wrap: wrap; }
         .info-note { background-color: #f0f4f8; border: 1px solid #d0d7de; border-left: 4px solid #1e3c72; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #3182ce; line-height: 1.3; display: flex; align-items: flex-start; gap: 0.35rem; margin-top: 0.75rem; text-align: left; }
 
-        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; }
+        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; break-after: avoid !important; page-break-after: avoid !important; }
         ul { padding-left: 1.25rem; }
         li { margin-bottom: 0.4rem; font-size: 0.9rem; color: #4a5568; }
         p { font-size: 0.9rem; color: #4a5568; }
         
         .report-block {
-            display: inline-block;
+            display: block;
             width: 100%;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+            box-sizing: border-box !important;
         }
 
         @media print {
@@ -1285,11 +1298,21 @@ export async function downloadAllReportsForCurrentSession() {
             body {
                 background: #ffffff !important;
                 padding: 0 !important;
+                margin: 0 !important;
             }
             .student-report-page {
                 box-shadow: none !important;
                 margin: 0 !important;
+                padding: 0 !important;
                 max-width: 100% !important;
+                page-break-before: always !important;
+                break-before: page !important;
+                page-break-inside: auto !important;
+                break-inside: auto !important;
+            }
+            .student-report-page:first-child {
+                page-break-before: avoid !important;
+                break-before: avoid !important;
             }
         }
     </style>
@@ -1376,11 +1399,14 @@ export async function downloadZipReportsForCurrentSession() {
     <title>Report Card - ${escapeHtml(res.studentName || 'Student')}</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @page { size: auto; margin: 0; }
+        @page { size: A4 portrait; margin: 8mm 10mm; }
         *, *:before, *:after { box-sizing: border-box !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        body { font-family: 'Poppins', sans-serif; padding: 10mm 15mm !important; margin: 0; color: #2d3748; line-height: 1.5; }
+        body { font-family: 'Poppins', sans-serif; padding: 10mm 15mm; margin: 0; color: #2d3748; line-height: 1.5; }
         ${getReportCardPrintCss()}
-        @media print { .no-print { display: none !important; } }
+        @media print { 
+            .no-print { display: none !important; } 
+            body { padding: 0 !important; margin: 0 !important; }
+        }
     </style>
 </head>
 <body>

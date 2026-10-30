@@ -732,16 +732,18 @@
     <style>
         @media print {
             @page {
-                size: auto;
-                margin: 0; /* Strips browser headers/footers completely */
+                size: A4 portrait;
+                margin: 8mm 10mm;
             }
             *, *:before, *:after {
                 box-sizing: border-box !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
             body {
                 width: 100% !important;
                 margin: 0 !important;
-                padding: 15mm 18mm !important; /* Simulates print margins safely (more white space) */
+                padding: 0 !important;
             }
             body * {
                 visibility: hidden;
@@ -1334,18 +1336,26 @@
                     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
                     <style>
                         @page {
-                            size: auto;
-                            margin: 0;
+                            size: A4 portrait;
+                            margin: 8mm 10mm;
                         }
                         *, *:before, *:after {
                             box-sizing: border-box !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
                         }
                         body { 
                             font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                            padding: 5mm 8mm !important;
-                            margin: 0 !important;
+                            padding: 10mm 15mm;
+                            margin: 0;
                             color: #2d3748; 
                             line-height: 1.6; 
+                        }
+                        @media print {
+                            body {
+                                padding: 0 !important;
+                                margin: 0 !important;
+                            }
                         }
                         .header { border-bottom: 4px solid #1e3c72; padding-bottom: 1rem; margin-bottom: 1.5rem; text-align: center; }
                         .header h1 { margin: 0; color: #1e3c72; font-size: 2.2rem; font-weight: 800; letter-spacing: 1px; }
