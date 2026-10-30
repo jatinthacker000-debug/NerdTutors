@@ -4,7 +4,7 @@
 // and the shared confirmation modal.
 // ============================================
 
-import { loadTestSessionsForDropdown, loadTestSessionsForManagement } from './session-manager.js';
+import { loadTestSessionsForDropdown, loadTestSessionsForManagement } from './session-manager.js?v=250';
 
 // Escape HTML
 export function escapeHtml(text) {
