@@ -587,30 +587,46 @@
                                 <h3 class="progress-heading">
                                     <span>📈</span> <span id="progressChartTitle">Student Multi-Exam Progress</span>
                                 </h3>
-                                <div class="sub">Hover over any block to view granular subject marks and score deltas.</div>
+                                <div class="sub">Longitudinal performance analysis and score delta trajectories across examinations.</div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                                <select id="progressStudentSelect" style="padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-weight: 700; color: #1e3c72; background: white; cursor: pointer; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                    <option value="">Loading students...</option>
-                                </select>
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <span style="font-size: 0.8rem; font-weight: 700; color: #64748b;">Student:</span>
+                                    <select id="progressStudentSelect" style="padding: 7px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-weight: 700; color: #1e3c72; background: white; cursor: pointer; font-size: 0.88rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); outline: none;">
+                                        <option value="">Loading students...</option>
+                                    </select>
+                                </div>
                                 <div class="tog">
                                     <button id="progressBtnPct" class="on">Percentage</button>
                                     <button id="progressBtnMarks">Marks</button>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Filter Controls Bar: Subject Tabs & KPI Summary -->
+                        <div class="progress-filter-bar">
+                            <div class="progress-subject-section">
+                                <span class="filter-label">Filter by Subject:</span>
+                                <div id="progressSubjectTabs" class="subject-tabs-container">
+                                    <!-- Dynamic Subject Filter Tabs: [ All ] [ 📘 Economics (2) ] -->
+                                </div>
+                            </div>
+                            <div id="progressKpiStrip" class="progress-kpi-strip">
+                                <!-- Dynamic KPI metrics: Tests, Avg %, Top %, Delta -->
+                            </div>
+                        </div>
+
+                        <!-- Exam Selector Multi-Chip Bar -->
+                        <div id="progressExamSelectorWrap" class="progress-exam-selector-wrap">
+                            <span class="filter-label">Compare Tests:</span>
+                            <div id="progressExamChips" class="exam-chips-container">
+                                <!-- Dynamic toggleable exam chips -->
+                            </div>
+                        </div>
+
                         <div class="legend" id="progressLegend"></div>
                         <div class="plot" id="progressPlot"></div>
                         <div class="foot"></div>
-                        <details>
-                            <summary>⚙️ Edit Student &amp; Multi-Exam Performance Data</summary>
-                            <div style="margin-top: 10px; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Student Name:</label>
-                                <input id="progressStudentInput" value="Aarav Shah" style="padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1e293b; font: inherit; font-size: 0.85rem;">
-                            </div>
-                            <div class="scroll"><table id="progressTbl"></table></div>
-                            <button class="progress-mini" id="progressAddExam">+ Add Exam</button>
-                        </details>
                     </div>
                     <div class="progress-tip" id="progressTip"></div>
                 </div>
@@ -706,7 +722,7 @@
     </div>
 
     <!-- ==================== FIREBASE & APP SCRIPTS ==================== -->
-    <script type="module" src="dashboard.js"></script>
+    <script type="module" src="dashboard.js?v=251"></script>
 </body>
 
 </html>

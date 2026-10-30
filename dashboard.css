@@ -1512,71 +1512,159 @@
             height: 48px;
         }
 
-        .student-progress-wrap details {
-            margin-top: 12px;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 12px;
+        /* ==================== PROGRESS FILTER BAR & TABS ==================== */
+        .progress-filter-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1.25rem 0 0.85rem 0;
+            padding-bottom: 0.85rem;
+            border-bottom: 1px solid #f1f5f9;
         }
 
-        .student-progress-wrap summary {
-            cursor: pointer;
+        .progress-subject-section {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-label {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
             color: #64748b;
-            font-size: 0.85rem;
+        }
+
+        .subject-tabs-container {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .progress-subject-pill {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.82rem;
             font-weight: 600;
-        }
-
-        .student-progress-wrap .scroll {
-            overflow-x: auto;
-            margin-top: 10px;
-        }
-
-        .student-progress-wrap table {
-            border-collapse: collapse;
-            width: 100%;
-            font-size: 0.85rem;
-        }
-
-        .student-progress-wrap th,
-        .student-progress-wrap td {
-            border: 1px solid #e2e8f0;
-            padding: 6px 8px;
-            text-align: center;
-        }
-
-        .student-progress-wrap th {
-            background: #f8fafc;
-            font-weight: 700;
-            color: #334155;
-        }
-
-        .student-progress-wrap td input {
-            width: 64px;
-            text-align: center;
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
+            border: 1.5px solid #e2e8f0;
             background: #ffffff;
-            color: #1e293b;
-            font: inherit;
-            padding: 3px 4px;
-        }
-
-        .student-progress-wrap td input.name {
-            width: 120px;
-            text-align: left;
-        }
-
-        button.progress-mini {
-            border: 1px solid #cbd5e1;
-            background: #f8fafc;
-            color: #334155;
-            border-radius: 6px;
-            padding: 4px 10px;
+            color: #475569;
             cursor: pointer;
-            font: inherit;
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin-top: 8px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-        button.progress-mini:hover {
-            background: #e2e8f0;
+
+        .progress-subject-pill:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            color: #1e293b;
+        }
+
+        .progress-subject-pill.active {
+            background: #1e3c72;
+            border-color: #1e3c72;
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(30, 60, 114, 0.25);
+            font-weight: 700;
+        }
+
+        .progress-subject-pill .pill-count {
+            display: inline-block;
+            background: rgba(0, 0, 0, 0.08);
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .progress-subject-pill.active .pill-count {
+            background: rgba(255, 255, 255, 0.28);
+            color: #ffffff;
+        }
+
+        /* KPI Strip */
+        .progress-kpi-strip {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .progress-kpi-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .progress-kpi-badge strong {
+            color: #1e293b;
+            font-weight: 800;
+        }
+
+        .progress-kpi-badge.positive strong {
+            color: #059669;
+        }
+
+        .progress-kpi-badge.negative strong {
+            color: #dc2626;
+        }
+
+        /* Exam Selector Chips */
+        .progress-exam-selector-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+        }
+
+        .exam-chips-container {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .progress-exam-chip {
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .progress-exam-chip:hover {
+            border-color: #93c5fd;
+            color: #1e3c72;
+            background: #f8fafc;
+        }
+
+        .progress-exam-chip.selected {
+            background: #eff6ff;
+            border-color: #93c5fd;
+            color: #1d4ed8;
+            font-weight: 700;
+        }
+
+        .progress-exam-chip .check-icon {
+            font-size: 0.74rem;
         }
