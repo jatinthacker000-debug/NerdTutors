@@ -1,3 +1,32 @@
+function formatExamName(raw) {
+    if (!raw) return 'Exam';
+    let cleaned = raw.replace(/[_-]\d{10,}\b/g, '');
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    cleaned = cleaned.replace(/\(?\b(\d{1,2})[_\s\/\.-](\d{1,2})[_\s\/\.-](20\d{2})\b\)?/g, (match, d, m, y) => {
+        const day = parseInt(d, 10);
+        const monthNum = parseInt(m, 10);
+        const year = parseInt(y, 10);
+        if (monthNum >= 1 && monthNum <= 12 && day >= 1 && day <= 31) {
+            return ' (' + day + ' ' + months[monthNum - 1] + ' ' + year + ')';
+        }
+        return match;
+    });
+    cleaned = cleaned.replace(/\(?\b(\d{1,2})[_\/\.-](\d{1,2})[_\/\.-](\d{2})\b\)?/g, (match, d, m, y) => {
+        const day = parseInt(d, 10);
+        const monthNum = parseInt(m, 10);
+        const year = parseInt(y, 10) + 2000;
+        if (monthNum >= 1 && monthNum <= 12 && day >= 1 && day <= 31) {
+            return ' (' + day + ' ' + months[monthNum - 1] + ' ' + year + ')';
+        }
+        return match;
+    });
+    cleaned = cleaned.replace(/\(\s*\(/g, '(').replace(/\)\s*\)/g, ')');
+    cleaned = cleaned.replace(/_/g, ' ');
+    cleaned = cleaned.replace(/^NerdTutors\s*[-:]?\s*/i, '');
+    cleaned = cleaned.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+    return cleaned || raw;
+}
+
 // ============================================
 // SESSION MANAGER
 // Test session creation & management, student results
@@ -97,7 +126,7 @@ export async function loadTestSessionsForDropdown() {
             allTestSessions.push({ id, ...data });
             const yearTag = data.examYear && data.examYear !== 'Standard' ? ` (${data.examYear})` : '';
             const setTag = data.examSet && data.examSet !== 'Standard / All' ? ` [${data.examSet}]` : '';
-            optionsHtml += `<option value="${id}">${data.name}${yearTag}${setTag} (${data.class} - ${data.subject})</option>`;
+            optionsHtml += `<option value="${id}">${formatExamName(data.name)}${yearTag}${setTag} (${data.class} - ${data.subject})</option>`;
         });
 
         selectEl.innerHTML = optionsHtml;

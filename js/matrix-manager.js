@@ -1,3 +1,4 @@
+import { formatExamName } from './student-progress-chart.js';
 // ============================================
 // QUESTION PERFORMANCE MATRIX MODULE
 // Generates and manages the Question-by-Student Marks Grid
@@ -158,7 +159,7 @@ export function populateMatrixSessionDropdown(sessions) {
     let html = '<option value="all">All Test Sessions (Combined View)</option>';
     filtered.forEach(s => {
         const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` - ${s.examSet}` : '';
-        html += `<option value="${s.id}">${escapeHtml(s.name)}${setTag} (${s.class} - ${s.subject})</option>`;
+        html += `<option value="${s.id}">${escapeHtml(formatExamName(s.name))}${setTag} (${s.class} - ${s.subject})</option>`;
     });
 
     sessionSelect.innerHTML = html;
