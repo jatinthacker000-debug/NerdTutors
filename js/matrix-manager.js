@@ -742,55 +742,74 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
     const mastered = questionItems.filter(q => q.accuracy > 90).sort((a, b) => b.accuracy - a.accuracy);
 
     let html = `
-        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 1.5rem 1.6rem; box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05); margin-bottom: 1.5rem;">
+            <!-- Header Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
                 <div>
-                    <div style="font-weight: 800; color: #1e3c72; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span>🧠</span> CBSE Topic Mastery & Class Weakness Analysis
-                        <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">AI Diagnosed</span>
+                    <div style="font-weight: 800; color: #0f172a; font-size: 1.25rem; display: flex; align-items: center; gap: 0.6rem; letter-spacing: -0.3px;">
+                        <span style="font-size: 1.4rem;">🧠</span> CBSE Topic Mastery &amp; Class Weakness Analysis
+                        <span style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35); display: inline-flex; align-items: center; gap: 4px;">✨ Gemini 4 AI Diagnosed</span>
                     </div>
-                    <p style="color: #64748b; font-size: 0.85rem; margin: 0.35rem 0 0 0;">
-                        ${escapeHtml(activeSession.curriculumSummary || `Curriculum breakdown across ${questionItems.length} evaluated questions mapped to syllabus topics.`)}
-                    </p>
+                    <div style="color: #64748b; font-size: 0.82rem; margin-top: 0.25rem; font-weight: 500;">
+                        Curriculum topic extraction and class-wide misconception audit powered by Google Vertex AI deep reasoning.
+                    </div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                    <button id="btnToggleTopicCollapse" onclick="window.toggleTopicAnalysisCollapse()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <button id="btnToggleTopicCollapse" onclick="window.toggleTopicAnalysisCollapse()" style="background: #f8fafc; color: #475569; border: 1.5px solid #e2e8f0; padding: 0.45rem 0.95rem; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s ease;">
                         <span id="topicCollapseIcon">▲</span> <span id="topicCollapseText">Collapse View</span>
                     </button>
-                    <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 0.45rem 0.95rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s ease;">
                         <span>🔄</span> Re-Analyze Topics
                     </button>
                 </div>
             </div>
 
+            <!-- Curriculum Blueprint & Scope Callout -->
+            ${activeSession.curriculumSummary ? `
+                <div style="background: linear-gradient(135deg, #f8faff 0%, #f1f5f9 100%); border: 1px solid #e0e7ff; border-left: 4px solid #4f46e5; border-radius: 10px; padding: 1rem 1.25rem; margin: 1.15rem 0 1.35rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                    <div style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #4338ca; display: flex; align-items: center; gap: 6px; margin-bottom: 0.35rem;">
+                        <span>📋</span> Curriculum Blueprint &amp; Chapter Weightage
+                    </div>
+                    <div style="color: #334155; font-size: 0.88rem; line-height: 1.65;">
+                        ${formatCurriculumSummary(activeSession.curriculumSummary)}
+                    </div>
+                </div>
+            ` : ''}
+
             <!-- Topic Performance Grid -->
             <div id="topicAnalysisGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
                 
                 <!-- 🔴 Critical Weakness Column -->
-                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 1.1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <div style="background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 12px; padding: 1.15rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid #fee2e2;">
                         <span style="font-weight: 800; color: #991b1b; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🔴</span> Critical Questions (&lt; 60%)
+                            <span>🔴</span> Critical Weaknesses (&lt; 60%)
                         </span>
-                        <span style="background: #fee2e2; color: #991b1b; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${criticalWeak.length}</span>
+                        <span style="background: #fee2e2; color: #991b1b; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${criticalWeak.length} Questions</span>
                     </div>
                     ${criticalWeak.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">🎉 No critical question weaknesses (&lt; 60%) detected across class!</div>`
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic; padding: 1rem; text-align: center;">🎉 No critical question weaknesses (&lt; 60%) detected across class!</div>`
             : criticalWeak.map(q => `
-                            <div style="background: white; border: 1px solid #fee2e2; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                            <div style="background: white; border: 1px solid #fee2e2; border-radius: 10px; padding: 0.85rem; margin-bottom: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: transform 0.15s ease;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
                                     <div>
                                         <span style="background: #ef4444; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
                                             ${escapeHtml(q.qNum)}
                                         </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
+                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.88rem;">
                                             ${escapeHtml(q.topic)}
                                         </span>
                                     </div>
-                                    <span style="background: #fee2e2; color: #991b1b; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
+                                    <span style="background: #fee2e2; color: #991b1b; font-weight: 800; font-size: 0.78rem; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;">${q.accuracy}%</span>
                                 </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+                                <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
+                                
+                                <!-- Progress Bar -->
+                                <div style="background: #f1f5f9; border-radius: 9999px; height: 5px; width: 100%; margin: 0.5rem 0 0.35rem 0; overflow: hidden;">
+                                    <div style="background: #ef4444; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
+                                </div>
+
+                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #94a3b8;">
                                     <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
                                     <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
                                 </div>
@@ -799,30 +818,36 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 </div>
 
                 <!-- 🟡 Developing Column -->
-                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 1.1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 1.15rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid #fef3c7;">
                         <span style="font-weight: 800; color: #92400e; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
                             <span>🟡</span> Need Improvement (60% – 90%)
                         </span>
-                        <span style="background: #fef3c7; color: #92400e; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${developing.length}</span>
+                        <span style="background: #fef3c7; color: #92400e; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${developing.length} Questions</span>
                     </div>
                     ${developing.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No questions in 60% – 90% range.</div>`
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic; padding: 1rem; text-align: center;">No questions in 60% – 90% range.</div>`
             : developing.map(q => `
-                            <div style="background: white; border: 1px solid #fef3c7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                            <div style="background: white; border: 1px solid #fef3c7; border-radius: 10px; padding: 0.85rem; margin-bottom: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: transform 0.15s ease;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
                                     <div>
                                         <span style="background: #f59e0b; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
                                             ${escapeHtml(q.qNum)}
                                         </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
+                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.88rem;">
                                             ${escapeHtml(q.topic)}
                                         </span>
                                     </div>
-                                    <span style="background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
+                                    <span style="background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.78rem; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;">${q.accuracy}%</span>
                                 </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+                                <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
+                                
+                                <!-- Progress Bar -->
+                                <div style="background: #f1f5f9; border-radius: 9999px; height: 5px; width: 100%; margin: 0.5rem 0 0.35rem 0; overflow: hidden;">
+                                    <div style="background: #f59e0b; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
+                                </div>
+
+                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #94a3b8;">
                                     <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
                                     <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
                                 </div>
@@ -831,30 +856,36 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 </div>
 
                 <!-- 🟢 Mastered Column -->
-                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 1.1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <div style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px; padding: 1.15rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid #dcfce7;">
                         <span style="font-weight: 800; color: #166534; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
                             <span>🟢</span> Strong Questions (&gt; 90%)
                         </span>
-                        <span style="background: #dcfce7; color: #166534; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${mastered.length}</span>
+                        <span style="background: #dcfce7; color: #166534; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${mastered.length} Questions</span>
                     </div>
                     ${mastered.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No questions currently above 90%.</div>`
+            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic; padding: 1rem; text-align: center;">No questions currently above 90%.</div>`
             : mastered.map(q => `
-                            <div style="background: white; border: 1px solid #dcfce7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                            <div style="background: white; border: 1px solid #dcfce7; border-radius: 10px; padding: 0.85rem; margin-bottom: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: transform 0.15s ease;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
                                     <div>
                                         <span style="background: #10b981; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
                                             ${escapeHtml(q.qNum)}
                                         </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
+                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.88rem;">
                                             ${escapeHtml(q.topic)}
                                         </span>
                                     </div>
-                                    <span style="background: #dcfce7; color: #166534; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
+                                    <span style="background: #dcfce7; color: #166534; font-weight: 800; font-size: 0.78rem; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;">${q.accuracy}%</span>
                                 </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
+                                <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
+                                
+                                <!-- Progress Bar -->
+                                <div style="background: #f1f5f9; border-radius: 9999px; height: 5px; width: 100%; margin: 0.5rem 0 0.35rem 0; overflow: hidden;">
+                                    <div style="background: #10b981; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
+                                </div>
+
+                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #94a3b8;">
                                     <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
                                     <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
                                 </div>

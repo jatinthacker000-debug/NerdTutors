@@ -34,11 +34,26 @@ function getTheme(subject) {
 
 /**
  * Strips raw timestamp IDs and prefixes to produce clean, humanized examination names
+ * Automatically converts raw date strings like "25 10 2026" or "25_10_2026" into "(25 Oct 2026)"
  */
 function formatExamName(raw) {
     if (!raw) return 'Exam';
-    // Remove trailing timestamp suffixes like _1793101570263 or -1793101570263
+    // Remove raw epoch timestamp suffixes like _1793101570263 or -1793101570263
     let cleaned = raw.replace(/[_-]\d{10,}\b/g, '');
+
+    // Detect and format embedded dates like 25_10_2026, 25-10-2026, 25 10 2026, 25/10/2026
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    cleaned = cleaned.replace(/\b(\d{1,2})[_\s\/\.-](\d{1,2})[_\s\/\.-](20\d{2}|\d{2})\b/g, (match, d, m, y) => {
+        const day = parseInt(d, 10);
+        const monthNum = parseInt(m, 10);
+        let year = parseInt(y, 10);
+        if (year < 100) year += 2000;
+        if (monthNum >= 1 && monthNum <= 12 && day >= 1 && day <= 31) {
+            return `(${day} ${months[monthNum - 1]} ${year})`;
+        }
+        return `(${d}/${m}/${year})`;
+    });
+
     // Replace underscores with spaces
     cleaned = cleaned.replace(/_/g, ' ');
     // Remove leading "NerdTutors" prefix if present
