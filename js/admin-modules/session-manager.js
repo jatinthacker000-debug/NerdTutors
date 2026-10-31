@@ -994,19 +994,13 @@ window.printReportCard = async function(resultId) {
     <title>Report Card - ${escapeHtml(res.studentName || 'Student')}</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @page {
-            size: A4 portrait;
-            margin: 8mm 10mm;
-        }
+        @page { size: A4 portrait; margin: 5mm 6mm; }
         *, *:before, *:after {
             box-sizing: border-box !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
-        body { 
-            font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            padding: 10mm 15mm;
-            margin: 0;
+        body { font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 6mm 6mm; margin: 0 auto; max-width: 100%; box-sizing: border-box;
             color: #2d3748; 
             line-height: 1.5; 
         }
@@ -1235,10 +1229,7 @@ export async function downloadAllReportsForCurrentSession() {
     <title>${escapeHtml(sessionTitle)} - All Student Report Cards (${results.length})</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @page {
-            size: A4 portrait;
-            margin: 8mm 10mm;
-        }
+        @page { size: A4 portrait; margin: 5mm 6mm; }
         *, *:before, *:after {
             box-sizing: border-box !important;
             -webkit-print-color-adjust: exact !important;
@@ -1247,8 +1238,7 @@ export async function downloadAllReportsForCurrentSession() {
         body { 
             font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             margin: 0;
-            padding: 20px 10px;
-            background: #f1f5f9;
+            padding: 6mm 6mm; background: #f1f5f9; max-width: 100%; box-sizing: border-box;
             color: #2d3748; 
             line-height: 1.5; 
         }
@@ -1428,9 +1418,9 @@ export async function downloadZipReportsForCurrentSession() {
     <title>Report Card - ${escapeHtml(res.studentName || 'Student')}</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @page { size: A4 portrait; margin: 8mm 10mm; }
+        @page { size: A4 portrait; margin: 5mm 6mm; }
         *, *:before, *:after { box-sizing: border-box !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        body { font-family: 'Poppins', sans-serif; padding: 10mm 15mm; margin: 0; color: #2d3748; line-height: 1.5; }
+        body { font-family: 'Poppins', sans-serif; padding: 6mm 6mm; margin: 0 auto; max-width: 100%; box-sizing: border-box; color: #2d3748; line-height: 1.5; }
         ${getReportCardPrintCss()}
         @media print { 
             .no-print { display: none !important; } 

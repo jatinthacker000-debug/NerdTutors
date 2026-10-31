@@ -33,9 +33,9 @@ import {
     loadTestSessionsForManagement,
     populateMockData,
     setupPdfExtractionHub
-} from './js/admin-modules/session-manager.js?v=255';
+} from './js/admin-modules/session-manager.js?v=257';
 import { setupGateManager } from './js/admin-modules/gate-manager.js';
-import { setupBundleEvaluator, loadBundleSessions } from './js/admin-modules/bundle-evaluator.js?v=255';
+import { setupBundleEvaluator, loadBundleSessions } from './js/admin-modules/bundle-evaluator.js?v=257';
 
 // Initialize
 function init() {
