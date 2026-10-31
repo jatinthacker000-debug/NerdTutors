@@ -756,11 +756,11 @@ async function submitGoogleBatchJob() {
                 };
             });
 
-            // Sort jobs chronologically in ascending order as requested (earliest test -> latest test)
+            // Sort jobs chronologically in descending order (latest batch on top)
             cachedBatchJobs.sort((a, b) => {
                 const timeA = new Date(a.createdAt || a.createTime || 0).getTime();
                 const timeB = new Date(b.createdAt || b.createTime || 0).getTime();
-                return timeA - timeB;
+                return timeB - timeA;
             });
 
             console.log("📋 Current Batch Jobs with Firestore Metadata:", cachedBatchJobs);

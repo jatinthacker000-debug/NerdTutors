@@ -35,7 +35,7 @@ import {
     setupPdfExtractionHub
 } from './js/admin-modules/session-manager.js?v=250';
 import { setupGateManager } from './js/admin-modules/gate-manager.js';
-import { setupBundleEvaluator, loadBundleSessions } from './js/admin-modules/bundle-evaluator.js';
+import { setupBundleEvaluator, loadBundleSessions } from './js/admin-modules/bundle-evaluator.js?v=253';
 
 // Initialize
 function init() {
