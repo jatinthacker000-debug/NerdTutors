@@ -55,7 +55,7 @@ export default async function handler(req, res) {
     const credsInfo = getVertexCredentialsInfo();
     try {
         authToken = await getVertexAccessToken();
-    } catch (_) {}
+    } catch (_) { }
 
     const rawKeys = process.env.VERTEX_API_KEY || process.env.GEMINI_API_KEY || process.env.GEMINI_API || process.env.GEMINI_KEY || "";
     const apiKey = rawKeys ? rawKeys.split(",")[0].trim() : "";
@@ -66,8 +66,8 @@ export default async function handler(req, res) {
 
     const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
     const location = process.env.GCP_LOCATION || "global";
-    const host = location === "global" 
-        ? "aiplatform.googleapis.com" 
+    const host = location === "global"
+        ? "aiplatform.googleapis.com"
         : (location === "us" ? "aiplatform.us.rep.googleapis.com" : `${location}-aiplatform.googleapis.com`);
 
     const promptText = `You are a master CBSE Curriculum Coordinator and Exam Analyst.
@@ -114,9 +114,9 @@ Return STRICT JSON ONLY in this format:
 
     if (isVertex) {
         headers["Authorization"] = `Bearer ${authToken}`;
-        targetUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-4-argon:generateContent`;
+        targetUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-3.8-flash:generateContent`;
     } else {
-        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
     }
 
     const payload = {
@@ -128,7 +128,7 @@ Return STRICT JSON ONLY in this format:
         ],
         generationConfig: {
             responseMimeType: "application/json",
-            temperature: 0.1,
+            temperature: 0.0,
             seed: 42
         }
     };
@@ -140,10 +140,10 @@ Return STRICT JSON ONLY in this format:
             body: JSON.stringify(payload)
         });
 
-        // Failover to gemini-3.8-flash if primary encounters error
+        // Failover if primary encounters error
         if (!response.ok && isVertex) {
-            console.warn(`Argon topic analysis status ${response.status}. Failing over to gemini-3.8-flash...`);
-            const fallbackUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-3.8-flash:generateContent`;
+            console.warn(`Gemini 3.8 Flash topic analysis status ${response.status}. Failing over to gemini-4-argon...`);
+            const fallbackUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-4-argon:generateContent`;
             response = await fetch(fallbackUrl, {
                 method: "POST",
                 headers: headers,
@@ -158,7 +158,7 @@ Return STRICT JSON ONLY in this format:
 
         const data = await response.json();
         const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        
+
         let parsed = {};
         try {
             parsed = JSON.parse(rawContent.trim().replace(/^```json/i, '').replace(/```$/i, '').trim());

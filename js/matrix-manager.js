@@ -753,6 +753,73 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
     const developing = questionItems.filter(q => q.accuracy >= 60 && q.accuracy <= 90).sort((a, b) => a.accuracy - b.accuracy);
     const mastered = questionItems.filter(q => q.accuracy > 90).sort((a, b) => b.accuracy - a.accuracy);
 
+    // Determine default filter: focus on critical weaknesses first, or fallback if 0
+    let defaultFilter = 'critical';
+    if (criticalWeak.length === 0) {
+        if (developing.length > 0) defaultFilter = 'developing';
+        else defaultFilter = 'mastered';
+    }
+
+    // Helper to generate question card HTML
+    function generateQuestionCard(q, tier) {
+        let accentBorder = '#ef4444';
+        let badgeBg = '#ef4444';
+        let pillBg = '#fee2e2';
+        let pillColor = '#991b1b';
+        let barColor = '#ef4444';
+
+        if (tier === 'developing') {
+            accentBorder = '#f59e0b';
+            badgeBg = '#f59e0b';
+            pillBg = '#fef3c7';
+            pillColor = '#92400e';
+            barColor = '#f59e0b';
+        } else if (tier === 'mastered') {
+            accentBorder = '#10b981';
+            badgeBg = '#10b981';
+            pillBg = '#dcfce7';
+            pillColor = '#166534';
+            barColor = '#10b981';
+        }
+
+        const isVisible = defaultFilter === 'all' || defaultFilter === tier;
+
+        return `
+            <div class="topic-q-card" data-tier="${tier}" style="background: #ffffff; border: 1.5px solid #e2e8f0; border-left: 5px solid ${accentBorder}; border-radius: 12px; padding: 1rem 1.15rem; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: transform 0.15s ease, box-shadow 0.15s ease; display: ${isVisible ? 'block' : 'none'};" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.06)';" onmouseleave="this.style.transform='none'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.03)';">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                            <span style="background: ${badgeBg}; color: #ffffff; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.76rem; display: inline-block;">
+                                ${escapeHtml(q.qNum)}
+                            </span>
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.92rem;" title="${escapeHtml(q.topic)}">
+                                ${escapeHtml(q.topic)}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem; line-height: 1.3;">
+                            ${escapeHtml(q.chapter)} ${q.subtopic ? `· <span style="color: #94a3b8;">${escapeHtml(q.subtopic)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div style="text-align: right; flex-shrink: 0;">
+                        <span style="background: ${pillBg}; color: ${pillColor}; font-weight: 800; font-size: 0.82rem; padding: 3px 8px; border-radius: 6px; display: inline-block;">
+                            ${q.accuracy}%
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Accuracy Progress Bar -->
+                <div style="background: #f1f5f9; border-radius: 9999px; height: 6px; width: 100%; margin: 0.75rem 0 0.5rem 0; overflow: hidden;">
+                    <div style="background: ${barColor}; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
+                </div>
+
+                <div style="margin-top: 0.4rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.74rem; color: #94a3b8; border-top: 1px dashed #f1f5f9; padding-top: 0.45rem;">
+                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
+                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong> (${q.responsesCount} responses)</span>
+                </div>
+            </div>
+        `;
+    }
+
     let html = `
         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 1.5rem 1.6rem; box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05); margin-bottom: 1.5rem;">
             <!-- Header Bar -->
@@ -760,7 +827,7 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 <div>
                     <div style="font-weight: 800; color: #0f172a; font-size: 1.25rem; display: flex; align-items: center; gap: 0.6rem; letter-spacing: -0.3px;">
                         <span style="font-size: 1.4rem;">🧠</span> CBSE Topic Mastery &amp; Class Weakness Analysis
-                        <span style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35); display: inline-flex; align-items: center; gap: 4px;">✨ Gemini 4 AI Diagnosed</span>
+                        <span style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35); display: inline-flex; align-items: center; gap: 4px;">✨ Gemini 3.8 Flash AI Diagnosed</span>
                     </div>
                     <div style="color: #64748b; font-size: 0.82rem; margin-top: 0.25rem; font-weight: 500;">
                         Curriculum topic extraction and class-wide misconception audit powered by Google Vertex AI deep reasoning.
@@ -788,123 +855,53 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                 </div>
             ` : ''}
 
+            <!-- Category Filter Tabs & Layout Switcher Bar -->
+            <div id="topicFilterToolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; margin-bottom: 1.15rem; padding-bottom: 0.85rem; border-bottom: 1px solid #f1f5f9;">
+                <!-- Filter Pills -->
+                <div id="topicFilterPillsWrap" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'critical' ? 'active' : ''}" data-filter="critical" onclick="window.setTopicAnalysisFilter('critical')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'critical' ? 'background: #fef2f2; color: #991b1b; border: 1.5px solid #fecaca; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>🔴 Critical (&lt; 60%)</span>
+                        <span style="background: ${defaultFilter === 'critical' ? '#ef4444' : '#f1f5f9'}; color: ${defaultFilter === 'critical' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${criticalWeak.length}</span>
+                    </button>
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'developing' ? 'active' : ''}" data-filter="developing" onclick="window.setTopicAnalysisFilter('developing')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'developing' ? 'background: #fffbeb; color: #92400e; border: 1.5px solid #fde68a; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>🟡 Need Improvement (60%–90%)</span>
+                        <span style="background: ${defaultFilter === 'developing' ? '#f59e0b' : '#f1f5f9'}; color: ${defaultFilter === 'developing' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${developing.length}</span>
+                    </button>
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'mastered' ? 'active' : ''}" data-filter="mastered" onclick="window.setTopicAnalysisFilter('mastered')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'mastered' ? 'background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>🟢 Strong Topics (&gt; 90%)</span>
+                        <span style="background: ${defaultFilter === 'mastered' ? '#10b981' : '#f1f5f9'}; color: ${defaultFilter === 'mastered' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${mastered.length}</span>
+                    </button>
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'all' ? 'active' : ''}" data-filter="all" onclick="window.setTopicAnalysisFilter('all')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'all' ? 'background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>📋 All Questions</span>
+                        <span style="background: ${defaultFilter === 'all' ? '#3b82f6' : '#f1f5f9'}; color: ${defaultFilter === 'all' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${questionItems.length}</span>
+                    </button>
+                </div>
+
+                <!-- Grid Column Toggle (1 Col vs 2 Col) -->
+                <div style="display: inline-flex; background: #f1f5f9; padding: 3px; border-radius: 8px; border: 1px solid #e2e8f0; align-items: center;">
+                    <button type="button" id="btnTopicGrid1Col" onclick="window.setTopicGridLayout(1)" title="1 Column List View" style="border: none; background: transparent; padding: 5px 11px; border-radius: 6px; font-size: 0.78rem; font-weight: 700; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.15s ease;">
+                        <span>🔲 1 Column</span>
+                    </button>
+                    <button type="button" id="btnTopicGrid2Col" onclick="window.setTopicGridLayout(2)" title="2 Column Grid View" style="border: none; background: #ffffff; padding: 5px 11px; border-radius: 6px; font-size: 0.78rem; font-weight: 700; color: #1e293b; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.15s ease;">
+                        <span>▦ 2 Columns</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Topic Performance Grid -->
-            <div id="topicAnalysisGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
-                
-                <!-- 🔴 Critical Weakness Column -->
-                <div style="background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 12px; padding: 1.15rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid #fee2e2;">
-                        <span style="font-weight: 800; color: #991b1b; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🔴</span> Critical Weaknesses (&lt; 60%)
-                        </span>
-                        <span style="background: #fee2e2; color: #991b1b; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${criticalWeak.length} Questions</span>
-                    </div>
-                    ${criticalWeak.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic; padding: 1rem; text-align: center;">🎉 No critical question weaknesses (&lt; 60%) detected across class!</div>`
-            : criticalWeak.map(q => `
-                            <div style="background: white; border: 1px solid #fee2e2; border-radius: 10px; padding: 0.85rem; margin-bottom: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: transform 0.15s ease;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div>
-                                        <span style="background: #ef4444; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
-                                            ${escapeHtml(q.qNum)}
-                                        </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.88rem;">
-                                            ${escapeHtml(q.topic)}
-                                        </span>
-                                    </div>
-                                    <span style="background: #fee2e2; color: #991b1b; font-weight: 800; font-size: 0.78rem; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;">${q.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                
-                                <!-- Progress Bar -->
-                                <div style="background: #f1f5f9; border-radius: 9999px; height: 5px; width: 100%; margin: 0.5rem 0 0.35rem 0; overflow: hidden;">
-                                    <div style="background: #ef4444; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
-                                </div>
+            <div id="topicAnalysisGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 0.95rem;">
+                ${questionItems.length === 0
+                    ? `<div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 2rem; font-style: italic;">No question items evaluated for this session.</div>`
+                    : questionItems.map(q => {
+                        const tier = q.accuracy < 60 ? 'critical' : (q.accuracy <= 90 ? 'developing' : 'mastered');
+                        return generateQuestionCard(q, tier);
+                    }).join('')
+                }
+            </div>
 
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #94a3b8;">
-                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
-                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
-                                </div>
-                            </div>
-                        `).join('')}
-                </div>
-
-                <!-- 🟡 Developing Column -->
-                <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px; padding: 1.15rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid #fef3c7;">
-                        <span style="font-weight: 800; color: #92400e; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🟡</span> Need Improvement (60% – 90%)
-                        </span>
-                        <span style="background: #fef3c7; color: #92400e; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${developing.length} Questions</span>
-                    </div>
-                    ${developing.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic; padding: 1rem; text-align: center;">No questions in 60% – 90% range.</div>`
-            : developing.map(q => `
-                            <div style="background: white; border: 1px solid #fef3c7; border-radius: 10px; padding: 0.85rem; margin-bottom: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: transform 0.15s ease;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div>
-                                        <span style="background: #f59e0b; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
-                                            ${escapeHtml(q.qNum)}
-                                        </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.88rem;">
-                                            ${escapeHtml(q.topic)}
-                                        </span>
-                                    </div>
-                                    <span style="background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.78rem; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;">${q.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                
-                                <!-- Progress Bar -->
-                                <div style="background: #f1f5f9; border-radius: 9999px; height: 5px; width: 100%; margin: 0.5rem 0 0.35rem 0; overflow: hidden;">
-                                    <div style="background: #f59e0b; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
-                                </div>
-
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #94a3b8;">
-                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
-                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
-                                </div>
-                            </div>
-                        `).join('')}
-                </div>
-
-                <!-- 🟢 Mastered Column -->
-                <div style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px; padding: 1.15rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid #dcfce7;">
-                        <span style="font-weight: 800; color: #166534; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🟢</span> Strong Questions (&gt; 90%)
-                        </span>
-                        <span style="background: #dcfce7; color: #166534; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${mastered.length} Questions</span>
-                    </div>
-                    ${mastered.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic; padding: 1rem; text-align: center;">No questions currently above 90%.</div>`
-            : mastered.map(q => `
-                            <div style="background: white; border: 1px solid #dcfce7; border-radius: 10px; padding: 0.85rem; margin-bottom: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: transform 0.15s ease;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div>
-                                        <span style="background: #10b981; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
-                                            ${escapeHtml(q.qNum)}
-                                        </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.88rem;">
-                                            ${escapeHtml(q.topic)}
-                                        </span>
-                                    </div>
-                                    <span style="background: #dcfce7; color: #166534; font-weight: 800; font-size: 0.78rem; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;">${q.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                
-                                <!-- Progress Bar -->
-                                <div style="background: #f1f5f9; border-radius: 9999px; height: 5px; width: 100%; margin: 0.5rem 0 0.35rem 0; overflow: hidden;">
-                                    <div style="background: #10b981; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
-                                </div>
-
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: #94a3b8;">
-                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
-                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
-                                </div>
-                            </div>
-                        `).join('')}
-                </div>
-
+            <!-- Dynamic Empty Tier Message -->
+            <div id="topicAnalysisEmptyMsg" style="display: none; text-align: center; color: #64748b; padding: 2rem; font-style: italic; background: #f8fafc; border-radius: 10px; border: 1px dashed #cbd5e1; margin-top: 0.75rem;">
+                🎉 No questions in this performance category!
             </div>
         </div>
     `;
@@ -1198,4 +1195,83 @@ export function exportMatrixCsv() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+
+if (typeof window !== 'undefined') {
+    window.setTopicAnalysisFilter = function(filter) {
+        const cards = document.querySelectorAll('.topic-q-card');
+        let visibleCount = 0;
+
+        cards.forEach(card => {
+            const match = filter === 'all' || card.dataset.tier === filter;
+            card.style.display = match ? 'block' : 'none';
+            if (match) visibleCount++;
+        });
+
+        const emptyMsg = document.getElementById('topicAnalysisEmptyMsg');
+        if (emptyMsg) {
+            emptyMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+
+        const btns = document.querySelectorAll('.topic-filter-btn');
+        btns.forEach(btn => {
+            const bFilter = btn.dataset.filter;
+            const isActive = bFilter === filter;
+            btn.classList.toggle('active', isActive);
+            const badge = btn.querySelector('span:last-child');
+
+            if (isActive) {
+                if (bFilter === 'critical') {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #fef2f2; color: #991b1b; border: 1.5px solid #fecaca; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15);';
+                    if (badge) { badge.style.background = '#ef4444'; badge.style.color = '#ffffff'; }
+                } else if (bFilter === 'developing') {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #fffbeb; color: #92400e; border: 1.5px solid #fde68a; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15);';
+                    if (badge) { badge.style.background = '#f59e0b'; badge.style.color = '#ffffff'; }
+                } else if (bFilter === 'mastered') {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15);';
+                    if (badge) { badge.style.background = '#10b981'; badge.style.color = '#ffffff'; }
+                } else {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);';
+                    if (badge) { badge.style.background = '#3b82f6'; badge.style.color = '#ffffff'; }
+                }
+            } else {
+                btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;';
+                if (badge) { badge.style.background = '#f1f5f9'; badge.style.color = '#64748b'; }
+            }
+        });
+    };
+
+    window.setTopicGridLayout = function(cols) {
+        const grid = document.getElementById('topicAnalysisGrid');
+        const btn1 = document.getElementById('btnTopicGrid1Col');
+        const btn2 = document.getElementById('btnTopicGrid2Col');
+        if (!grid) return;
+
+        if (cols === 1) {
+            grid.style.gridTemplateColumns = '1fr';
+            if (btn1) {
+                btn1.style.background = '#ffffff';
+                btn1.style.color = '#1e293b';
+                btn1.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            }
+            if (btn2) {
+                btn2.style.background = 'transparent';
+                btn2.style.color = '#64748b';
+                btn2.style.boxShadow = 'none';
+            }
+        } else {
+            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(360px, 1fr))';
+            if (btn2) {
+                btn2.style.background = '#ffffff';
+                btn2.style.color = '#1e293b';
+                btn2.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            }
+            if (btn1) {
+                btn1.style.background = 'transparent';
+                btn1.style.color = '#64748b';
+                btn1.style.boxShadow = 'none';
+            }
+        }
+    };
 }
