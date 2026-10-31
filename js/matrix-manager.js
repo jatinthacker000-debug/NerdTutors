@@ -157,8 +157,8 @@ export function populateMatrixSessionDropdown(sessions) {
 
     let html = '<option value="all">All Test Sessions (Combined View)</option>';
     filtered.forEach(s => {
-        const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` · ${s.examSet}` : '';
-        html += `<option value="${s.id}">${escapeHtml(s.name)}${setTag} (${s.class} · ${s.subject})</option>`;
+        const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` - ${s.examSet}` : '';
+        html += `<option value="${s.id}">${escapeHtml(s.name)}${setTag} (${s.class} - ${s.subject})</option>`;
     });
 
     sessionSelect.innerHTML = html;
@@ -648,9 +648,20 @@ if (typeof window !== 'undefined') {
 /**
  * Render CBSE Topic Mastery & Class Weakness Analysis Section
  */
+function formatCurriculumSummary(summary) {
+    if (!summary) return '';
+    let text = escapeHtml(summary);
+    // Bold quoted chapter names
+    text = text.replace(/'([^']+)'/g, '<strong style="color: #1e293b; background: #e0e7ff; padding: 1px 6px; border-radius: 4px; font-weight: 700;">$1</strong>');
+    // Highlight marks breakdown
+    text = text.replace(/\((\d+)\s*marks?\)/gi, '<span style="font-weight: 700; color: #4338ca; background: #ede9fe; padding: 1px 6px; border-radius: 4px; font-size: 0.8rem;">$1 Marks</span>');
+    return text;
+}
+
 function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
     const container = document.getElementById('matrixTopicAnalysisSection');
     if (!container) return;
+    try {
 
     if (!activeSession || activeSession.id === 'all') {
         container.style.display = 'none';
@@ -898,6 +909,11 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
     `;
 
     container.innerHTML = html;
+    } catch (err) {
+        console.error("renderTopicAnalysis error:", err);
+        container.style.display = "block";
+        container.innerHTML = `<div style=\"background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 1rem; border-radius: 8px; font-size: 0.85rem;\">Notice: Unable to render AI topic analytics: ${escapeHtml(err.message)}</div>`;
+    }
 }
 
 if (typeof window !== 'undefined') {

@@ -690,9 +690,19 @@ async function submitGoogleBatchJob() {
 
         try {
             console.log("🔄 Fetching batch jobs from Google Cloud Vertex AI...");
-            const res = await fetch('/api/batch-evaluate?action=list');
-            const data = await res.json();
-            let liveJobs = (res.ok && Array.isArray(data.jobs)) ? data.jobs : [];
+            let liveJobs = [];
+            try {
+                const res = await fetch('/api/batch-evaluate?action=list');
+                const contentType = res.headers?.get('content-type') || '';
+                if (res.ok && contentType.includes('application/json')) {
+                    const data = await res.json();
+                    if (Array.isArray(data.jobs)) liveJobs = data.jobs;
+                } else {
+                    console.info("Notice: Live batch API returned non-JSON or static page (local server mode). Falling back to cached local & Firestore batch jobs.");
+                }
+            } catch (fetchErr) {
+                console.info("Notice: Live batch API endpoint unavailable locally:", fetchErr.message);
+            }
 
             // Fetch persistent session metadata from localStorage
             let fsMetadataMap = {};
@@ -738,6 +748,24 @@ async function submitGoogleBatchJob() {
                 });
             } catch (fsErr) {
                 console.warn("Notice: testResults batch sync check:", fsErr.message);
+            }
+
+            // If liveJobs is empty (e.g. local dev server), synthesize jobs from fsMetadataMap
+            if (liveJobs.length === 0 && Object.keys(fsMetadataMap).length > 0) {
+                const uniqueIds = new Set();
+                Object.values(fsMetadataMap).forEach(meta => {
+                    const id = meta.batchId || meta.id;
+                    if (id && !uniqueIds.has(id)) {
+                        uniqueIds.add(id);
+                        liveJobs.push({
+                            batchId: id,
+                            name: id,
+                            status: meta.status || 'SYNCED',
+                            createdAt: meta.createdAt || meta.createTime || new Date().toISOString(),
+                            ...meta
+                        });
+                    }
+                });
             }
 
             // Merge Firestore metadata so sessionId and sessionName are NEVER lost
