@@ -393,3 +393,4 @@ export function syncClassSubjects(classElement, subjectElement, targetSubject = 
 2. **Serverless Secret Decoupling:** Google Cloud Vertex AI private keys and service accounts never touch frontend code; all AI evaluation calls pass through serverless endpoints (`/api/*`).
 3. **Optimistic Offline Recovery:** `ocr-scan.html` preserves in-memory payloads, student details, and image blobs in `localStorage` / `sessionStorage` so network interruptions never cause data loss.
 4. **Deterministic Evaluation:** All AI evaluation calls are seed-pinned (`seed: 42`, `temperature: 0.0`), guaranteeing reproducible results when re-evaluating identical documents into `testResults`.
+

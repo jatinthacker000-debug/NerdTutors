@@ -180,3 +180,4 @@ Per user directive, code modifications and security patching were excluded from 
    - *Phase 2 Objective*: Implement transparent, non-blocking rate limiting (e.g. 30 requests per minute per IP) to prevent token exhaustion without impacting normal exam sessions.
 4. **Comprehensive Stored XSS Sanitization**:
    - *Current State*: Most display templates use `escapeHtml()`, but dynamic strings in legacy question modals and report cards must be systematically verified to prevent script injection.
+
