@@ -349,9 +349,14 @@
                 <div class="content-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                         <h3 style="margin: 0;">📋 Student Exam Results</h3>
-                        <button id="btnPopulateMockData" type="button" style="background: #edf2f7; color: #4a5568; border: 1px solid #cbd5e0; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
-                            🧪 Populate 10 Mock Results
-                        </button>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button id="btnCleanOrphanedData" type="button" style="display: none; background: #fff1f2; color: #e11d48; border: 1px solid #fecaca; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; font-weight: 700; cursor: pointer; align-items: center; gap: 0.35rem;" onclick="window.cleanOrphanedResults()" title="Review and permanently delete orphaned student records from tests that were deleted in the past">
+                                ⚠️ Clean Orphaned Records (0)
+                            </button>
+                            <button id="btnPopulateMockData" type="button" style="background: #edf2f7; color: #4a5568; border: 1px solid #cbd5e0; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                                🧪 Populate 10 Mock Results
+                            </button>
+                        </div>
                     </div>
                     <p style="color: #666; margin-bottom: 1.5rem; margin-top: 0.5rem;">Select a Test Session below to view all student evaluations, scores, and print their report cards.</p>
                     
@@ -1163,7 +1168,7 @@
     </div>
 
 
-    <script type="module" src="admin.js?v=257"></script>
+    <script type="module" src="admin.js?v=258"></script>
 </body>
 
 </html>

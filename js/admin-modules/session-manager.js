@@ -20,7 +20,11 @@ function formatExamName(raw) {
         }
         return match;
     });
-    cleaned = cleaned.replace(/\(\s*\(/g, '(').replace(/\)\s*\)/g, ')');
+    let prev = '';
+    while (prev !== cleaned) {
+        prev = cleaned;
+        cleaned = cleaned.replace(/\(\s*\(/g, '(').replace(/\)\s*\)/g, ')');
+    }
     cleaned = cleaned.replace(/_/g, ' ');
     cleaned = cleaned.replace(/^NerdTutors\s*[-:]?\s*/i, '');
     cleaned = cleaned.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
@@ -110,6 +114,8 @@ export async function createTestSession() {
 }
 
 let allTestSessions = [];
+let orphanedResultsList = [];
+
 export async function loadTestSessionsForDropdown() {
     const selectEl = document.getElementById('resultSessionSelect');
     if (!selectEl) return;
@@ -118,16 +124,48 @@ export async function loadTestSessionsForDropdown() {
         const q = query(collection(db, 'testSessions'), orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
         allTestSessions = [];
+        const validSessionIds = new Set();
 
         let optionsHtml = '<option value="">-- Select a Test Session --</option>';
         querySnapshot.forEach(docSnap => {
             const data = docSnap.data();
             const id = docSnap.id;
             allTestSessions.push({ id, ...data });
+            validSessionIds.add(id);
             const yearTag = data.examYear && data.examYear !== 'Standard' ? ` (${data.examYear})` : '';
             const setTag = data.examSet && data.examSet !== 'Standard / All' ? ` [${data.examSet}]` : '';
             optionsHtml += `<option value="${id}">${formatExamName(data.name)}${yearTag}${setTag} (${data.class} - ${data.subject})</option>`;
         });
+
+        // Scan for orphaned testResults whose sessionId does NOT exist in testSessions
+        try {
+            const resultsSnap = await getDocs(collection(db, 'testResults'));
+            orphanedResultsList = [];
+            resultsSnap.forEach(d => {
+                const rData = d.data();
+                if (!rData.sessionId || !validSessionIds.has(rData.sessionId)) {
+                    orphanedResultsList.push({ id: d.id, ...rData });
+                }
+            });
+
+            // Update header warning button
+            const cleanBtn = document.getElementById('btnCleanOrphanedData');
+            if (cleanBtn) {
+                if (orphanedResultsList.length > 0) {
+                    cleanBtn.style.display = 'inline-flex';
+                    cleanBtn.innerHTML = `⚠️ Clean Orphaned Records (${orphanedResultsList.length})`;
+                } else {
+                    cleanBtn.style.display = 'none';
+                }
+            }
+
+            // Append orphaned option to dropdown if any exist
+            if (orphanedResultsList.length > 0) {
+                optionsHtml += `<option value="__ORPHANED__" style="color: #e11d48; font-weight: 700; background: #fff1f2;">⚠️ Orphaned Evaluations (${orphanedResultsList.length} from deleted tests)</option>`;
+            }
+        } catch (resErr) {
+            console.warn('Could not scan for orphaned results:', resErr);
+        }
 
         selectEl.innerHTML = optionsHtml;
     } catch (error) {
@@ -146,6 +184,7 @@ export async function loadResultsForSession(sessionId) {
     const countBadge = document.getElementById('resultsCountBadge');
     const countText = document.getElementById('resultsCountText');
     const sessionDetails = document.getElementById('sessionDetailsBadge');
+    const purgeBatchBtn = document.getElementById('btnPurgeOrphanedBatch');
 
     if (actionsBar) actionsBar.style.display = 'none';
 
@@ -158,21 +197,35 @@ export async function loadResultsForSession(sessionId) {
     `;
 
     try {
-        const querySnapshot = await getDocs(collection(db, 'testResults'));
+        const isOrphaned = sessionId === '__ORPHANED__';
         let results = [];
 
-        querySnapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            if (data.sessionId === sessionId) {
-                results.push({ id: docSnap.id, ...data });
-            }
-        });
+        if (isOrphaned) {
+            // Re-verify orphaned results live against current testSessions
+            const validSessionIds = new Set(allTestSessions.map(s => s.id));
+            const querySnapshot = await getDocs(collection(db, 'testResults'));
+            querySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (!data.sessionId || !validSessionIds.has(data.sessionId)) {
+                    results.push({ id: docSnap.id, ...data });
+                }
+            });
+            orphanedResultsList = [...results];
+        } else {
+            const querySnapshot = await getDocs(collection(db, 'testResults'));
+            querySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (data.sessionId === sessionId) {
+                    results.push({ id: docSnap.id, ...data });
+                }
+            });
+        }
 
         if (results.length === 0) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
-                        No student evaluations found for this session yet.
+                        ${isOrphaned ? 'No orphaned student evaluations found. All records belong to active tests.' : 'No student evaluations found for this session yet.'}
                     </td>
                 </tr>
             `;
@@ -186,16 +239,33 @@ export async function loadResultsForSession(sessionId) {
         results.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
         let html = '';
+        if (isOrphaned) {
+            html += `
+                <tr style="background: #fff1f2; border-bottom: 2px solid #fecaca;">
+                    <td colspan="7" style="padding: 0.85rem 1rem; color: #9f1239; font-size: 0.88rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;">
+                            <span>⚠️ <strong>Orphaned Student Records (${results.length}):</strong> These evaluations belong to tests that were previously deleted. You can delete rows individually below or click <strong>Purge All Orphaned Records</strong> to delete them in bulk.</span>
+                            <button type="button" onclick="window.cleanOrphanedResults()" style="background: #e11d48; color: white; border: none; padding: 0.35rem 0.85rem; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer;">🗑️ Purge All (${results.length})</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
         results.forEach(res => {
             const dateStr = res.createdAt ? new Date(res.createdAt.seconds * 1000).toLocaleDateString() : 'N/A';
+            const testLabel = isOrphaned ? `<div style="font-size: 0.72rem; color: #e11d48; font-weight: 600;">[From Deleted: ${escapeHtml(res.sessionName || res.testType || 'Unknown')}]</div>` : '';
             html += `
                 <tr style="border-bottom: 1px solid #e2e8f0;">
-                    <td style="padding: 1rem; font-weight: 600; color: #2d3748;">${escapeHtml(res.studentName)}</td>
+                    <td style="padding: 1rem; font-weight: 600; color: #2d3748;">
+                        ${escapeHtml(res.studentName)}
+                        ${testLabel}
+                    </td>
                     <td style="padding: 1rem;">
                         <span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(res.batch || res.targetGroup || 'Both')}</span>
                     </td>
-                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.class)}</td>
-                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.subject)}</td>
+                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.class || 'Class 12th')}</td>
+                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.subject || 'General')}</td>
                     <td style="padding: 1rem;">
                         <span style="background: #edf2f7; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 700; color: #2b6cb0; display: inline-flex; align-items: center; gap: 0.35rem;">
                             <span>${res.score} / ${res.maxMarks}</span>
@@ -228,14 +298,22 @@ export async function loadResultsForSession(sessionId) {
         // Show and configure the action bar
         if (actionsBar) {
             actionsBar.style.display = 'flex';
-            if (countText) countText.textContent = `${results.length} Submissions`;
+            if (countText) countText.textContent = isOrphaned ? `${results.length} Orphaned Evaluations` : `${results.length} Submissions`;
 
-            const sessionObj = allTestSessions.find(s => s.id === sessionId);
+            if (purgeBatchBtn) {
+                purgeBatchBtn.style.display = isOrphaned ? 'inline-flex' : 'none';
+            }
+
             if (sessionDetails) {
-                const sTitle = sessionObj?.name || results[0]?.sessionName || 'Exam';
-                const sSub = sessionObj?.subject || results[0]?.subject || '';
-                const sCls = sessionObj?.class || results[0]?.class || '';
-                sessionDetails.innerHTML = `&bull; <strong>${escapeHtml(sTitle)}</strong> (${escapeHtml(sCls)}${sSub ? ' - ' + escapeHtml(sSub) : ''})`;
+                if (isOrphaned) {
+                    sessionDetails.innerHTML = `&bull; <span style="color: #e11d48; font-weight: 700;">Leftover records from deleted tests</span>`;
+                } else {
+                    const sessionObj = allTestSessions.find(s => s.id === sessionId);
+                    const sTitle = sessionObj?.name || results[0]?.sessionName || 'Exam';
+                    const sSub = sessionObj?.subject || results[0]?.subject || '';
+                    const sCls = sessionObj?.class || results[0]?.class || '';
+                    sessionDetails.innerHTML = `&bull; <strong>${escapeHtml(sTitle)}</strong> (${escapeHtml(sCls)}${sSub ? ' - ' + escapeHtml(sSub) : ''})`;
+                }
             }
 
             const zipBtn = document.getElementById('btnDownloadZipReports');
@@ -1795,13 +1873,56 @@ async function toggleSessionStatus(id, currentStatus) {
 }
 
 async function deleteSession(id) {
-    if (!confirm("Are you sure you want to delete this test session? Students will no longer be able to submit results for it.")) return;
-
     try {
+        const sessionSnap = await getDoc(doc(db, 'testSessions', id));
+        const sessionData = sessionSnap.exists() ? sessionSnap.data() : null;
+        const sessionName = sessionData ? (sessionData.name || 'Test Session') : 'this test session';
+
+        // Query all student evaluations associated with this sessionId or matching sessionName
+        const resultsSnap = await getDocs(collection(db, 'testResults'));
+        const matchingResults = [];
+        resultsSnap.forEach(d => {
+            const data = d.data();
+            if (data.sessionId === id || (sessionData && data.sessionName && data.sessionName === sessionData.name && !data.sessionId)) {
+                matchingResults.push({ id: d.id, studentName: data.studentName || 'Student' });
+            }
+        });
+
+        const count = matchingResults.length;
+        const confirmMsg = count > 0
+            ? `Are you sure you want to delete "${sessionName}"?\n\n⚠️ CASCADING DELETE: This test session has ${count} student evaluation record(s) in Firestore.\nDeleting this test will ALSO permanently delete all ${count} associated student evaluation(s).\n\nDo you want to proceed?`
+            : `Are you sure you want to delete "${sessionName}"? Students will no longer be able to submit results for it.`;
+
+        if (!confirm(confirmMsg)) return;
+
+        // Cascade delete all student results
+        if (count > 0) {
+            await Promise.all(matchingResults.map(r => deleteDoc(doc(db, 'testResults', r.id))));
+            console.log(`Cascade deleted ${count} student evaluation(s) for session ${id}`);
+        }
+
+        // Delete test session
         await deleteDoc(doc(db, 'testSessions', id));
-        showToast("Test Session deleted successfully!", "success");
+
+        showToast(
+            count > 0
+                ? `Test Session & all ${count} student evaluation(s) deleted successfully!`
+                : "Test Session deleted successfully!",
+            "success"
+        );
+
         loadTestSessionsForManagement();
-        loadTestSessionsForDropdown();
+        await loadTestSessionsForDropdown();
+
+        // If results table was displaying this session, reset it
+        const resultSessionSelect = document.getElementById('resultSessionSelect');
+        if (resultSessionSelect && resultSessionSelect.value === id) {
+            resultSessionSelect.value = '';
+            const tbody = document.getElementById('resultsTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">Select a test session above to view student evaluations.</td></tr>';
+            const actionsBar = document.getElementById('resultsActionsBar');
+            if (actionsBar) actionsBar.style.display = 'none';
+        }
     } catch (error) {
         console.error("Error deleting session:", error);
         showToast("Failed to delete session: " + error.message, "error");
@@ -1819,9 +1940,62 @@ async function deleteResult(id) {
         if (resultSessionSelect && resultSessionSelect.value) {
             loadResultsForSession(resultSessionSelect.value);
         }
+        // Also refresh orphaned count in dropdown
+        loadTestSessionsForDropdown();
     } catch (error) {
         console.error("Error deleting student result:", error);
         showToast("Failed to delete result: " + error.message, "error");
+    }
+}
+
+export async function cleanOrphanedResults() {
+    try {
+        const sessionsSnap = await getDocs(collection(db, 'testSessions'));
+        const validSessionIds = new Set();
+        sessionsSnap.forEach(s => validSessionIds.add(s.id));
+
+        const resultsSnap = await getDocs(collection(db, 'testResults'));
+        const orphans = [];
+        resultsSnap.forEach(d => {
+            const data = d.data();
+            if (!data.sessionId || !validSessionIds.has(data.sessionId)) {
+                orphans.push({
+                    id: d.id,
+                    studentName: data.studentName || 'Student',
+                    sessionName: data.sessionName || data.testType || 'Deleted Session'
+                });
+            }
+        });
+
+        if (orphans.length === 0) {
+            showToast("No orphaned student evaluations found! All data matches active test sessions.", "info");
+            return;
+        }
+
+        const sampleNames = orphans.slice(0, 5).map(o => `• ${o.studentName} (${o.sessionName})`).join('\n');
+        const extraMsg = orphans.length > 5 ? `\n...and ${orphans.length - 5} more` : '';
+        const msg = `Found ${orphans.length} orphaned student evaluation(s) from deleted tests:\n\n${sampleNames}${extraMsg}\n\nAre you sure you want to permanently delete all ${orphans.length} orphaned record(s) from Firestore? This action cannot be undone.`;
+
+        if (!confirm(msg)) return;
+
+        await Promise.all(orphans.map(o => deleteDoc(doc(db, 'testResults', o.id))));
+
+        showToast(`Successfully deleted ${orphans.length} orphaned student record(s)!`, "success");
+
+        orphanedResultsList = [];
+        await loadTestSessionsForDropdown();
+
+        const resultSessionSelect = document.getElementById('resultSessionSelect');
+        if (resultSessionSelect && resultSessionSelect.value === '__ORPHANED__') {
+            resultSessionSelect.value = '';
+            const tbody = document.getElementById('resultsTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">All orphaned records cleaned! Select a test session above.</td></tr>';
+            const actionsBar = document.getElementById('resultsActionsBar');
+            if (actionsBar) actionsBar.style.display = 'none';
+        }
+    } catch (error) {
+        console.error("Error cleaning orphaned results:", error);
+        showToast("Failed to clean orphaned records: " + error.message, "error");
     }
 }
 
@@ -2109,6 +2283,7 @@ async function cacheTestSession(id) {
 window.toggleSessionStatus = toggleSessionStatus;
 window.deleteSession = deleteSession;
 window.deleteResult = deleteResult;
+window.cleanOrphanedResults = cleanOrphanedResults;
 window.editStudentScore = editStudentScore;
 window.editQuestionScore = editQuestionScore;
 window.editSession = editSession;

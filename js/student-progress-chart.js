@@ -66,7 +66,11 @@ export function formatExamName(raw) {
     });
 
     // 3. Clean any nested or double brackets: ((...)) -> (...)
-    cleaned = cleaned.replace(/\(\s*\(/g, '(').replace(/\)\s*\)/g, ')');
+    let prev = '';
+    while (prev !== cleaned) {
+        prev = cleaned;
+        cleaned = cleaned.replace(/\(\s*\(/g, '(').replace(/\)\s*\)/g, ')');
+    }
     // Replace underscores with spaces
     cleaned = cleaned.replace(/_/g, ' ');
     // Remove leading "NerdTutors" prefix if present

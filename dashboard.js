@@ -15,8 +15,8 @@ import {
     updateDoc,
     doc
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { initQuestionMatrix, renderQuestionMatrix, populateMatrixSessionDropdown } from './js/matrix-manager.js?v=256';
-import { initStudentProgressChart, loadRealDataIntoProgressChart, formatExamName } from './js/student-progress-chart.js?v=256';
+import { initQuestionMatrix, renderQuestionMatrix, populateMatrixSessionDropdown } from './js/matrix-manager.js?v=258';
+import { initStudentProgressChart, loadRealDataIntoProgressChart, formatExamName } from './js/student-progress-chart.js?v=258';
 
 // ==================== APP STATE ==================== 
 const appState = {
