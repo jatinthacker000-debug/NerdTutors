@@ -88,7 +88,7 @@ export async function extractDigitalTextFromPdf(file, onProgress) {
 
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
-        
+
         let lastY, text = '';
         for (let item of textContent.items) {
             if (lastY !== undefined && Math.abs(item.transform[5] - lastY) > 5) {

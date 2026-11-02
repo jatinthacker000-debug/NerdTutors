@@ -254,10 +254,10 @@ export function renderGateCredentials(credentials, isPermissionNotice = false) {
                     ${safeLabel}
                 </td>
                 <td style="padding: 0.9rem 1rem;">
-                    ${isSystem 
-                        ? `<span style="background: #e0e7ff; color: #4338ca; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🛡️ System Master</span>` 
-                        : `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🔥 Active Key</span>`
-                    }
+                    ${isSystem
+                ? `<span style="background: #e0e7ff; color: #4338ca; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🛡️ System Master</span>`
+                : `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🔥 Active Key</span>`
+            }
                 </td>
                 <td style="padding: 0.9rem 1rem; color: #64748b; font-size: 0.85rem;">
                     <span title="Stored securely on backend & database">☁️ ${dateStr}</span>
@@ -324,7 +324,7 @@ function setupEventListeners() {
                         source: 'firebase',
                         createdAt: serverTimestamp()
                     });
-                } catch (_) {}
+                } catch (_) { }
 
                 // Always persist via backend API
                 const authHeaders = await getNerdAuthHeaders();
@@ -396,7 +396,7 @@ function setupEventListeners() {
                         label,
                         lastUpdated: serverTimestamp()
                     }, { merge: true });
-                } catch (_) {}
+                } catch (_) { }
 
                 // Update via backend API
                 const authHeaders = await getNerdAuthHeaders();
@@ -473,7 +473,7 @@ function generateSecureKey() {
 window.reloadGateCredentials = loadGateCredentials;
 window.shiftCredentialsToFirebase = shiftCredentialsToFirebase;
 
-window.openEditGateKey = function(username) {
+window.openEditGateKey = function (username) {
     const cred = gateCredentialsCache.find(c => c.username.toLowerCase() === username.toLowerCase());
     if (!cred) {
         showToast("Key not found in cache", "error");
@@ -492,7 +492,7 @@ window.openEditGateKey = function(username) {
     if (modal) modal.style.display = 'flex';
 };
 
-window.copyFirestoreRuleSnippet = function() {
+window.copyFirestoreRuleSnippet = function () {
     const ruleSnippet = `match /gateCredentials/{document=**} {
   allow read, write: if request.auth != null;
 }`;
@@ -503,13 +503,13 @@ window.copyFirestoreRuleSnippet = function() {
     });
 };
 
-window.togglePasswordVisibility = function(elementId) {
+window.togglePasswordVisibility = function (elementId) {
     const input = document.getElementById(elementId);
     if (!input) return;
     input.type = input.type === 'password' ? 'text' : 'password';
 };
 
-window.copyTextToClipboard = async function(text, label = 'Text') {
+window.copyTextToClipboard = async function (text, label = 'Text') {
     try {
         await navigator.clipboard.writeText(text);
         showToast(`${label} copied to clipboard!`, 'success');
@@ -518,7 +518,7 @@ window.copyTextToClipboard = async function(text, label = 'Text') {
     }
 };
 
-window.deleteGateKey = async function(username) {
+window.deleteGateKey = async function (username) {
     if (!confirm(`Are you sure you want to permanently delete the gate password for "${username}"?`)) {
         return;
     }
@@ -527,7 +527,7 @@ window.deleteGateKey = async function(username) {
         // Direct deletion from Firebase Firestore if accessible
         try {
             await deleteDoc(doc(db, 'gateCredentials', username));
-        } catch (_) {}
+        } catch (_) { }
 
         // Deletion from backend API
         const authHeaders = await getNerdAuthHeaders();
