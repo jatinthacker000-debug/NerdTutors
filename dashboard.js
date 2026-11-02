@@ -18,6 +18,16 @@ import {
 import { initQuestionMatrix, renderQuestionMatrix, populateMatrixSessionDropdown } from './js/matrix-manager.js?v=258';
 import { initStudentProgressChart, loadRealDataIntoProgressChart, formatExamName } from './js/student-progress-chart.js?v=258';
 
+// Robust HTML escaping
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escapeHtml(str) {
+    if (!str && str !== 0) return '';
+    return String(str).replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
+}
+if (typeof window !== 'undefined') {
+    window.escapeHtml = escapeHtml;
+}
+
 // ==================== APP STATE ==================== 
 const appState = {
     testResults: [],
@@ -236,16 +246,16 @@ function renderTable() {
         const timeStr = date.toLocaleTimeString();
 
         row.innerHTML = `
-                <td class="student-name">${result.studentName || 'Anonymous'}</td>
-                <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${result.batch || result.targetGroup || 'Both'}</span></td>
-                <td>${result.studentId?.substring(0, 8) || '-'}</td>
+                <td class="student-name">${escapeHtml(result.studentName || 'Anonymous')}</td>
+                <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(result.batch || result.targetGroup || 'Both')}</span></td>
+                <td>${escapeHtml(result.studentId?.substring(0, 8) || '-')}</td>
                 <td>${dateStr}<br><small style="color: #94a3b8;">${timeStr}</small></td>
-                <td>${result.totalScore || '0/0'}</td>
-                <td><span class="score-badge ${scoreClass}">${result.percentage || '0%'}</span></td>
+                <td>${escapeHtml(result.totalScore || '0/0')}</td>
+                <td><span class="score-badge ${scoreClass}">${escapeHtml(result.percentage || '0%')}</span></td>
                 <td>${result.totalQuestions || 0}</td>
                 <td>
-                    <button class="action-btn" onclick="window.viewDetails('${result.id}')">👁️ View</button>
-                    <button class="action-btn" onclick="window.exportResult('${result.id}')">📥 Export</button>
+                    <button class="action-btn" onclick="window.viewDetails('${escapeHtml(result.id)}')">👁️ View</button>
+                    <button class="action-btn" onclick="window.exportResult('${escapeHtml(result.id)}')">📥 Export</button>
                 </td>
             `;
 
@@ -418,7 +428,7 @@ function viewDetails(resultId) {
                     <div style="margin-top: 0.75rem; background: #fef9c3; border-radius: 8px; padding: 0.75rem; border-left: 3px solid #f59e0b;">
                         <div style="font-weight: 600; color: #92400e; font-size: 0.8rem; margin-bottom: 0.4rem;">💡 Suggestions for Improvement</div>
                         <ul style="margin: 0; padding-left: 1.2rem; color: #78350f; font-size: 0.85rem;">
-                            ${item.improvements.map(s => `<li style="margin-bottom: 0.25rem;">${s}</li>`).join('')}
+                            ${item.improvements.map(s => `<li style="margin-bottom: 0.25rem;">${escapeHtml(s)}</li>`).join('')}
                         </ul>
                     </div>`;
             }
@@ -429,17 +439,17 @@ function viewDetails(resultId) {
                 feedbackHtml = `
                     <div style="margin-top: 0.75rem; background: #eff6ff; border-radius: 8px; padding: 0.75rem; border-left: 3px solid #3b82f6;">
                         <div style="font-weight: 600; color: #1e40af; font-size: 0.8rem; margin-bottom: 0.3rem;">🤖 AI Review</div>
-                        <div style="color: #1e3a5f; font-size: 0.85rem;">${item.feedback}</div>
+                        <div style="color: #1e3a5f; font-size: 0.85rem;">${escapeHtml(item.feedback)}</div>
                     </div>`;
             }
 
             answerDiv.innerHTML = `
                 <div class="answer-question">
-                    <strong style="color: #1e3c72;">Q${index + 1}:</strong> ${item.questionText || 'Question text not available'}
+                    <strong style="color: #1e3c72;">Q${index + 1}:</strong> ${escapeHtml(item.questionText || 'Question text not available')}
                 </div>
                 <div style="margin-top: 0.5rem; background: #f1f5f9; border-radius: 8px; padding: 0.75rem; border-left: 3px solid #6366f1;">
                     <div style="font-weight: 600; color: #475569; font-size: 0.8rem; margin-bottom: 0.3rem;">📝 Student's Answer</div>
-                    <div style="color: #334155; font-size: 0.9rem; white-space: pre-wrap;">${studentAnswer}</div>
+                    <div style="color: #334155; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(studentAnswer)}</div>
                 </div>
                 <div class="answer-score" style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-weight: 600;">Score: ${earned}/${max}</span>
@@ -554,16 +564,16 @@ function renderFullTable() {
         const timeStr = date.toLocaleTimeString();
 
         row.innerHTML = `
-                <td class="student-name">${result.studentName || 'Anonymous'}</td>
-                <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${result.batch || result.targetGroup || 'Both'}</span></td>
-                <td>${result.studentId?.substring(0, 8) || '-'}</td>
+                <td class="student-name">${escapeHtml(result.studentName || 'Anonymous')}</td>
+                <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(result.batch || result.targetGroup || 'Both')}</span></td>
+                <td>${escapeHtml(result.studentId?.substring(0, 8) || '-')}</td>
                 <td>${dateStr}<br><small style="color: #94a3b8;">${timeStr}</small></td>
-                <td>${result.totalScore || '0/0'}</td>
-                <td><span class="score-badge ${scoreClass}">${result.percentage || '0%'}</span></td>
+                <td>${escapeHtml(result.totalScore || '0/0')}</td>
+                <td><span class="score-badge ${scoreClass}">${escapeHtml(result.percentage || '0%')}</span></td>
                 <td>${result.totalQuestions || 0}</td>
                 <td>
-                    <button class="action-btn" onclick="window.viewDetails('${result.id}')">👁️ View</button>
-                    <button class="action-btn" onclick="window.exportResult('${result.id}')">📥 Export</button>
+                    <button class="action-btn" onclick="window.viewDetails('${escapeHtml(result.id)}')">👁️ View</button>
+                    <button class="action-btn" onclick="window.exportResult('${escapeHtml(result.id)}')">📥 Export</button>
                 </td>
             `;
 
@@ -656,10 +666,10 @@ function renderRecentResults() {
         if (percentage < 50) scoreClass = 'score-low';
 
         row.innerHTML = `
-            <td class="student-name">${result.studentName || 'Anonymous'}</td>
+            <td class="student-name">${escapeHtml(result.studentName || 'Anonymous')}</td>
             <td>${date.toLocaleDateString()}</td>
-            <td><span class="score-badge ${scoreClass}">${result.percentage || '0%'}</span></td>
-            <td><span class="type-badge ${testType}">${testType.toUpperCase()}</span></td>
+            <td><span class="score-badge ${scoreClass}">${escapeHtml(result.percentage || '0%')}</span></td>
+            <td><span class="type-badge ${escapeHtml(testType)}">${escapeHtml(testType.toUpperCase())}</span></td>
         `;
 
         tbody.appendChild(row);
@@ -732,10 +742,10 @@ function renderStudentsPage() {
 
         card.innerHTML = `
             <div class="student-card-header">
-                <div class="student-avatar">${initial}</div>
+                <div class="student-avatar">${escapeHtml(initial)}</div>
                 <div class="student-info">
-                    <h4>${student.name}</h4>
-                    <p>ID: ${student.id.substring(0, 8)}...</p>
+                    <h4>${escapeHtml(student.name)}</h4>
+                    <p>ID: ${escapeHtml(student.id.substring(0, 8))}...</p>
                 </div>
             </div>
             <div class="student-stats">
@@ -744,7 +754,7 @@ function renderStudentsPage() {
                     <div class="label">Tests</div>
                 </div>
                 <div class="student-stat-item">
-                    <div class="value">${student.avgScore}%</div>
+                    <div class="value">${escapeHtml(student.avgScore)}%</div>
                     <div class="label">Avg Score</div>
                 </div>
                 <div class="student-stat-item">
@@ -799,7 +809,7 @@ function updateAnalyticsSessionDropdown() {
     let html = '<option value="all">All Test Sessions</option>';
     filtered.forEach(s => {
         const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` [${s.examSet}]` : '';
-        html += `<option value="${s.id}">${formatExamName(s.name)}${setTag} (${s.class} - ${s.subject})</option>`;
+        html += `<option value="${escapeHtml(s.id)}">${escapeHtml(formatExamName(s.name))}${escapeHtml(setTag)} (${escapeHtml(s.class)} - ${escapeHtml(s.subject)})</option>`;
     });
 
     sessionFilter.innerHTML = html;
@@ -843,16 +853,6 @@ function syncAnalyticsSubjectFilter() {
     }
 }
 
-// Helper to escape HTML safely
-function escapeHtml(text) {
-    if (typeof text !== 'string') return text;
-    return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
 
 // ==================== INITIALIZE ANALYTICS CHARTS ====================
 function initAnalyticsCharts() {
@@ -1119,8 +1119,8 @@ function renderLeaderboardAndDetailedTable(filteredResults) {
             return `
                 <tr>
                     <td><strong>${index + 1}</strong></td>
-                    <td class="student-name">${medal}${s[0]}</td>
-                    <td><span class="score-badge score-high">${s[1]}%</span></td>
+                    <td class="student-name">${medal}${escapeHtml(s[0])}</td>
+                    <td><span class="score-badge score-high">${escapeHtml(s[1])}%</span></td>
                 </tr>
             `;
         }).join('');
@@ -1135,12 +1135,12 @@ function renderLeaderboardAndDetailedTable(filteredResults) {
             const dateStr = date.toLocaleDateString();
             return `
                 <tr>
-                    <td class="student-name">${r.studentName || 'Anonymous'}</td>
-                    <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${r.batch || r.targetGroup || 'Both'}</span></td>
-                    <td>${r.class || '-'}</td>
-                    <td>${r.subject || '-'}</td>
-                    <td>${r.totalScore || '0/0'}</td>
-                    <td>${r.percentage || '0%'}</td>
+                    <td class="student-name">${escapeHtml(r.studentName || 'Anonymous')}</td>
+                    <td><span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(r.batch || r.targetGroup || 'Both')}</span></td>
+                    <td>${escapeHtml(r.class || '-')}</td>
+                    <td>${escapeHtml(r.subject || '-')}</td>
+                    <td>${escapeHtml(r.totalScore || '0/0')}</td>
+                    <td>${escapeHtml(r.percentage || '0%')}</td>
                     <td>${dateStr}</td>
                 </tr>
             `;
@@ -1178,7 +1178,7 @@ function updateExportSessionDropdown() {
 
     let html = '<option value="all">All Test Sessions</option>';
     filtered.forEach(s => {
-        html += `<option value="${s.id}">${formatExamName(s.name)} (${s.class} - ${s.subject})</option>`;
+        html += `<option value="${escapeHtml(s.id)}">${escapeHtml(formatExamName(s.name))} (${escapeHtml(s.class)} - ${escapeHtml(s.subject)})</option>`;
     });
 
     sessionFilter.innerHTML = html;

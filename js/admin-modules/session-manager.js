@@ -268,22 +268,22 @@ export async function loadResultsForSession(sessionId) {
                     <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.subject || 'General')}</td>
                     <td style="padding: 1rem;">
                         <span style="background: #edf2f7; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 700; color: #2b6cb0; display: inline-flex; align-items: center; gap: 0.35rem;">
-                            <span>${res.score} / ${res.maxMarks}</span>
-                            <span style="cursor: pointer; color: #718096; font-size: 0.9rem;" title="Edit Score" onclick="window.editStudentScore('${res.id}', ${res.score}, ${res.maxMarks})">✏️</span>
+                            <span>${Number(res.score) || 0} / ${Number(res.maxMarks) || 0}</span>
+                            <span style="cursor: pointer; color: #718096; font-size: 0.9rem;" title="Edit Score" data-id="${escapeHtml(res.id)}" onclick="window.editStudentScore(this.dataset.id, ${Number(res.score) || 0}, ${Number(res.maxMarks) || 0})">✏️</span>
                         </span>
                     </td>
                     <td style="padding: 1rem; color: #718096;">${dateStr}</td>
                     <td style="padding: 1rem; text-align: right;">
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #3182ce; margin-right: 0.35rem; width: auto;" onclick="window.viewReportCard('${res.id}')">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #3182ce; margin-right: 0.35rem; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.viewReportCard(this.dataset.id)">
                             👁️ View Card
                         </button>
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #4f46e5; margin-right: 0.35rem; width: auto;" onclick="window.downloadSingleStudentPdf('${res.id}')" title="Download single PDF">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #4f46e5; margin-right: 0.35rem; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.downloadSingleStudentPdf(this.dataset.id)" title="Download single PDF">
                             📥 PDF
                         </button>
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #2f855a; margin-right: 0.35rem; width: auto;" onclick="window.printReportCard('${res.id}')">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #2f855a; margin-right: 0.35rem; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.printReportCard(this.dataset.id)">
                             🖨️ Print
                         </button>
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #e53e3e; width: auto;" onclick="window.deleteResult('${res.id}')">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #e53e3e; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.deleteResult(this.dataset.id)">
                             🗑️ Delete
                         </button>
                     </td>
@@ -382,8 +382,8 @@ window.viewReportCard = function(resultId) {
         appealHtml = `
             <div style="background: #fffaf0; border: 1px solid #feebc8; border-left: 4px solid #dd6b20; border-radius: 8px; padding: 1.25rem; margin-top: 1.5rem;">
                 <h4 style="color: #dd6b20; margin: 0 0 0.5rem 0; font-size: 1.1rem; font-weight: 700;">⚖️ Re-evaluation Appeal Advisor</h4>
-                <p style="color: #7b341e; font-weight: 700; margin: 0 0 0.25rem 0; font-size: 0.95rem;">Appeal Case: ${res.totalAppealPotential}</p>
-                <p style="color: #7b341e; margin: 0; font-size: 0.9rem; line-height: 1.5;">${res.appealSummary}</p>
+                <p style="color: #7b341e; font-weight: 700; margin: 0 0 0.25rem 0; font-size: 0.95rem;">Appeal Case: ${escapeHtml(res.totalAppealPotential)}</p>
+                <p style="color: #7b341e; margin: 0; font-size: 0.9rem; line-height: 1.5;">${escapeHtml(res.appealSummary)}</p>
             </div>
         `;
     }
@@ -560,7 +560,7 @@ window.viewReportCard = function(resultId) {
                                 <strong>${escapeHtml(qText)}</strong>
                                 <span style="background: #e2e8f0; padding: 0.25rem 0.75rem; border-radius: 12px; font-weight: bold; font-size: 0.9rem; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem;">
                                     <span>${earned} / ${max}</span>
-                                    <span style="cursor: pointer; color: #1e3c72; font-size: 0.85rem;" title="Edit Question Marks" onclick="window.editQuestionScore('${res.id}', ${originalIndex})">✏️</span>
+                                    <span style="cursor: pointer; color: #1e3c72; font-size: 0.85rem;" title="Edit Question Marks" data-id="${escapeHtml(res.id)}" data-index="${Number(originalIndex) || 0}" onclick="window.editQuestionScore(this.dataset.id, Number(this.dataset.index))">✏️</span>
                                 </span>
                             </div>
                             ${studentAns ? `<div style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #4a5568;"><strong>Student Answer:</strong> ${escapeHtml(studentAns)}</div>` : ''}
@@ -1816,25 +1816,30 @@ export async function loadTestSessionsForManagement() {
                         <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end; align-items: center; white-space: nowrap;">
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid ${data.cachedContentId ? '#86efac' : '#cbd5e1'}; background: ${data.cachedContentId ? '#dcfce7' : '#ffffff'}; color: ${data.cachedContentId ? '#15803d' : '#475569'}; cursor: pointer; font-weight: 700; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.cacheTestSession('${id}')" 
+                                data-id="${escapeHtml(id)}"
+                                onclick="window.cacheTestSession(this.dataset.id)" 
                                 title="${data.cachedContentId ? 'Gemini context cache active (75% token discount)' : 'Generate Gemini context cache for 75% token discount'}">
                                 ${data.cachedContentId ? '⚡ 75% Cached' : '⚡ Cache (75% Off)'}
                             </button>
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.editSession('${id}')" 
+                                data-id="${escapeHtml(id)}"
+                                onclick="window.editSession(this.dataset.id)" 
                                 title="Edit Session">
                                 ✏️ Edit
                             </button>
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.toggleSessionStatus('${id}', '${status}')" 
+                                data-id="${escapeHtml(id)}"
+                                data-status="${escapeHtml(status)}"
+                                onclick="window.toggleSessionStatus(this.dataset.id, this.dataset.status)" 
                                 title="${isActive ? 'Deactivate Session' : 'Activate Session'}">
                                 ${isActive ? '⏸️ Deactivate' : '▶️ Activate'}
                             </button>
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 0.55rem; font-size: 0.8rem; border-radius: 6px; border: 1px solid #fecaca; background: #fff1f2; color: #e11d48; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.deleteSession('${id}')" 
+                                data-id="${escapeHtml(id)}"
+                                onclick="window.deleteSession(this.dataset.id)" 
                                 title="Delete Session">
                                 🗑️
                             </button>

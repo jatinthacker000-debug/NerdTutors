@@ -597,14 +597,10 @@
             evaluationInterval = null;
         }
 
+        const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
         function escapeHtml(str) {
-            if (!str) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            if (!str && str !== 0) return '';
+            return String(str).replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
         }
 
         function cleanModelAnswer(raw, isMcq = false) {
@@ -1038,18 +1034,18 @@
                             <div>
                                 <span style="font-weight: 800; color: #1e3a8a; font-size: 0.95rem;">${escapeHtml(selectedSession.name)}</span>
                                 <div style="font-size: 0.78rem; color: #3b82f6; margin-top: 0.15rem;">
-                                    Class: <strong>${selectedSession.class}</strong> · Subject: <strong>${selectedSession.subject}</strong>
+                                    Class: <strong>${escapeHtml(selectedSession.class)}</strong> · Subject: <strong>${escapeHtml(selectedSession.subject)}</strong>
                                 </div>
                             </div>
                             <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
                                 <span style="background: #dbeafe; color: #1d4ed8; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.8rem; border: 1px solid #bfdbfe;">
-                                    📅 ${year}
+                                    📅 ${escapeHtml(year)}
                                 </span>
                                 <span style="background: #ede9fe; color: #6d28d9; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.8rem; border: 1px solid #ddd6fe;">
-                                    🔖 ${set}
+                                    🔖 ${escapeHtml(set)}
                                 </span>
                                 <span style="background: #fef3c7; color: #92400e; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.8rem; border: 1px solid #fde68a;">
-                                    💯 ${selectedSession.maxMarks} Marks
+                                    💯 ${escapeHtml(selectedSession.maxMarks)} Marks
                                 </span>
                             </div>
                         </div>
@@ -1269,7 +1265,7 @@
                 const div = document.createElement('div');
                 div.className = 'file-item';
                 div.innerHTML = `
-                    <span class="file-name">📄 ${file.name || ('Image ' + (index + 1))}</span>
+                    <span class="file-name">📄 ${escapeHtml(file.name || ('Image ' + (index + 1)))}</span>
                     <button type="button" class="file-remove" data-index="${index}">×</button>
                 `;
                 fileList.appendChild(div);

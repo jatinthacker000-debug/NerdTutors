@@ -10,4 +10,4 @@ vertex-key.json
 *service-account*.json
 *vertex*.json
 .agents/teamwork/
-.agents/teamwork/
+firestore.rules

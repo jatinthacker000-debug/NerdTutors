@@ -1470,6 +1470,15 @@
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
         import { collection, query, where, orderBy, getDocs, getDoc, doc } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
 
+        const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        function escapeHtml(str) {
+            if (!str && str !== 0) return '';
+            return String(str).replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
+        }
+        if (typeof window !== 'undefined') {
+            window.escapeHtml = escapeHtml;
+        }
+
         let currentUser = null;
         let allResults = [];
         let currentSort = 'date-desc';
@@ -1921,13 +1930,13 @@
                 }
 
                 return `
-                    <div class="result-card" data-grade="${grade.class}" data-id="${result.id}">
-                        <div class="result-score-circle ${grade.class}">
+                    <div class="result-card" data-grade="${escapeHtml(grade.class)}" data-id="${escapeHtml(result.id)}">
+                        <div class="result-score-circle ${escapeHtml(grade.class)}">
                             <span class="result-score">${score}%</span>
                         </div>
                         <div class="result-info">
                             <div class="result-title-row">
-                                <h3 class="result-title">${result.testName || 'Practice Test'}</h3>
+                                <h3 class="result-title">${escapeHtml(result.testName || 'Practice Test')}</h3>
                                 ${improvementHtml}
                             </div>
                             <div class="result-meta">
@@ -1945,7 +1954,7 @@
                                         <circle cx="12" cy="12" r="10"/>
                                         <polyline points="12 6 12 12 16 14"/>
                                     </svg>
-                                    ${duration}
+                                    ${escapeHtml(duration)}
                                 </div>
                                 <div class="result-meta-item">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1963,7 +1972,7 @@
                                 </div>
                             </div>
                         </div>
-                        <span class="result-badge ${grade.class}">${grade.label}</span>
+                        <span class="result-badge ${escapeHtml(grade.class)}">${escapeHtml(grade.label)}</span>
                         <svg class="result-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 18l6-6-6-6"/>
                         </svg>
@@ -2224,23 +2233,23 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; padding: 1.25rem; border-radius: 12px; margin-bottom: 2rem; font-size: 0.95rem;">
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Student Name</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${result.studentName || currentUser.displayName}</span>
+                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${escapeHtml(result.studentName || (currentUser && currentUser.displayName) || 'Student')}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Batch / Group</span>
-                        <span style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">${result.batch || result.targetGroup || 'Both'}</span>
+                        <span style="font-weight: 700; color: #1e3c72; font-size: 0.95rem;">${escapeHtml(result.batch || result.targetGroup || 'Both')}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Date Evaluated</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${date}</span>
+                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${escapeHtml(date)}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Class</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${result.class || 'N/A'}</span>
+                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${escapeHtml(result.class || 'N/A')}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                         <span style="font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Subject</span>
-                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${result.subject || 'Practice Test'}</span>
+                        <span style="font-weight: 700; color: #2d3748; font-size: 0.95rem;">${escapeHtml(result.subject || 'Practice Test')}</span>
                     </div>
                 </div>
 

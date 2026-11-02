@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getVertexAccessToken } from './vertex-auth.js';
+import { handleCors, validateInvocation, verifyAuth, checkRateLimit, sendError } from './_security.js';
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -26,38 +27,7 @@ try {
     console.warn("Env force load error:", e.message);
 }
 
-// ===== Admin Detection =====
-const DEFAULT_ADMIN_EMAILS = [
-    "kaushtubh457@gmail.com",
-    "jatinthacker000@gmail.com",
-    "pathak.amitkumar@hrjohnsonindia.com"
-];
-
-function getAdminEmails() {
-    let emails = [...DEFAULT_ADMIN_EMAILS];
-    if (process.env.ADMIN_EMAILS) {
-        process.env.ADMIN_EMAILS.split(',').forEach(e => {
-            const clean = e.trim().toLowerCase();
-            if (clean && !emails.includes(clean)) emails.push(clean);
-        });
-    }
-    return emails;
-}
-
-function checkIsAdmin(email, gateToken) {
-    if (email) {
-        const cleanEmail = email.toLowerCase().trim();
-        const adminList = getAdminEmails();
-        if (adminList.includes(cleanEmail) || cleanEmail.includes('admin')) return true;
-    }
-    if (gateToken) {
-        try {
-            const raw = Buffer.from(gateToken, 'base64').toString('utf8');
-            if (raw.toLowerCase().includes('admin') || raw.toLowerCase().includes('jatin')) return true;
-        } catch (_) { }
-    }
-    return false;
-}
+// ===== Admin Detection & Auth Managed via api/_security.js =====
 
 // ===== CBSE 2.0.0-PROD Zero-Error Rules Matrix =====
 let cbseRules = null;
@@ -119,115 +89,44 @@ function getUniversalGuardrails() {
 `;
 }
 
-// ===== Multi-Tier Sliding Window Rate Limiter =====
-// Admin: Unlimited requests
-// Normal Users: Max 4 requests per rolling 60s, Max 25 requests per rolling 24 hours
-const ocrRateLimitMap = new Map();
-const OCR_MINUTE_WINDOW_MS = 60 * 1000;
-const OCR_DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
-const OCR_MAX_PER_MINUTE = Number(process.env.RATE_LIMIT_PER_MINUTE) || 4; // Max 4 per min for normal users
-const OCR_MAX_PER_DAY = Number(process.env.RATE_LIMIT_PER_DAY) || 25;       // Max 25 per day for normal users
-
-function checkOcrRateLimit(clientKey, isAdminUser) {
-    if (isAdminUser) {
-        return { limited: false, reason: null, waitSeconds: 0 };
-    }
-
-    const now = Date.now();
-    let record = ocrRateLimitMap.get(clientKey);
-    if (!record) {
-        record = { minuteTimes: [], dayTimes: [] };
-    }
-
-    // Filter timestamps within rolling windows
-    record.minuteTimes = record.minuteTimes.filter(t => (now - t) < OCR_MINUTE_WINDOW_MS);
-    record.dayTimes = record.dayTimes.filter(t => (now - t) < OCR_DAY_WINDOW_MS);
-
-    // 1. Check Minute Limit (max 4 per minute)
-    if (record.minuteTimes.length >= OCR_MAX_PER_MINUTE) {
-        const oldestTime = record.minuteTimes[0];
-        const waitSeconds = Math.max(1, Math.ceil((oldestTime + OCR_MINUTE_WINDOW_MS - now) / 1000));
-        return { limited: true, reason: 'minute', waitSeconds };
-    }
-
-    // 2. Check Daily Limit (max 25 per day)
-    if (record.dayTimes.length >= OCR_MAX_PER_DAY) {
-        const oldestTime = record.dayTimes[0];
-        const waitHours = Math.max(1, Math.ceil((oldestTime + OCR_DAY_WINDOW_MS - now) / (1000 * 60 * 60)));
-        return { limited: true, reason: 'day', waitHours };
-    }
-
-    record.minuteTimes.push(now);
-    record.dayTimes.push(now);
-    ocrRateLimitMap.set(clientKey, record);
-
-    // Prune stale client records periodically
-    if (ocrRateLimitMap.size > 500) {
-        for (const [key, rec] of ocrRateLimitMap.entries()) {
-            if (rec.dayTimes.every(t => (now - t) >= OCR_DAY_WINDOW_MS)) {
-                ocrRateLimitMap.delete(key);
-            }
-        }
-    }
-
-    return { limited: false, reason: null, waitSeconds: 0 };
-}
-
 export default async function handler(req, res) {
     console.log("📸 OCR-EVALUATE HANDLER STARTED");
 
-    // ===== CORS =====
-    const allowedOrigins = [
-        "https://nerd-tutors.vercel.app",
-        "https://nerd-tutors-two.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:5000"
-    ];
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-    }
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Gate-Token, X-User-Email");
+    // ===== CORS & Security Pre-flight =====
+    if (handleCors(req, res)) return;
+    if (validateInvocation(req, res)) return;
 
-    if (req.method === "OPTIONS") return res.status(200).end();
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-    // ===== Gate Security Check Disabled (Direct Access) =====
-    const gateToken = req.headers['x-gate-token'] || "";
+    // ===== Mandatory User Authentication =====
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+        return res.status(401).json({
+            error: "Unauthorized",
+            message: authResult.error || "Authentication required. Please log in to evaluate answer sheets."
+        });
+    }
+
+    // ===== Tiered Rate Limiting =====
+    const rateLimitResult = checkRateLimit(req, authResult.user);
+    if (!rateLimitResult.allowed) {
+        res.setHeader("Retry-After", rateLimitResult.retryAfterSeconds);
+        return res.status(429).json({
+            error: "Too Many Requests",
+            message: rateLimitResult.message,
+            retryAfterSeconds: rateLimitResult.retryAfterSeconds
+        });
+    }
+
+    const isAdminUser = Boolean(authResult.user?.isAdmin);
+    if (isAdminUser) {
+        console.log(`👑 [Admin Access] Unlimited evaluations granted for: ${authResult.user.email || authResult.user.username || 'Authenticated Admin'}`);
+    }
 
     // ===== Parse Body =====
     let body = req.body;
     if (typeof body === "string") {
         try { body = JSON.parse(body); } catch (_) { body = {}; }
-    }
-
-    // ===== Admin Detection & Rate Limiting =====
-    const userEmail = req.headers['x-user-email'] || body?.userEmail || body?.studentEmail || "";
-    const isAdminUser = checkIsAdmin(userEmail, gateToken);
-
-    const clientIdentifier = userEmail || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown_client';
-
-    if (isAdminUser) {
-        console.log(`👑 [Admin Access] Unlimited evaluations granted for: ${userEmail || 'Authenticated Admin'}`);
-    } else {
-        const rateCheck = checkOcrRateLimit(clientIdentifier, false);
-        if (rateCheck.limited) {
-            if (rateCheck.reason === 'minute') {
-                console.warn(`🛑 [Rate Limit: Minute] User ${clientIdentifier} exceeded 4 req/min. Wait ${rateCheck.waitSeconds}s.`);
-                res.setHeader('Retry-After', rateCheck.waitSeconds);
-                return res.status(429).json({
-                    error: "Rate limit exceeded",
-                    message: `Evaluation rate limit reached (maximum ${OCR_MAX_PER_MINUTE} evaluations per minute). Please wait ${rateCheck.waitSeconds} seconds before scanning another paper.`
-                });
-            } else if (rateCheck.reason === 'day') {
-                console.warn(`🛑 [Rate Limit: Day] User ${clientIdentifier} exceeded daily quota of ${OCR_MAX_PER_DAY} evaluations.`);
-                return res.status(429).json({
-                    error: "Daily limit reached",
-                    message: `Daily evaluation limit reached (${OCR_MAX_PER_DAY} of ${OCR_MAX_PER_DAY} evaluations used today). Please try again tomorrow or contact your teacher.`
-                });
-            }
-        }
     }
 
     // ===== Validate API Key =====

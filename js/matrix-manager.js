@@ -5,14 +5,13 @@ import { formatExamName } from './student-progress-chart.js';
 // with full cross-sectional analytics, drawer flyouts, and CSV export.
 // ============================================
 
-function escapeHtml(text) {
-    if (typeof text !== 'string') return text;
-    return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+export function escapeHtml(str) {
+    if (!str && str !== 0) return '';
+    return String(str).replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
+}
+if (typeof window !== 'undefined') {
+    window.escapeHtml = escapeHtml;
 }
 
 let matrixState = {
@@ -159,7 +158,7 @@ export function populateMatrixSessionDropdown(sessions) {
     let html = '<option value="all">All Test Sessions (Combined View)</option>';
     filtered.forEach(s => {
         const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` - ${s.examSet}` : '';
-        html += `<option value="${s.id}">${escapeHtml(formatExamName(s.name))}${setTag} (${s.class} - ${s.subject})</option>`;
+        html += `<option value="${escapeHtml(s.id)}">${escapeHtml(formatExamName(s.name))}${escapeHtml(setTag)} (${escapeHtml(s.class)} - ${escapeHtml(s.subject)})</option>`;
     });
 
     sessionSelect.innerHTML = html;
@@ -415,7 +414,7 @@ export function renderQuestionMatrix(results) {
         const totalScored = st.score !== undefined ? st.score : (st.totalScore || 0);
         const maxMarks = st.maxMarks || 40;
         theadHtml += `
-            <th class="th-student" onclick="window.setStudentProgressName &amp;&amp; window.setStudentProgressName('${escapeHtml(st.studentName)}')" style="cursor: pointer;" title="Click to load progress chart for ${escapeHtml(st.studentName)}">
+            <th class="th-student" data-student-name="${encodeURIComponent(st.studentName)}" style="cursor: pointer;" title="Click to load progress chart for ${escapeHtml(st.studentName)}">
                 <div style="font-size: 0.95rem; font-weight: 700; color: #1e293b;">${escapeHtml(st.studentName)}</div>
                 <div style="margin-top: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
                     <span style="background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">${escapeHtml(batchTag)}</span>
@@ -430,6 +429,15 @@ export function renderQuestionMatrix(results) {
         </tr>
     `;
     tableHead.innerHTML = theadHtml;
+    tableHead.onclick = (e) => {
+        const th = e.target.closest('.th-student');
+        if (th && th.dataset.studentName) {
+            const studentName = decodeURIComponent(th.dataset.studentName);
+            if (typeof window.setStudentProgressName === 'function') {
+                window.setStudentProgressName(studentName);
+            }
+        }
+    };
 
     // 8. Render Matrix Body (<tbody>)
     let tbodyHtml = '';

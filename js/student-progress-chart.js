@@ -12,6 +12,15 @@ let mode = "pct"; // "pct" or "marks"
 const H = 320;
 let tip = null;
 
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+export function escapeHtml(str) {
+    if (!str && str !== 0) return '';
+    return String(str).replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
+}
+if (typeof window !== 'undefined') {
+    window.escapeHtml = escapeHtml;
+}
+
 const SUBJECT_THEMES = {
     "Economics": { color: "#4f46e5", bg: "#eef2ff", border: "#c7d2fe", icon: "📘", barBg: "linear-gradient(180deg, #6366f1 0%, #4f46e5 100%)" },
     "Business Studies": { color: "#d97706", bg: "#fffbeb", border: "#fde68a", icon: "📙", barBg: "linear-gradient(180deg, #f59e0b 0%, #d97706 100%)" },
@@ -275,7 +284,7 @@ function render() {
         const subjectsInView = [...new Set(displayedExams.map(e => e.subject))];
         legendEl.innerHTML = subjectsInView.map(sub => {
             const theme = getTheme(sub);
-            return `<span><i style="background:${theme.color}"></i>${sub}</span>`;
+            return `<span><i style="background:${theme.color}"></i>${escapeHtml(sub)}</span>`;
         }).join("");
     }
 
@@ -318,8 +327,8 @@ function renderSubjectTabs(subjectsList, counts, totalCount) {
         const theme = getTheme(sub);
         const isActive = activeSubject === sub;
         html += `
-            <button type="button" class="progress-subject-pill ${isActive ? 'active' : ''}" data-subject="${sub}">
-                <span>${theme.icon} ${sub}</span>
+            <button type="button" class="progress-subject-pill ${isActive ? 'active' : ''}" data-subject="${escapeHtml(sub)}">
+                <span>${theme.icon} ${escapeHtml(sub)}</span>
                 <span class="pill-count">${counts[sub] || 0}</span>
             </button>
         `;
@@ -353,9 +362,9 @@ function renderExamChips(examsList) {
     container.innerHTML = examsList.map(e => {
         const isSelected = !deselectedExamIds.has(e.id);
         return `
-            <button type="button" class="progress-exam-chip ${isSelected ? 'selected' : ''}" data-id="${e.id}">
+            <button type="button" class="progress-exam-chip ${isSelected ? 'selected' : ''}" data-id="${escapeHtml(e.id)}">
                 <span class="check-icon">${isSelected ? '✓' : '+'}</span>
-                <span>${e.name}</span>
+                <span>${escapeHtml(e.name)}</span>
             </button>
         `;
     }).join('');
@@ -492,13 +501,13 @@ function renderPlot(examsList) {
         // Hover Tooltip
         const tipHtml = `
             <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; margin-bottom: 2px;">
-                ${theme.icon} ${e.subject}
+                ${theme.icon} ${escapeHtml(e.subject)}
             </div>
-            <strong style="font-size: 0.95rem; color: #ffffff;">${e.name}</strong>
+            <strong style="font-size: 0.95rem; color: #ffffff;">${escapeHtml(e.name)}</strong>
             <div style="margin-top: 6px; font-size: 0.85rem; color: #38bdf8; font-weight: 700;">
                 Score: ${e.score} / ${e.maxMarks} (${e.pct}%)
             </div>
-            ${e.date ? `<div style="font-size: 0.74rem; opacity: 0.7; margin-top: 2px;">Date: ${e.date}</div>` : ''}
+            ${e.date ? `<div style="font-size: 0.74rem; opacity: 0.7; margin-top: 2px;">Date: ${escapeHtml(e.date)}</div>` : ''}
         `;
         st.addEventListener("pointerenter", ev => {
             st.style.transform = "scaleX(1.05) translateY(-3px)";
@@ -517,10 +526,10 @@ function renderPlot(examsList) {
         lbl.style.whiteSpace = "normal";
         lbl.style.wordBreak = "break-word";
         lbl.innerHTML = `
-            <strong style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25;" title="${e.rawName}">
-                ${e.name}
+            <strong style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25;" title="${escapeHtml(e.rawName)}">
+                ${escapeHtml(e.name)}
             </strong>
-            <small>out of ${e.maxMarks}${e.date ? ' · ' + e.date : ''}</small>
+            <small>out of ${escapeHtml(e.maxMarks)}${e.date ? ' · ' + escapeHtml(e.date) : ''}</small>
         `;
 
         col.appendChild(tot);
@@ -557,7 +566,7 @@ export function loadRealDataIntoProgressChart(testResults, targetStudent = null)
     if (selectEl && availableStudents.length > 0) {
         const currentVal = targetStudent || selectEl.value;
         selectEl.innerHTML = availableStudents.map(s =>
-            `<option value="${s}" ${s === currentVal ? 'selected' : ''}>${s}</option>`
+            `<option value="${escapeHtml(s)}" ${s === currentVal ? 'selected' : ''}>${escapeHtml(s)}</option>`
         ).join('');
     }
 
