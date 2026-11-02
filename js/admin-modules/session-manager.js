@@ -54,6 +54,7 @@ import {
 
 import { showToast, escapeHtml, syncClassSubjects } from './admin-utils.js';
 import { smartExtractPdf, runExtractionDiagnosticTest, initPdfJs } from './pdf-extractor.js';
+import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 
 export async function createTestSession() {
     const btn = document.getElementById('btnCreateSession');
@@ -2238,14 +2239,11 @@ async function cacheTestSession(id) {
         }
 
         showToast("⚡ Building Gemini Context Cache for 75% savings...", "info");
-        const gateToken = localStorage.getItem('gate_token') || '';
+        const authHeaders = await getNerdAuthHeaders();
 
-        const res = await fetch('/api/create-cache', {
+        const res = await fetch(apiUrl('/api/create-cache'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Gate-Token': gateToken
-            },
+            headers: authHeaders,
             body: JSON.stringify({
                 sessionId: id,
                 examName: data.name,

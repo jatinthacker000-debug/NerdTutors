@@ -15,6 +15,7 @@ import {
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { showToast, escapeHtml } from './admin-utils.js';
+import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 
 let gateCredentialsCache = [];
 let isGateManagerInitialized = false;
@@ -86,7 +87,8 @@ export async function loadGateCredentials() {
  */
 async function loadFromBackendApi(listBody, isPermissionNotice = false) {
     try {
-        const res = await fetch('/api/manage-gate');
+        const authHeaders = await getNerdAuthHeaders();
+        const res = await fetch(apiUrl('/api/manage-gate'), { headers: authHeaders });
         if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data.credentials) && data.credentials.length > 0) {
@@ -124,7 +126,8 @@ export async function shiftCredentialsToFirebase() {
     try {
         let count = 0;
         // Fetch all active credentials from backend
-        const res = await fetch('/api/manage-gate');
+        const authHeaders = await getNerdAuthHeaders();
+        const res = await fetch(apiUrl('/api/manage-gate'), { headers: authHeaders });
         if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data.credentials)) {
@@ -167,9 +170,10 @@ export async function shiftCredentialsToFirebase() {
  */
 async function syncCredentialsToBackend(credsList) {
     try {
-        await fetch('/api/manage-gate', {
+        const authHeaders = await getNerdAuthHeaders();
+        await fetch(apiUrl('/api/manage-gate'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({
                 action: 'sync',
                 credentials: credsList.map(c => ({
@@ -323,9 +327,10 @@ function setupEventListeners() {
                 } catch (_) {}
 
                 // Always persist via backend API
-                const res = await fetch('/api/manage-gate', {
+                const authHeaders = await getNerdAuthHeaders();
+                const res = await fetch(apiUrl('/api/manage-gate'), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders,
                     body: JSON.stringify({
                         action: 'add',
                         username,
@@ -394,9 +399,10 @@ function setupEventListeners() {
                 } catch (_) {}
 
                 // Update via backend API
-                const res = await fetch('/api/manage-gate', {
+                const authHeaders = await getNerdAuthHeaders();
+                const res = await fetch(apiUrl('/api/manage-gate'), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders,
                     body: JSON.stringify({
                         action: 'update',
                         username,
@@ -524,9 +530,10 @@ window.deleteGateKey = async function(username) {
         } catch (_) {}
 
         // Deletion from backend API
-        const res = await fetch('/api/manage-gate', {
+        const authHeaders = await getNerdAuthHeaders();
+        const res = await fetch(apiUrl('/api/manage-gate'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({ action: 'delete', username: username, id: username })
         });
 

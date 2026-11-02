@@ -22,6 +22,7 @@ import {
     orderBy
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { showToast, escapeHtml } from './admin-utils.js';
+import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 
 let bundleSessionsList = [];
 let selectedBundleSession = null;
@@ -589,9 +590,10 @@ async function submitGoogleBatchJob() {
                 students: studentsPayload
             };
 
-            const res = await fetch('/api/batch-evaluate', {
+            const authHeaders = await getNerdAuthHeaders();
+            const res = await fetch(apiUrl('/api/batch-evaluate'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify(requestBody)
             });
 
@@ -692,7 +694,10 @@ async function submitGoogleBatchJob() {
             console.log("🔄 Fetching batch jobs from Google Cloud Vertex AI...");
             let liveJobs = [];
             try {
-                const res = await fetch('/api/batch-evaluate?action=list');
+                const authHeaders = await getNerdAuthHeaders();
+                const res = await fetch(apiUrl('/api/batch-evaluate?action=list'), {
+                    headers: authHeaders
+                });
                 const contentType = res.headers?.get('content-type') || '';
                 if (res.ok && contentType.includes('application/json')) {
                     const data = await res.json();
@@ -1112,7 +1117,10 @@ async function submitGoogleBatchJob() {
 
             // 1. Check status on Google Vertex AI
             console.log("📡 Step 1: Polling Vertex AI batch status...");
-            const statusRes = await fetch(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`);
+            const authHeaders = await getNerdAuthHeaders();
+            const statusRes = await fetch(apiUrl(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`), {
+                headers: authHeaders
+            });
             const statusData = await statusRes.json();
             console.log("📡 Status Response from Google Cloud:", statusData);
 
@@ -1195,9 +1203,10 @@ async function submitGoogleBatchJob() {
                 });
 
                 console.log("📥 Step 2: Requesting parsed results from /api/batch-evaluate (action: sync)...");
-                const syncRes = await fetch('/api/batch-evaluate', {
+                const syncAuthHeaders = await getNerdAuthHeaders();
+                const syncRes = await fetch(apiUrl('/api/batch-evaluate'), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: syncAuthHeaders,
                     body: JSON.stringify({
                         action: 'sync',
                         batchId: batchId,
@@ -1330,9 +1339,10 @@ async function submitGoogleBatchJob() {
     async function deleteBatchJob(docId) {
         if (!confirm("Are you sure you want to delete this batch job record from the registry?")) return;
         try {
-            const res = await fetch('/api/batch-evaluate', {
+            const authHeaders = await getNerdAuthHeaders();
+            const res = await fetch(apiUrl('/api/batch-evaluate'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify({ action: 'delete', batchId: docId })
             });
             if (!res.ok) throw new Error("Failed to delete batch job");
@@ -1346,9 +1356,10 @@ async function submitGoogleBatchJob() {
     async function downloadBatchPredictions(batchId, docId) {
         try {
             showToast("Fetching batch prediction records...", "info");
-            const res = await fetch('/api/batch-evaluate', {
+            const authHeaders = await getNerdAuthHeaders();
+            const res = await fetch(apiUrl('/api/batch-evaluate'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify({
                     action: 'sync',
                     batchId: batchId

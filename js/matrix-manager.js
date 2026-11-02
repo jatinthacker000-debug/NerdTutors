@@ -1,4 +1,5 @@
 import { formatExamName } from './student-progress-chart.js';
+import { getNerdAuthHeaders, apiUrl } from './client-auth.js';
 // ============================================
 // QUESTION PERFORMANCE MATRIX MODULE
 // Generates and manages the Question-by-Student Marks Grid
@@ -604,9 +605,10 @@ export async function triggerTopicAnalysisForSession(sessionId) {
     }
 
     try {
-        const res = await fetch('/api/analyze-topics', {
+        const authHeaders = await getNerdAuthHeaders();
+        const res = await fetch(apiUrl('/api/analyze-topics'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({
                 sessionId: session.id,
                 questions: session.questions || '',

@@ -4,6 +4,7 @@
 // 1. Client-Side Fast PDF.js Digital Parser (<500ms, 0 API cost)
 // 2. Multimodal Gemini/AI Vision Document OCR (/api/extract-pdf)
 // 3. Automated Real-Time Quality Guard & Self-Test Suite
+import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 function escapeHtml(str) {
     if (typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -131,12 +132,10 @@ export async function extractWithAiVision(file, extractType, metadata = {}, onPr
         });
     }
 
-    const response = await fetch('/api/extract-pdf', {
+    const authHeaders = await getNerdAuthHeaders();
+    const response = await fetch(apiUrl('/api/extract-pdf'), {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(gateToken ? { 'X-Gate-Token': gateToken } : {})
-        },
+        headers: authHeaders,
         body: JSON.stringify({
             pdfBase64: base64File.data,
             extractType: extractType || 'questions',
@@ -361,12 +360,10 @@ export async function runExtractionDiagnosticTest() {
     // Test 3: Ping Backend API (/api/extract-pdf)
     try {
         const startTime = performance.now();
-        const res = await fetch('/api/extract-pdf', {
+        const authHeaders = await getNerdAuthHeaders();
+        const res = await fetch(apiUrl('/api/extract-pdf'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(gateToken ? { 'X-Gate-Token': gateToken } : {})
-            },
+            headers: authHeaders,
             body: JSON.stringify({ action: 'self-test' })
         });
         const elapsed = Math.round(performance.now() - startTime);
