@@ -383,18 +383,54 @@ export function renderQuestionMatrix(results) {
     let sortedQuestions = Array.from(questionIndex.keys()).sort(naturalQuestionSort);
 
     // Filter questions based on Question Filter mode
-    if (qTypeVal === 'mistakes') {
+    if (qTypeVal === 'weak') {
         sortedQuestions = sortedQuestions.filter(qNum => {
             const q = questionIndex.get(qNum);
+            if (!q) return false;
+            let earned = 0;
+            let possible = 0;
+            q.responses.forEach(resp => {
+                earned += Number(resp.score) || 0;
+                possible += Number(resp.maxMarks) || q.maxMarks || 1;
+            });
+            return possible > 0 && (earned / possible) < 0.60;
+        });
+    } else if (qTypeVal === 'critical') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            if (!q) return false;
+            let earned = 0;
+            let possible = 0;
+            q.responses.forEach(resp => {
+                earned += Number(resp.score) || 0;
+                possible += Number(resp.maxMarks) || q.maxMarks || 1;
+            });
+            return possible > 0 && (earned / possible) < 0.40;
+        });
+    } else if (qTypeVal === 'mcq') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            return q && q.maxMarks === 1;
+        });
+    } else if (qTypeVal === 'subjective') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            return q && q.maxMarks > 1;
+        });
+    } else if (qTypeVal === 'mistakes') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            if (!q) return false;
             // Include question if at least one student scored less than maxMarks
-            return Array.from(q.responses.values()).some(resp => resp.score < resp.maxMarks);
+            return Array.from(q.responses.values()).some(resp => (Number(resp.score) || 0) < (Number(resp.maxMarks) || q.maxMarks));
         });
     } else if (qTypeVal === 'full') {
         sortedQuestions = sortedQuestions.filter(qNum => {
             const q = questionIndex.get(qNum);
+            if (!q) return false;
             // Include question only if every student scored full marks
             const resps = Array.from(q.responses.values());
-            return resps.length > 0 && resps.every(resp => resp.score >= resp.maxMarks);
+            return resps.length > 0 && resps.every(resp => (Number(resp.score) || 0) >= (Number(resp.maxMarks) || q.maxMarks));
         });
     }
 
@@ -963,9 +999,28 @@ function updateMatrixKpis(students, questions, questionIndex) {
     if (studentsEl) studentsEl.textContent = students.length;
     if (questionsEl) questionsEl.textContent = questions.length;
 
+    const toughestCard = toughestQEl ? (toughestQEl.closest('.kpi-card') || toughestQEl.parentElement) : null;
+    const easiestCard = easiestQEl ? (easiestQEl.closest('.kpi-card') || easiestQEl.parentElement) : null;
+
     if (!questions || questions.length === 0 || !questionIndex) {
-        if (toughestQEl) toughestQEl.textContent = '-';
-        if (easiestQEl) easiestQEl.textContent = '-';
+        if (toughestQEl) {
+            toughestQEl.textContent = '-';
+            toughestQEl.style.cursor = 'default';
+        }
+        if (toughestCard) {
+            toughestCard.style.cursor = 'default';
+            toughestCard.title = '';
+            toughestCard.onclick = null;
+        }
+        if (easiestQEl) {
+            easiestQEl.textContent = '-';
+            easiestQEl.style.cursor = 'default';
+        }
+        if (easiestCard) {
+            easiestCard.style.cursor = 'default';
+            easiestCard.title = '';
+            easiestCard.onclick = null;
+        }
         return;
     }
 
@@ -1000,10 +1055,43 @@ function updateMatrixKpis(students, questions, questionIndex) {
     if (toughestQEl && toughestQ) {
         toughestQEl.textContent = `${toughestQ.qNum} (${toughestQ.pct}%)`;
         if (toughestQSub) toughestQSub.textContent = `Lowest accuracy across class`;
+        if (toughestCard) {
+            toughestCard.style.cursor = 'pointer';
+            toughestCard.title = `Click to inspect Question ${toughestQ.qNum} drilldown`;
+            toughestCard.onclick = () => window.openWeakQuestionDrilldown(toughestQ.qNum);
+        }
+        toughestQEl.style.cursor = 'pointer';
+    } else {
+        if (toughestQEl) {
+            toughestQEl.textContent = '-';
+            toughestQEl.style.cursor = 'default';
+        }
+        if (toughestCard) {
+            toughestCard.style.cursor = 'default';
+            toughestCard.title = '';
+            toughestCard.onclick = null;
+        }
     }
+
     if (easiestQEl && easiestQ) {
         easiestQEl.textContent = `${easiestQ.qNum} (${easiestQ.pct}%)`;
         if (easiestQSub) easiestQSub.textContent = `Highest accuracy across class`;
+        if (easiestCard) {
+            easiestCard.style.cursor = 'pointer';
+            easiestCard.title = `Click to inspect Question ${easiestQ.qNum} drilldown`;
+            easiestCard.onclick = () => window.openWeakQuestionDrilldown(easiestQ.qNum);
+        }
+        easiestQEl.style.cursor = 'pointer';
+    } else {
+        if (easiestQEl) {
+            easiestQEl.textContent = '-';
+            easiestQEl.style.cursor = 'default';
+        }
+        if (easiestCard) {
+            easiestCard.style.cursor = 'default';
+            easiestCard.title = '';
+            easiestCard.onclick = null;
+        }
     }
 }
 
@@ -1094,12 +1182,43 @@ if (typeof window !== 'undefined') {
         let modelAns = '';
 
         if (activeSession) {
+            // Helper to extract question/answer text from plain text blocks with leaf-subpart matching
+            const matchInText = (text, targetQ) => {
+                if (!text || typeof text !== 'string') return '';
+                // 1. First attempt exact leaf-level match for qNum (e.g. Q17(a) or 17(a)) by escaping parentheses
+                const cleanNum = targetQ.replace(/^q\s*\.?\s*/i, '').trim();
+                const escapedLeaf = cleanNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const flexLeaf = escapedLeaf.replace(/\\\(/g, '\\s*\\(');
+                const escapedExact = targetQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+                const leafPattern = `(?:(?:q\\.?|question\\s*)?${escapedExact}|(?:q\\.?|question\\s*)${flexLeaf}|(?:^|\\n)\\s*${flexLeaf})`;
+                const regLeaf = new RegExp(`${leafPattern}[^\\n]*(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*`, 'i');
+                const mLeaf = text.match(regLeaf);
+                if (mLeaf && mLeaf[0].trim()) {
+                    return mLeaf[0].trim();
+                }
+
+                // 2. If not found, fallback to digit-only regex
+                const qRawNum = targetQ.replace(/\D/g, '');
+                if (qRawNum) {
+                    const regDigit = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*`, 'i');
+                    const mDigit = text.match(regDigit);
+                    if (mDigit && mDigit[0].trim()) {
+                        return mDigit[0].trim();
+                    }
+                    const regFallback = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*\\n([^\\n]+(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*)`, 'i');
+                    const mFb = text.match(regFallback);
+                    if (mFb && mFb[0].trim()) {
+                        return mFb[0].trim();
+                    }
+                }
+                return '';
+            };
+
             if (!qPrompt && activeSession.questions) {
                 if (typeof activeSession.questions === 'string') {
-                    const qRawNum = qNum.replace(/\D/g, '');
-                    const reg = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*\\n([^\\n]+(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*)`, 'i');
-                    const m = activeSession.questions.match(reg);
-                    if (m) qPrompt = m[0].trim();
+                    const extracted = matchInText(activeSession.questions, qNum);
+                    if (extracted) qPrompt = extracted;
                 } else if (Array.isArray(activeSession.questions)) {
                     const foundQ = activeSession.questions.find(q => {
                         const idStr = String(q.id || q.questionNumber || q.qNo || '');
@@ -1114,10 +1233,8 @@ if (typeof window !== 'undefined') {
 
             if (!modelAns && activeSession.markingScheme) {
                 if (typeof activeSession.markingScheme === 'string') {
-                    const qRawNum = qNum.replace(/\D/g, '');
-                    const regAns = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*\\n([^\\n]+(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*)`, 'i');
-                    const mAns = activeSession.markingScheme.match(regAns);
-                    if (mAns) modelAns = mAns[0].trim();
+                    const extracted = matchInText(activeSession.markingScheme, qNum);
+                    if (extracted) modelAns = extracted;
                     else modelAns = activeSession.markingScheme;
                 }
             }

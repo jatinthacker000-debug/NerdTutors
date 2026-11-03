@@ -701,11 +701,9 @@ Return STRICT JSON:
     // Package each student into an inline GenerateContentRequest
     const inlinedRequests = students.map((st, idx) => {
         const studentName = st.studentName || `Student ${idx + 1}`;
-        const studentPrompt = `STUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}
-(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")
-
-${promptBase}`;
-        const parts = [{ text: studentPrompt }];
+        const candidateSuffix = `\n\n--- EVALUATION TARGET ---\nSTUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}\n(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")\nEvaluate the student's handwritten answer sheet pages below against the master criteria above.`;
+        // Static promptBase MUST come FIRST at Token 0 to trigger Google Cloud Vertex AI implicit prefix KV-caching across all students!
+        const parts = [{ text: promptBase + candidateSuffix }];
 
         if (Array.isArray(st.pages)) {
             st.pages.forEach(p => {
