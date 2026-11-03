@@ -390,7 +390,6 @@ Return STRICT JSON only (no markdown, no code blocks):
   "totalScore": <number>,
   "maxMarks": ${mm},
   "overallFeedback": "Concise 2-sentence executive summary of student strengths and core areas to improve.",
-  "rawTranscription": "Full raw text transcription of the student's answer sheet",
   "improvements": [
     "1-2 high-impact bullet points (max 2 items)"
   ],
@@ -402,7 +401,6 @@ Return STRICT JSON only (no markdown, no code blocks):
       "studentOption": "<uppercase letter A/B/C/D if MCQ, else null>",
       "correctOption": "<uppercase letter A/B/C/D from marking scheme if MCQ, else null>",
       "stanceCorrect": "<boolean true/false if Defend/Refute question, else null>",
-      "rawStudentText": "<verbatim transcription of student's answer for this question>",
       "studentAnswerText": "Brief quote IF marks lost, else \"\"",
       "feedback": "Concise 1-2 sentence feedback.",
       "score": <number - actual marks awarded to student, between 0 and maxMarks>,
@@ -1125,16 +1123,7 @@ Return the response as a strict JSON object.`;
 
             result.totalScore = calculatedTotal;
 
-            // Ensure rawTranscription is populated
-            if (!result.rawTranscription && Array.isArray(result.results)) {
-                const combinedRaw = result.results
-                    .map(r => r.rawStudentText || r.studentAnswerText || "")
-                    .filter(Boolean)
-                    .join("\n\n");
-                if (combinedRaw) {
-                    result.rawTranscription = combinedRaw;
-                }
-            }
+            
         }
 
         // Add metadata about the model used and tokens burned
