@@ -180,12 +180,17 @@ Return STRICT JSON in the following format:
   "totalScore": <number>,
   "maxMarks": ${maxMarks || 40},
   "overallFeedback": "<comprehensive 2-sentence performance summary>",
+  "rawTranscription": "<full raw text transcription of the student's answer sheet>",
   "improvements": ["1-2 high-impact bullet points"],
   "results": [
     {
       "questionNumber": "Q1",
       "questionText": "",
       "maxMarks": <number - immutable question weight>,
+      "studentOption": "<uppercase letter A/B/C/D if MCQ, else null>",
+      "correctOption": "<uppercase letter A/B/C/D from marking scheme if MCQ, else null>",
+      "stanceCorrect": "<boolean true/false if Defend/Refute question, else null>",
+      "rawStudentText": "<verbatim transcription of student's answer for this question>",
       "studentAnswerText": "<brief quote if marks lost, else ''>",
       "feedback": "<concise feedback under 15 words>",
       "score": <number - awarded marks>,

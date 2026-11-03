@@ -402,6 +402,9 @@ export function renderQuestionMatrix(results) {
     updateMatrixKpis(activeStudents, sortedQuestions, questionIndex);
 
     const activeSession = matrixState.sessions.find(s => s.id === sessionVal);
+    matrixState.lastQuestionIndex = questionIndex;
+    matrixState.activeSession = activeSession;
+    matrixState.activeStudents = activeStudents;
 
     // 7. Render Matrix Header (<thead>)
     let theadHtml = `
@@ -643,6 +646,11 @@ export async function triggerTopicAnalysisForSession(sessionId) {
 
         // Re-render
         renderTopicAnalysis(session, matrixState.questionIndex, matrixState.activeQuestions);
+
+        // Sync with Students Hub in real-time
+        if (typeof window.renderStudentsPage === 'function') {
+            window.renderStudentsPage();
+        }
     } catch (err) {
         console.error('Topic analysis error:', err);
         alert(`Topic Analysis Notice: ${err.message}`);
@@ -795,7 +803,7 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
         const isVisible = defaultFilter === 'all' || defaultFilter === tier;
 
         return `
-            <div class="topic-q-card" data-tier="${tier}" style="background: #ffffff; border: 1.5px solid #e2e8f0; border-left: 5px solid ${accentBorder}; border-radius: 12px; padding: 1rem 1.15rem; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: transform 0.15s ease, box-shadow 0.15s ease; display: ${isVisible ? 'block' : 'none'};" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.06)';" onmouseleave="this.style.transform='none'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.03)';">
+            <div class="topic-q-card" data-tier="${tier}" onclick="window.openWeakQuestionDrilldown('${escapeHtml(q.qNum)}')" style="background: #ffffff; border: 1.5px solid #e2e8f0; border-left: 5px solid ${accentBorder}; border-radius: 12px; padding: 1rem 1.15rem; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; display: ${isVisible ? 'block' : 'none'};" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.06)';" onmouseleave="this.style.transform='none'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.03)';">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem;">
                     <div style="flex: 1; min-width: 0;">
                         <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
@@ -826,6 +834,10 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
                     <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
                     <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong> (${q.responsesCount} responses)</span>
                 </div>
+
+                <button type="button" class="btn-inspect-responses" onclick="event.stopPropagation(); window.openWeakQuestionDrilldown('${escapeHtml(q.qNum)}')" style="width: 100%; margin-top: 0.75rem; padding: 0.45rem 0.75rem; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; color: #1e293b; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: all 0.2s ease;">
+                    <span>🔍</span> Inspect Responses (${q.responsesCount} Students)
+                </button>
             </div>
         `;
     }
@@ -1039,6 +1051,159 @@ if (typeof window !== 'undefined') {
 
         backdrop.classList.add('active');
     };
+
+    /**
+     * Open Weak-Question Drilldown Drawer showing Question, CBSE Answer, and student responses
+     */
+    window.openWeakQuestionDrilldown = function (qNum) {
+        if (!qNum) return;
+        const backdrop = document.getElementById('weakQuestionDrilldownBackdrop');
+        if (!backdrop) return;
+
+        const qRec = matrixState.lastQuestionIndex?.get(qNum);
+        const activeSession = matrixState.activeSession || matrixState.sessions?.find(s => s.id === document.getElementById('matrixSessionFilter')?.value) || matrixState.sessions?.[0];
+
+        const sessionLabel = document.getElementById('weakDrilldownSessionLabel');
+        if (sessionLabel) sessionLabel.textContent = activeSession ? formatExamName(activeSession.name) : 'Exam Session';
+
+        const qBadge = document.getElementById('weakDrilldownQBadge');
+        if (qBadge) qBadge.textContent = qNum;
+
+        const topicTitle = document.getElementById('weakDrilldownTopicTitle');
+        const topicName = resolveQuestionTopic(qNum, qRec, activeSession, matrixState.sessions);
+        if (topicTitle) topicTitle.textContent = topicName && topicName !== '-' ? topicName : `Question ${qNum}`;
+
+        const metaEl = document.getElementById('weakDrilldownMeta');
+        const maxMarks = qRec ? qRec.maxMarks : 1;
+
+        // Calculate accuracy for this question across responses
+        let earned = 0;
+        let possible = 0;
+        const responsesList = qRec && qRec.responses ? Array.from(qRec.responses.values()) : [];
+        responsesList.forEach(r => {
+            earned += Number(r.score) || 0;
+            possible += Number(r.maxMarks) || maxMarks;
+        });
+        const accPct = possible > 0 ? Math.round((earned / possible) * 100) : 0;
+        if (metaEl) {
+            metaEl.textContent = `${activeSession?.subject || 'Syllabus'} · Max Marks: ${maxMarks}M · Class Accuracy: ${accPct}% (${earned}/${possible} pts)`;
+        }
+
+        // Resolve question text and marking scheme model answer
+        let qPrompt = qRec?.text || '';
+        let modelAns = '';
+
+        if (activeSession) {
+            if (!qPrompt && activeSession.questions) {
+                if (typeof activeSession.questions === 'string') {
+                    const qRawNum = qNum.replace(/\D/g, '');
+                    const reg = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*\\n([^\\n]+(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*)`, 'i');
+                    const m = activeSession.questions.match(reg);
+                    if (m) qPrompt = m[0].trim();
+                } else if (Array.isArray(activeSession.questions)) {
+                    const foundQ = activeSession.questions.find(q => {
+                        const idStr = String(q.id || q.questionNumber || q.qNo || '');
+                        return idStr.toLowerCase().includes(qNum.toLowerCase());
+                    });
+                    if (foundQ) {
+                        qPrompt = foundQ.text || foundQ.question || '';
+                        modelAns = foundQ.modelAnswer || foundQ.markingScheme || foundQ.answer || '';
+                    }
+                }
+            }
+
+            if (!modelAns && activeSession.markingScheme) {
+                if (typeof activeSession.markingScheme === 'string') {
+                    const qRawNum = qNum.replace(/\D/g, '');
+                    const regAns = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*\\n([^\\n]+(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*)`, 'i');
+                    const mAns = activeSession.markingScheme.match(regAns);
+                    if (mAns) modelAns = mAns[0].trim();
+                    else modelAns = activeSession.markingScheme;
+                }
+            }
+        }
+
+        const qTextEl = document.getElementById('weakDrilldownQuestionText');
+        if (qTextEl) qTextEl.textContent = qPrompt || 'Refer to the test session question paper for full prompt statement.';
+
+        const modelAnsEl = document.getElementById('weakDrilldownModelAnswer');
+        if (modelAnsEl) modelAnsEl.textContent = modelAns || 'Refer to official CBSE marking scheme for key value points and solution guidelines.';
+
+        const countEl = document.getElementById('weakDrilldownCount');
+        if (countEl) countEl.textContent = responsesList.length;
+
+        // Sort responses with lowest score first (weakest students prioritized)
+        responsesList.sort((a, b) => {
+            const scoreA = Number(a.score) || 0;
+            const scoreB = Number(b.score) || 0;
+            return scoreA - scoreB;
+        });
+
+        const listEl = document.getElementById('weakDrilldownResponsesList');
+        if (listEl) {
+            if (responsesList.length === 0) {
+                listEl.innerHTML = '<div style="text-align: center; color: #64748b; padding: 2rem; font-style: italic;">No student responses recorded for this question yet.</div>';
+            } else {
+                listEl.innerHTML = responsesList.map(r => {
+                    const score = Number(r.score) || 0;
+                    const mMarks = Number(r.maxMarks) || maxMarks;
+                    let badgeBg = '#fef2f2';
+                    let badgeColor = '#991b1b';
+                    let badgeBorder = '#fecaca';
+                    let markIcon = '✗ Zero Marks';
+
+                    if (score >= mMarks) {
+                        badgeBg = '#f0fdf4';
+                        badgeColor = '#166534';
+                        badgeBorder = '#bbf7d0';
+                        markIcon = '✓ Full Marks';
+                    } else if (score > 0) {
+                        badgeBg = '#fffbeb';
+                        badgeColor = '#92400e';
+                        badgeBorder = '#fde68a';
+                        markIcon = '! Partial Marks';
+                    }
+
+                    return `
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #e0e7ff; color: #3730a3; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem;">
+                                        ${escapeHtml((r.studentName || 'A').charAt(0).toUpperCase())}
+                                    </div>
+                                    <div>
+                                        <strong style="color: #1e293b; font-size: 0.95rem;">${escapeHtml(r.studentName || 'Anonymous Student')}</strong>
+                                        <div style="font-size: 0.74rem; color: #64748b;">${escapeHtml(r.sessionName || '')}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.76rem;">
+                                        ${markIcon}
+                                    </span>
+                                    <span style="font-weight: 800; font-size: 1.05rem; color: #1e293b;">
+                                        ${score} / ${mMarks}M
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.65rem 0.85rem; font-size: 0.85rem; color: #334155; margin-bottom: 0.5rem; font-style: italic; white-space: pre-wrap;">
+                                <strong>Student's Written Answer:</strong> "${escapeHtml(r.studentAnswerText || r.rawStudentText || '(No answer text provided)')}"
+                            </div>
+
+                            <div style="font-size: 0.84rem; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 0.6rem 0.85rem;">
+                                <strong>Examiner Feedback:</strong> ${escapeHtml(r.feedback || 'Evaluated according to CBSE criteria.')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        backdrop.style.display = 'flex';
+        requestAnimationFrame(() => {
+            backdrop.classList.add('active');
+        });
+    };
 }
 
 /**
@@ -1118,10 +1283,30 @@ function setupMatrixDomListeners(appState) {
         });
     }
 
+    // Weak Question Drilldown close events
+    const closeWeakBtn = document.getElementById('btnCloseWeakDrilldown');
+    const weakBackdrop = document.getElementById('weakQuestionDrilldownBackdrop');
+    if (closeWeakBtn && weakBackdrop) {
+        const hideWeak = () => {
+            weakBackdrop.classList.remove('active');
+            setTimeout(() => { weakBackdrop.style.display = 'none'; }, 250);
+        };
+        closeWeakBtn.addEventListener('click', hideWeak);
+        weakBackdrop.addEventListener('click', (e) => {
+            if (e.target === weakBackdrop) hideWeak();
+        });
+    }
+
     // Close on Escape key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && drawerBackdrop?.classList.contains('active')) {
-            drawerBackdrop.classList.remove('active');
+        if (e.key === 'Escape') {
+            if (drawerBackdrop?.classList.contains('active')) {
+                drawerBackdrop.classList.remove('active');
+            }
+            if (weakBackdrop?.classList.contains('active')) {
+                weakBackdrop.classList.remove('active');
+                setTimeout(() => { weakBackdrop.style.display = 'none'; }, 250);
+            }
         }
     });
 }

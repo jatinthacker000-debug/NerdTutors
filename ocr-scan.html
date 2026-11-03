@@ -1458,7 +1458,8 @@
                     images: uploadedFiles,
                     subject: selectedSession.subject,
                     otherInstructions: selectedSession.otherInstructions || "",
-                    cachedContentId: activeCacheId
+                    cachedContentId: activeCacheId,
+                    questionLayout: selectedSession.questionLayout || null
                 });
 
                 const report = await submitWithRetry(payloadString);
@@ -1488,6 +1489,7 @@
                     maxMarks: lockedMax,
                     overallFeedback: report.overallFeedback,
                     improvements: report.improvements,
+                    rawTranscription: report.rawTranscription || report.extractedText || null,
                     breakdown: report.results || [],
                     modelUsed: report.modelUsed || 'gemini-4-argon',
                     tokenUsage: report.tokenUsage || null,
@@ -1942,6 +1944,7 @@
                     maxMarks: lockedMax,
                     overallFeedback: report.overallFeedback,
                     improvements: report.improvements,
+                    rawTranscription: report.rawTranscription || report.extractedText || null,
                     breakdown: report.results || [],
                     modelUsed: report.modelUsed || 'gemini-4-argon',
                     tokenUsage: report.tokenUsage || null,
