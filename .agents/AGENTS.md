@@ -1,3 +1,8 @@
+# ZERO WORKSPACE BRANCHING / ZERO REPOSITORY INVOCATION (MANDATORY)
+- **ALREADY IN WORKSPACE:** You are executing directly inside the existing, active repository at `d:\Trinno\NerdTutors`.
+- **STRICT PROHIBITION:** You MUST NEVER run `git clone`, `git init`, `git worktree add`, or create new repository folders.
+- **NO SUBAGENTS / NO BUREAUCRACY:** Do NOT spawn subagents, do not spawn background coordinators, and do not create branched workspaces. Work directly and immediately on the files in this directory.
+
 # Nerd Tutors Workspace Specifications
 
 ## 1. Evaluation & OCR Grading Standards (`api/ocr-evaluate.js`)
