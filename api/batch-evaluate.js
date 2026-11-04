@@ -667,6 +667,7 @@ ${reasoningGuardrailPrompt}
 CRITICAL CONSTRAINTS:
 1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
+3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
 4. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
    - Always use canonical numbering matching the official exam paper.
    - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
@@ -719,7 +720,8 @@ Return STRICT JSON:
         const genConfig = {
             responseMimeType: "application/json",
             temperature: 0.0,
-            seed: 42
+            seed: 42,
+            mediaResolution: "MEDIA_RESOLUTION_MEDIUM"
         };
 
         if (isArgon) {
