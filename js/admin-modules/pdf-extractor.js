@@ -4,7 +4,6 @@
 // 1. Client-Side Fast PDF.js Digital Parser (<500ms, 0 API cost)
 // 2. Multimodal Gemini/AI Vision Document OCR (/api/extract-pdf)
 // 3. Automated Real-Time Quality Guard & Self-Test Suite
-import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 function escapeHtml(str) {
     if (typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -88,7 +87,7 @@ export async function extractDigitalTextFromPdf(file, onProgress) {
 
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
-
+        
         let lastY, text = '';
         for (let item of textContent.items) {
             if (lastY !== undefined && Math.abs(item.transform[5] - lastY) > 5) {
@@ -132,10 +131,12 @@ export async function extractWithAiVision(file, extractType, metadata = {}, onPr
         });
     }
 
-    const authHeaders = await getNerdAuthHeaders();
-    const response = await fetch(apiUrl('/api/extract-pdf'), {
+    const response = await fetch('/api/extract-pdf', {
         method: 'POST',
-        headers: authHeaders,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(gateToken ? { 'X-Gate-Token': gateToken } : {})
+        },
         body: JSON.stringify({
             pdfBase64: base64File.data,
             extractType: extractType || 'questions',
@@ -360,10 +361,12 @@ export async function runExtractionDiagnosticTest() {
     // Test 3: Ping Backend API (/api/extract-pdf)
     try {
         const startTime = performance.now();
-        const authHeaders = await getNerdAuthHeaders();
-        const res = await fetch(apiUrl('/api/extract-pdf'), {
+        const res = await fetch('/api/extract-pdf', {
             method: 'POST',
-            headers: authHeaders,
+            headers: {
+                'Content-Type': 'application/json',
+                ...(gateToken ? { 'X-Gate-Token': gateToken } : {})
+            },
             body: JSON.stringify({ action: 'self-test' })
         });
         const elapsed = Math.round(performance.now() - startTime);

@@ -1,44 +1,26 @@
-import { handleCors, validateInvocation, verifyAuth, checkRateLimit, sendError } from "./_security.js";
-
 export default async function handler(req, res) {
-  console.log("🚀 EVALUATE HANDLER STARTED");
+  console.log("🚀 EVALUATE HANDLER STARTED"); // Force redeploy check
 
-  // ===== CORS & Security Pre-flight =====
-  if (handleCors(req, res)) return;
-  if (validateInvocation(req, res)) return;
+  // ===== CORS =====
+  const allowedOrigins = [
+    "https://nerd-tutors.vercel.app",
+    "https://nerd-tutors-two.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5000"
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
+  if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  // ===== Mandatory User Authentication =====
-  const authResult = await verifyAuth(req);
-  if (!authResult.authenticated) {
-    return res.status(401).json({
-      error: "Unauthorized",
-      message: authResult.error || "Authentication required. Please log in to evaluate answer sheets."
-    });
-  }
-
-  // ===== Tiered Rate Limiting =====
-  const rateLimitResult = checkRateLimit(req, authResult.user);
-  if (!rateLimitResult.allowed) {
-    res.setHeader("Retry-After", rateLimitResult.retryAfterSeconds);
-    return res.status(429).json({
-      error: "Too Many Requests",
-      message: rateLimitResult.message,
-      retryAfterSeconds: rateLimitResult.retryAfterSeconds
-    });
-  }
-
-  // ===== Parse Body Safely =====
+  // ===== Parse Body =====
   let body = req.body;
-  if (typeof body === "string") {
-    try {
-      body = JSON.parse(body);
-    } catch (_) {
-      return sendError(res, 400, "Invalid JSON in request body");
-    }
-  }
-  body = body || {};
+  if (typeof body === "string") body = JSON.parse(body);
   const otherInstructions = body.otherInstructions || "";
 
   // ===== Validate API Key =====
@@ -60,7 +42,7 @@ export default async function handler(req, res) {
 
   if (apiKeys.length === 0) {
     console.error("❌ API Key Missing!");
-    return sendError(res, 500, "Missing API Key in Environment Variables");
+    return res.status(500).json({ error: "Missing API Key in Environment Variables" });
   }
 
   // ===== Check for Batch or Single Request =====
@@ -226,12 +208,7 @@ You MUST prioritize and obey the following custom instruction over all other sco
     const clean = text.replace(/```json|```/g, "").trim();
     console.log("🧼 CLEAN JSON received");
 
-    let result;
-    try {
-      result = JSON.parse(clean);
-    } catch (parseErr) {
-      throw new Error(`Failed to parse AI evaluation JSON: ${parseErr.message}`);
-    }
+    const result = JSON.parse(clean);
 
     // Return format depends on request type
     return res.status(200).json(result);
@@ -240,8 +217,12 @@ You MUST prioritize and obey the following custom instruction over all other sco
     console.log("❌ ERROR:", err);
 
     if (isBatch) {
-      // Return error for batch with sanitized details to prevent leaking API keys
-      return sendError(res, 500, "Batch evaluation failed", err.message || "Unknown error");
+      // Return error for batch with as much detail as possible
+      return res.status(500).json({
+        error: "Batch evaluation failed",
+        details: err.message || "Unknown error",
+        raw_error: err.toString()
+      });
     } else {
       // Return safe fallback for single
       return res.status(200).json({

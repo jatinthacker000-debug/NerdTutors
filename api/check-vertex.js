@@ -1,27 +1,11 @@
 import { getVertexAccessToken, getVertexCredentialsInfo } from './vertex-auth.js';
-import {
-    handleCors,
-    validateInvocation,
-    verifyAuth,
-    sendError
-} from './_security.js';
 
 export default async function handler(req, res) {
-    if (handleCors(req, res)) return;
-    if (validateInvocation(req, res)) return;
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    if (req.method !== "GET") {
-        return sendError(res, 405, "Method not allowed. Use GET.");
-    }
-
-    // Require authenticated admin
-    const authResult = await verifyAuth(req);
-    if (!authResult.authenticated) {
-        return sendError(res, 401, "Unauthorized: Authentication required to inspect Vertex AI credentials.");
-    }
-    if (!authResult.user?.isAdmin) {
-        return sendError(res, 403, "Forbidden: Administrator privileges required to inspect Vertex AI credentials.");
-    }
+    if (req.method === "OPTIONS") return res.status(200).end();
 
     const credsInfo = getVertexCredentialsInfo();
 
@@ -59,11 +43,10 @@ export default async function handler(req, res) {
             serviceAccountEmail: credsInfo.clientEmail,
             projectId: credsInfo.projectId,
             googleOAuth2Handshake: "FAILED",
-            error: err.message ? err.message.replace(/key=[^&\s]+/gi, 'key=[REDACTED]') : 'Token exchange error',
-            diagnosticTip: (err.message || "").includes("PEM")
+            error: err.message,
+            diagnosticTip: err.message.includes("PEM")
                 ? "Private key newline formatting issue. Ensure \\n characters are handled."
                 : "Check if the Service Account is enabled in GCP Console -> IAM & Admin -> Service Accounts."
         });
     }
 }
-

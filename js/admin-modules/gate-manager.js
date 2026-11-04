@@ -15,7 +15,6 @@ import {
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { showToast, escapeHtml } from './admin-utils.js';
-import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 
 let gateCredentialsCache = [];
 let isGateManagerInitialized = false;
@@ -87,8 +86,7 @@ export async function loadGateCredentials() {
  */
 async function loadFromBackendApi(listBody, isPermissionNotice = false) {
     try {
-        const authHeaders = await getNerdAuthHeaders();
-        const res = await fetch(apiUrl('/api/manage-gate'), { headers: authHeaders });
+        const res = await fetch('/api/manage-gate');
         if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data.credentials) && data.credentials.length > 0) {
@@ -126,8 +124,7 @@ export async function shiftCredentialsToFirebase() {
     try {
         let count = 0;
         // Fetch all active credentials from backend
-        const authHeaders = await getNerdAuthHeaders();
-        const res = await fetch(apiUrl('/api/manage-gate'), { headers: authHeaders });
+        const res = await fetch('/api/manage-gate');
         if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data.credentials)) {
@@ -170,10 +167,9 @@ export async function shiftCredentialsToFirebase() {
  */
 async function syncCredentialsToBackend(credsList) {
     try {
-        const authHeaders = await getNerdAuthHeaders();
-        await fetch(apiUrl('/api/manage-gate'), {
+        await fetch('/api/manage-gate', {
             method: 'POST',
-            headers: authHeaders,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'sync',
                 credentials: credsList.map(c => ({
@@ -254,10 +250,10 @@ export function renderGateCredentials(credentials, isPermissionNotice = false) {
                     ${safeLabel}
                 </td>
                 <td style="padding: 0.9rem 1rem;">
-                    ${isSystem
-                ? `<span style="background: #e0e7ff; color: #4338ca; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🛡️ System Master</span>`
-                : `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🔥 Active Key</span>`
-            }
+                    ${isSystem 
+                        ? `<span style="background: #e0e7ff; color: #4338ca; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🛡️ System Master</span>` 
+                        : `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">🔥 Active Key</span>`
+                    }
                 </td>
                 <td style="padding: 0.9rem 1rem; color: #64748b; font-size: 0.85rem;">
                     <span title="Stored securely on backend & database">☁️ ${dateStr}</span>
@@ -324,13 +320,12 @@ function setupEventListeners() {
                         source: 'firebase',
                         createdAt: serverTimestamp()
                     });
-                } catch (_) { }
+                } catch (_) {}
 
                 // Always persist via backend API
-                const authHeaders = await getNerdAuthHeaders();
-                const res = await fetch(apiUrl('/api/manage-gate'), {
+                const res = await fetch('/api/manage-gate', {
                     method: 'POST',
-                    headers: authHeaders,
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'add',
                         username,
@@ -396,13 +391,12 @@ function setupEventListeners() {
                         label,
                         lastUpdated: serverTimestamp()
                     }, { merge: true });
-                } catch (_) { }
+                } catch (_) {}
 
                 // Update via backend API
-                const authHeaders = await getNerdAuthHeaders();
-                const res = await fetch(apiUrl('/api/manage-gate'), {
+                const res = await fetch('/api/manage-gate', {
                     method: 'POST',
-                    headers: authHeaders,
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'update',
                         username,
@@ -473,7 +467,7 @@ function generateSecureKey() {
 window.reloadGateCredentials = loadGateCredentials;
 window.shiftCredentialsToFirebase = shiftCredentialsToFirebase;
 
-window.openEditGateKey = function (username) {
+window.openEditGateKey = function(username) {
     const cred = gateCredentialsCache.find(c => c.username.toLowerCase() === username.toLowerCase());
     if (!cred) {
         showToast("Key not found in cache", "error");
@@ -492,7 +486,7 @@ window.openEditGateKey = function (username) {
     if (modal) modal.style.display = 'flex';
 };
 
-window.copyFirestoreRuleSnippet = function () {
+window.copyFirestoreRuleSnippet = function() {
     const ruleSnippet = `match /gateCredentials/{document=**} {
   allow read, write: if request.auth != null;
 }`;
@@ -503,13 +497,13 @@ window.copyFirestoreRuleSnippet = function () {
     });
 };
 
-window.togglePasswordVisibility = function (elementId) {
+window.togglePasswordVisibility = function(elementId) {
     const input = document.getElementById(elementId);
     if (!input) return;
     input.type = input.type === 'password' ? 'text' : 'password';
 };
 
-window.copyTextToClipboard = async function (text, label = 'Text') {
+window.copyTextToClipboard = async function(text, label = 'Text') {
     try {
         await navigator.clipboard.writeText(text);
         showToast(`${label} copied to clipboard!`, 'success');
@@ -518,7 +512,7 @@ window.copyTextToClipboard = async function (text, label = 'Text') {
     }
 };
 
-window.deleteGateKey = async function (username) {
+window.deleteGateKey = async function(username) {
     if (!confirm(`Are you sure you want to permanently delete the gate password for "${username}"?`)) {
         return;
     }
@@ -527,13 +521,12 @@ window.deleteGateKey = async function (username) {
         // Direct deletion from Firebase Firestore if accessible
         try {
             await deleteDoc(doc(db, 'gateCredentials', username));
-        } catch (_) { }
+        } catch (_) {}
 
         // Deletion from backend API
-        const authHeaders = await getNerdAuthHeaders();
-        const res = await fetch(apiUrl('/api/manage-gate'), {
+        const res = await fetch('/api/manage-gate', {
             method: 'POST',
-            headers: authHeaders,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'delete', username: username, id: username })
         });
 

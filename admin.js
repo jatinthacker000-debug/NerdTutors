@@ -33,9 +33,9 @@ import {
     loadTestSessionsForManagement,
     populateMockData,
     setupPdfExtractionHub
-} from './js/admin-modules/session-manager.js?v=263';
+} from './js/admin-modules/session-manager.js';
 import { setupGateManager } from './js/admin-modules/gate-manager.js';
-import { setupBundleEvaluator, loadBundleSessions } from './js/admin-modules/bundle-evaluator.js?v=263';
+import { setupBundleEvaluator, loadBundleSessions } from './js/admin-modules/bundle-evaluator.js';
 
 // Initialize
 function init() {
@@ -50,19 +50,13 @@ function init() {
 }
 
 function setupAuth() {
-    window.auth = auth;
-    onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, (user) => {
         if (user) {
             if (isAdmin(user.email) || user.email?.includes('admin')) {
                 localStorage.setItem('gate_authenticated', 'true');
-                // Ensure valid master gate token is present
-                const masterGateToken = btoa('nerd_tutor_alpha:nt_pass_alpha2026');
-                localStorage.setItem('gate_token', masterGateToken);
-                localStorage.setItem('admin_email', user.email || 'kaushtubh457@gmail.com');
-                try {
-                    const idToken = await user.getIdToken();
-                    if (idToken) localStorage.setItem('firebase_id_token', idToken);
-                } catch (_) {}
+                if (!localStorage.getItem('gate_token')) {
+                    localStorage.setItem('gate_token', btoa('admin:' + (user.email || 'jatin_admin')));
+                }
                 showAdminPanel(user);
             } else {
                 showAccessDenied(user);

@@ -4,18 +4,13 @@
 // and the shared confirmation modal.
 // ============================================
 
-import { loadTestSessionsForDropdown, loadTestSessionsForManagement } from './session-manager.js?v=250';
+import { loadTestSessionsForDropdown, loadTestSessionsForManagement } from './session-manager.js';
 
-const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-
-// Robust regex-based HTML escaping
-export function escapeHtml(str) {
-    if (!str && str !== 0) return '';
-    return String(str).replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
-}
-
-if (typeof window !== 'undefined') {
-    window.escapeHtml = escapeHtml;
+// Escape HTML
+export function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Switch tabs

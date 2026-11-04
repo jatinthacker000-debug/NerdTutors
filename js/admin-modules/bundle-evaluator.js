@@ -22,7 +22,6 @@ import {
     orderBy
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { showToast, escapeHtml } from './admin-utils.js';
-import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 
 let bundleSessionsList = [];
 let selectedBundleSession = null;
@@ -590,20 +589,9 @@ async function submitGoogleBatchJob() {
                 students: studentsPayload
             };
 
-            console.group("%c🔍 PRE-FLIGHT PROMPT & DUPLICATION AUDIT", "background:#0f172a;color:#facc15;font-weight:bold;padding:4px 8px;border-radius:4px;");
-            console.table({
-                "Questions Text": { Chars: (requestBody.questions || "").length, Est_Tokens: Math.round((requestBody.questions || "").length / 4) },
-                "Marking Scheme Text": { Chars: (requestBody.markingScheme || "").length, Est_Tokens: Math.round((requestBody.markingScheme || "").length / 4) },
-                "Override Instructions": { Chars: (requestBody.otherInstructions || "").length, Est_Tokens: Math.round((requestBody.otherInstructions || "").length / 4) },
-                "Explicit Cache ID": { Chars: requestBody.cachedContentId ? requestBody.cachedContentId.length : 0, Est_Tokens: requestBody.cachedContentId ? "ACTIVE (75% OFF)" : "❌ NULL (NO CACHE)" },
-                "Students (JSONL Rows)": { Chars: requestBody.students.length, Est_Tokens: `${requestBody.students.reduce((s, st) => s + st.pages.length, 0)} total image pages` }
-            });
-            console.groupEnd();
-
-            const authHeaders = await getNerdAuthHeaders();
-            const res = await fetch(apiUrl('/api/batch-evaluate'), {
+            const res = await fetch('/api/batch-evaluate', {
                 method: 'POST',
-                headers: authHeaders,
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
             });
 
@@ -702,22 +690,9 @@ async function submitGoogleBatchJob() {
 
         try {
             console.log("🔄 Fetching batch jobs from Google Cloud Vertex AI...");
-            let liveJobs = [];
-            try {
-                const authHeaders = await getNerdAuthHeaders();
-                const res = await fetch(apiUrl('/api/batch-evaluate?action=list'), {
-                    headers: authHeaders
-                });
-                const contentType = res.headers?.get('content-type') || '';
-                if (res.ok && contentType.includes('application/json')) {
-                    const data = await res.json();
-                    if (Array.isArray(data.jobs)) liveJobs = data.jobs;
-                } else {
-                    console.info("Notice: Live batch API returned non-JSON or static page (local server mode). Falling back to cached local & Firestore batch jobs.");
-                }
-            } catch (fetchErr) {
-                console.info("Notice: Live batch API endpoint unavailable locally:", fetchErr.message);
-            }
+            const res = await fetch('/api/batch-evaluate?action=list');
+            const data = await res.json();
+            let liveJobs = (res.ok && Array.isArray(data.jobs)) ? data.jobs : [];
 
             // Fetch persistent session metadata from localStorage
             let fsMetadataMap = {};
@@ -765,24 +740,6 @@ async function submitGoogleBatchJob() {
                 console.warn("Notice: testResults batch sync check:", fsErr.message);
             }
 
-            // If liveJobs is empty (e.g. local dev server), synthesize jobs from fsMetadataMap
-            if (liveJobs.length === 0 && Object.keys(fsMetadataMap).length > 0) {
-                const uniqueIds = new Set();
-                Object.values(fsMetadataMap).forEach(meta => {
-                    const id = meta.batchId || meta.id;
-                    if (id && !uniqueIds.has(id)) {
-                        uniqueIds.add(id);
-                        liveJobs.push({
-                            batchId: id,
-                            name: id,
-                            status: meta.status || 'SYNCED',
-                            createdAt: meta.createdAt || meta.createTime || new Date().toISOString(),
-                            ...meta
-                        });
-                    }
-                });
-            }
-
             // Merge Firestore metadata so sessionId and sessionName are NEVER lost
             cachedBatchJobs = liveJobs.map(job => {
                 const shortId = (job.batchId || job.id || '').split('/').pop();
@@ -799,11 +756,11 @@ async function submitGoogleBatchJob() {
                 };
             });
 
-            // Sort jobs chronologically in descending order (latest batch on top)
+            // Sort jobs chronologically in ascending order as requested (earliest test -> latest test)
             cachedBatchJobs.sort((a, b) => {
                 const timeA = new Date(a.createdAt || a.createTime || 0).getTime();
                 const timeB = new Date(b.createdAt || b.createTime || 0).getTime();
-                return timeB - timeA;
+                return timeA - timeB;
             });
 
             console.log("📋 Current Batch Jobs with Firestore Metadata:", cachedBatchJobs);
@@ -1127,10 +1084,7 @@ async function submitGoogleBatchJob() {
 
             // 1. Check status on Google Vertex AI
             console.log("📡 Step 1: Polling Vertex AI batch status...");
-            const authHeaders = await getNerdAuthHeaders();
-            const statusRes = await fetch(apiUrl(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`), {
-                headers: authHeaders
-            });
+            const statusRes = await fetch(`/api/batch-evaluate?action=status&batchId=${encodeURIComponent(batchId)}`);
             const statusData = await statusRes.json();
             console.log("📡 Status Response from Google Cloud:", statusData);
 
@@ -1213,10 +1167,9 @@ async function submitGoogleBatchJob() {
                 });
 
                 console.log("📥 Step 2: Requesting parsed results from /api/batch-evaluate (action: sync)...");
-                const syncAuthHeaders = await getNerdAuthHeaders();
-                const syncRes = await fetch(apiUrl('/api/batch-evaluate'), {
+                const syncRes = await fetch('/api/batch-evaluate', {
                     method: 'POST',
-                    headers: syncAuthHeaders,
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'sync',
                         batchId: batchId,
@@ -1234,22 +1187,6 @@ async function submitGoogleBatchJob() {
 
                 const parsedResults = syncData.parsedResults || [];
                 console.log(`📑 Total Students Parsed from Batch: ${parsedResults.length}`);
-
-                if (parsedResults.length > 0 && parsedResults.some(p => p.usageMetadata)) {
-                    console.group("%c🧾 GOOGLE VERTEX AI EXACT TOKEN RECEIPT", "background:#065f46;color:#ffffff;font-weight:bold;padding:4px 8px;border-radius:4px;");
-                    parsedResults.forEach((p, idx) => {
-                        const u = p.usageMetadata || {};
-                        console.log(`👤 Student ${idx + 1} (${p.studentName}):`, {
-                            promptTokenCount_TotalInput: u.promptTokenCount,
-                            promptTokensDetails: u.promptTokensDetails,
-                            candidatesTokenCount_VisibleJSON: u.candidatesTokenCount,
-                            thoughtsTokenCount_HiddenThinking: u.thoughtsTokenCount,
-                            cachedContentTokenCount: u.cachedContentTokenCount || 0,
-                            totalTokenCount: u.totalTokenCount
-                        });
-                    });
-                    console.groupEnd();
-                }
 
                 let resolvedStudentNames = [];
                 let syncedCount = 0;
@@ -1365,10 +1302,9 @@ async function submitGoogleBatchJob() {
     async function deleteBatchJob(docId) {
         if (!confirm("Are you sure you want to delete this batch job record from the registry?")) return;
         try {
-            const authHeaders = await getNerdAuthHeaders();
-            const res = await fetch(apiUrl('/api/batch-evaluate'), {
+            const res = await fetch('/api/batch-evaluate', {
                 method: 'POST',
-                headers: authHeaders,
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'delete', batchId: docId })
             });
             if (!res.ok) throw new Error("Failed to delete batch job");
@@ -1382,10 +1318,9 @@ async function submitGoogleBatchJob() {
     async function downloadBatchPredictions(batchId, docId) {
         try {
             showToast("Fetching batch prediction records...", "info");
-            const authHeaders = await getNerdAuthHeaders();
-            const res = await fetch(apiUrl('/api/batch-evaluate'), {
+            const res = await fetch('/api/batch-evaluate', {
                 method: 'POST',
-                headers: authHeaders,
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'sync',
                     batchId: batchId
@@ -1394,21 +1329,6 @@ async function submitGoogleBatchJob() {
             const data = await res.json();
             if (!res.ok) {
                 throw new Error(data.error || "Failed to fetch batch predictions from server");
-            }
-            if (data.parsedResults && Array.isArray(data.parsedResults) && data.parsedResults.some(p => p.usageMetadata)) {
-                console.group("%c🧾 GOOGLE VERTEX AI EXACT TOKEN RECEIPT", "background:#065f46;color:#ffffff;font-weight:bold;padding:4px 8px;border-radius:4px;");
-                data.parsedResults.forEach((p, idx) => {
-                    const u = p.usageMetadata || {};
-                    console.log(`👤 Student ${idx + 1} (${p.studentName}):`, {
-                        promptTokenCount_TotalInput: u.promptTokenCount,
-                        promptTokensDetails: u.promptTokensDetails,
-                        candidatesTokenCount_VisibleJSON: u.candidatesTokenCount,
-                        thoughtsTokenCount_HiddenThinking: u.thoughtsTokenCount,
-                        cachedContentTokenCount: u.cachedContentTokenCount || 0,
-                        totalTokenCount: u.totalTokenCount
-                    });
-                });
-                console.groupEnd();
             }
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);

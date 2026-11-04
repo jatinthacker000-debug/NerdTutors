@@ -17,7 +17,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 import { VALID_CATEGORIES, elements } from './shared-state.js';
-import { showToast, showConfirmModal, setupConfirmModal, closeConfirmModal, switchTab, escapeHtml } from './admin-utils.js';
+import { showToast, showConfirmModal, setupConfirmModal, closeConfirmModal, switchTab } from './admin-utils.js';
 import { setupAnswerEvaluation } from './answer-evaluator.js';
 
 // Module state
@@ -182,41 +182,41 @@ export function displayQuestions(questions) {
         if (questionType === 'mcq' && data.options) {
             mcqPreview = `
                 <div class="mcq-preview" style="margin-top: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem;">
-                    <div style="${data.correctAnswer === 'A' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">A) ${escapeHtml(data.options.A || '')}</div>
-                    <div style="${data.correctAnswer === 'B' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">B) ${escapeHtml(data.options.B || '')}</div>
-                    <div style="${data.correctAnswer === 'C' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">C) ${escapeHtml(data.options.C || '')}</div>
-                    <div style="${data.correctAnswer === 'D' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">D) ${escapeHtml(data.options.D || '')}</div>
+                    <div style="${data.correctAnswer === 'A' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">A) ${data.options.A || ''}</div>
+                    <div style="${data.correctAnswer === 'B' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">B) ${data.options.B || ''}</div>
+                    <div style="${data.correctAnswer === 'C' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">C) ${data.options.C || ''}</div>
+                    <div style="${data.correctAnswer === 'D' ? 'color: #2e7d32; font-weight: bold;' : 'color: #666;'}">D) ${data.options.D || ''}</div>
                 </div>
             `;
         }
 
         html += `
-                <div class="question-card ${isSelected ? 'selected' : ''}" data-id="${escapeHtml(data.id)}">
+                <div class="question-card ${isSelected ? 'selected' : ''}" data-id="${data.id}">
                     <div class="question-header">
                         <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <input type="checkbox" class="question-checkbox" data-id="${escapeHtml(data.id)}" ${isSelected ? 'checked' : ''}>
+                            <input type="checkbox" class="question-checkbox" data-id="${data.id}" ${isSelected ? 'checked' : ''}>
                             <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
                             <div class="question-meta">
-                                <span class="status-dot ${escapeHtml(status)}"></span>
+                                <span class="status-dot ${status}"></span>
                                 ${typeBadge}
-                                <span class="badge badge-category">${escapeHtml(data.category || 'N/A')}</span>
+                                <span class="badge badge-category">${data.category || 'N/A'}</span>
                                 <span class="badge badge-marks">${data.marks || 0} marks</span>
-                                <span class="badge badge-difficulty ${escapeHtml(difficultyClass)}">${escapeHtml(data.difficulty || 'Medium')}</span>
+                                <span class="badge badge-difficulty ${difficultyClass}">${data.difficulty || 'Medium'}</span>
                             </div>
                         </div>
                         <div class="question-actions">
-                            <button class="btn-icon preview" data-id="${escapeHtml(data.id)}" title="Preview">👁️</button>
-                            <button class="btn-icon duplicate" data-id="${escapeHtml(data.id)}" title="Duplicate">📋</button>
-                            <button class="btn-icon edit" data-id="${escapeHtml(data.id)}" title="Edit">✏️</button>
-                            <button class="btn-icon delete" data-id="${escapeHtml(data.id)}" title="Delete">🗑️</button>
+                            <button class="btn-icon preview" data-id="${data.id}" title="Preview">👁️</button>
+                            <button class="btn-icon duplicate" data-id="${data.id}" title="Duplicate">📋</button>
+                            <button class="btn-icon edit" data-id="${data.id}" title="Edit">✏️</button>
+                            <button class="btn-icon delete" data-id="${data.id}" title="Delete">🗑️</button>
                         </div>
                     </div>
-                    <p class="question-text">${escapeHtml(data.text || 'No question text')}</p>
+                    <p class="question-text">${data.text || 'No question text'}</p>
                     ${mcqPreview}
                     <div class="question-footer">
-                        <span>Created by: ${escapeHtml(data.createdBy || 'Unknown')}</span>
+                        <span>Created by: ${data.createdBy || 'Unknown'}</span>
                         <span style="display: flex; align-items: center; gap: 0.25rem;">
-                            <span class="status-dot ${escapeHtml(status)}" style="width: 8px; height: 8px;"></span>
+                            <span class="status-dot ${status}" style="width: 8px; height: 8px;"></span>
                             ${status === 'active' ? 'Active' : 'Inactive'}
                         </span>
                     </div>
@@ -880,12 +880,12 @@ function openPreviewModal(questionId) {
 
     const status = question.status || 'active';
     document.getElementById('previewMeta').innerHTML = `
-            <span class="badge badge-category">${escapeHtml(question.category || 'N/A')}</span>
+            <span class="badge badge-category">${question.category || 'N/A'}</span>
             <span class="badge badge-marks">${question.marks || 0} marks</span>
-            <span class="badge badge-difficulty ${(escapeHtml(question.difficulty || 'medium')).toLowerCase()}">${escapeHtml(question.difficulty || 'Medium')}</span>
+            <span class="badge badge-difficulty ${(question.difficulty || 'medium').toLowerCase()}">${question.difficulty || 'Medium'}</span>
             <span class="badge" style="background: ${status === 'active' ? '#e8f5e9' : '#ffebee'}; color: ${status === 'active' ? '#2e7d32' : '#c62828'}">
-                <span class="status-dot ${escapeHtml(status)}" style="width: 8px; height: 8px;"></span>
-                ${escapeHtml(status)}
+                <span class="status-dot ${status}" style="width: 8px; height: 8px;"></span>
+                ${status}
             </span>
         `;
     document.getElementById('previewQuestionText').textContent = question.text || 'No question text';

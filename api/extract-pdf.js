@@ -1,12 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import {
-    handleCors,
-    validateInvocation,
-    verifyAuth,
-    sendError
-} from './_security.js';
 
 const GATE_SECRET = process.env.GATE_SECRET || 'nt_gate_hmac_secret_2026_super_secure';
 
@@ -59,12 +53,24 @@ function getCredentials() {
 }
 
 export default async function handler(req, res) {
-    if (handleCors(req, res)) return;
-    if (validateInvocation(req, res)) return;
-
-    if (req.method !== "POST" && req.method !== "GET") {
-        return sendError(res, 405, "Method not allowed. Use GET or POST.");
+    // ===== CORS =====
+    const allowedOrigins = [
+        "https://nerd-tutors.vercel.app",
+        "https://nerd-tutors-two.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5000"
+    ];
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
     }
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Gate-Token");
+
+    if (req.method === "OPTIONS") return res.status(200).end();
+
+    // ===== Gate Security Check Disabled (Direct Access) =====
+    const gateToken = req.headers['x-gate-token'] || "";
 
     // ===== Parse Body =====
     let body = req.body || {};
@@ -72,7 +78,7 @@ export default async function handler(req, res) {
         try {
             body = JSON.parse(body);
         } catch (e) {
-            return sendError(res, 400, "Invalid JSON body");
+            return res.status(400).json({ error: "Invalid JSON body" });
         }
     }
 
@@ -88,13 +94,6 @@ export default async function handler(req, res) {
             timestamp: new Date().toISOString()
         });
     }
-
-    // Require authentication for PDF extraction
-    const authResult = await verifyAuth(req);
-    if (!authResult.authenticated) {
-        return sendError(res, 401, "Unauthorized: Authentication required to extract PDF documents.");
-    }
-
 
     // ===== Extract API Keys =====
     let apiKeys = [];
@@ -293,6 +292,8 @@ RULES:
         .replace(/AQ\.[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]')
         .replace(/AIza[a-zA-Z0-9_\-]+/gi, '[REDACTED_API_KEY]');
 
-    return sendError(res, 500, "Failed to extract PDF after attempting all available API keys", safeDetails);
+    return res.status(500).json({
+        error: "Failed to extract PDF after attempting all available API keys",
+        details: safeDetails
+    });
 }
-

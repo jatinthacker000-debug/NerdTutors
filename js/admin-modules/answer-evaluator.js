@@ -6,7 +6,6 @@
 // ============================================
 
 import { showToast } from './admin-utils.js';
-import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 
 export function setupAnswerEvaluation() {
     let modelFile = null;
@@ -160,10 +159,9 @@ export function setupAnswerEvaluation() {
 
         try {
             const maxMarksVal = evalMaxMarks ? (parseInt(evalMaxMarks.value) || 100) : 100;
-            const authHeaders = await getNerdAuthHeaders();
-            const response = await fetch(apiUrl('/api/ocr-evaluate'), {
+            const response = await fetch('/api/ocr-evaluate', {
                 method: 'POST',
-                headers: authHeaders,
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     mode: 'pdf-comparison',
                     modelAnswerFile: modelFile.data,
