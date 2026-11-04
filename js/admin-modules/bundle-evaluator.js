@@ -590,6 +590,16 @@ async function submitGoogleBatchJob() {
                 students: studentsPayload
             };
 
+            console.group("%c🔍 PRE-FLIGHT PROMPT & DUPLICATION AUDIT", "background:#0f172a;color:#facc15;font-weight:bold;padding:4px 8px;border-radius:4px;");
+            console.table({
+                "Questions Text": { Chars: (requestBody.questions || "").length, Est_Tokens: Math.round((requestBody.questions || "").length / 4) },
+                "Marking Scheme Text": { Chars: (requestBody.markingScheme || "").length, Est_Tokens: Math.round((requestBody.markingScheme || "").length / 4) },
+                "Override Instructions": { Chars: (requestBody.otherInstructions || "").length, Est_Tokens: Math.round((requestBody.otherInstructions || "").length / 4) },
+                "Explicit Cache ID": { Chars: requestBody.cachedContentId ? requestBody.cachedContentId.length : 0, Est_Tokens: requestBody.cachedContentId ? "ACTIVE (75% OFF)" : "❌ NULL (NO CACHE)" },
+                "Students (JSONL Rows)": { Chars: requestBody.students.length, Est_Tokens: `${requestBody.students.reduce((s, st) => s + st.pages.length, 0)} total image pages` }
+            });
+            console.groupEnd();
+
             const authHeaders = await getNerdAuthHeaders();
             const res = await fetch(apiUrl('/api/batch-evaluate'), {
                 method: 'POST',
@@ -1225,6 +1235,22 @@ async function submitGoogleBatchJob() {
                 const parsedResults = syncData.parsedResults || [];
                 console.log(`📑 Total Students Parsed from Batch: ${parsedResults.length}`);
 
+                if (parsedResults.length > 0 && parsedResults.some(p => p.usageMetadata)) {
+                    console.group("%c🧾 GOOGLE VERTEX AI EXACT TOKEN RECEIPT", "background:#065f46;color:#ffffff;font-weight:bold;padding:4px 8px;border-radius:4px;");
+                    parsedResults.forEach((p, idx) => {
+                        const u = p.usageMetadata || {};
+                        console.log(`👤 Student ${idx + 1} (${p.studentName}):`, {
+                            promptTokenCount_TotalInput: u.promptTokenCount,
+                            promptTokensDetails: u.promptTokensDetails,
+                            candidatesTokenCount_VisibleJSON: u.candidatesTokenCount,
+                            thoughtsTokenCount_HiddenThinking: u.thoughtsTokenCount,
+                            cachedContentTokenCount: u.cachedContentTokenCount || 0,
+                            totalTokenCount: u.totalTokenCount
+                        });
+                    });
+                    console.groupEnd();
+                }
+
                 let resolvedStudentNames = [];
                 let syncedCount = 0;
                 const sessionDetails = parseBatchSessionDetails(batchJobData);
@@ -1368,6 +1394,21 @@ async function submitGoogleBatchJob() {
             const data = await res.json();
             if (!res.ok) {
                 throw new Error(data.error || "Failed to fetch batch predictions from server");
+            }
+            if (data.parsedResults && Array.isArray(data.parsedResults) && data.parsedResults.some(p => p.usageMetadata)) {
+                console.group("%c🧾 GOOGLE VERTEX AI EXACT TOKEN RECEIPT", "background:#065f46;color:#ffffff;font-weight:bold;padding:4px 8px;border-radius:4px;");
+                data.parsedResults.forEach((p, idx) => {
+                    const u = p.usageMetadata || {};
+                    console.log(`👤 Student ${idx + 1} (${p.studentName}):`, {
+                        promptTokenCount_TotalInput: u.promptTokenCount,
+                        promptTokensDetails: u.promptTokensDetails,
+                        candidatesTokenCount_VisibleJSON: u.candidatesTokenCount,
+                        thoughtsTokenCount_HiddenThinking: u.thoughtsTokenCount,
+                        cachedContentTokenCount: u.cachedContentTokenCount || 0,
+                        totalTokenCount: u.totalTokenCount
+                    });
+                });
+                console.groupEnd();
             }
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);

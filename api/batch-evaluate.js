@@ -535,6 +535,7 @@ export default async function handler(req, res) {
             for (let i = 0; i < responsesList.length; i++) {
                 const item = responsesList[i];
                 const meta = studentsMetadata[i] || { studentName: `Student ${i + 1}` };
+                const usageMetadata = item.response?.usageMetadata || null;
 
                 let rawText = "";
                 if (item.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -592,12 +593,14 @@ export default async function handler(req, res) {
                     parsedResults.push({
                         studentName: resolvedStudentName,
                         result: evalObj,
+                        usageMetadata: usageMetadata,
                         rawOutput: cleaned
                     });
                 } catch (pErr) {
                     parsedResults.push({
                         studentName: meta.studentName || `Student ${i + 1}`,
                         error: "JSON parse failed: " + pErr.message,
+                        usageMetadata: usageMetadata,
                         rawOutput: rawText
                     });
                 }
@@ -755,6 +758,19 @@ Return STRICT JSON:
     const gcsBucket = process.env.GCP_STORAGE_BUCKET || `${projectId}-batch-evals`;
     const inputFileName = `inputs/${cleanSession}_${Date.now()}.jsonl`;
     const jsonlData = inlinedRequests.map(req => JSON.stringify({ request: req })).join('\n') + '\n';
+
+    console.log("📊 [BATCH INPUT PAYLOAD AUDIT]", {
+        isExplicitCache,
+        cachedContentId,
+        questionsChars: (questions || "").length,
+        questionsEstTokens: Math.round((questions || "").length / 4),
+        markingSchemeChars: (markingScheme || "").length,
+        markingSchemeEstTokens: Math.round((markingScheme || "").length / 4),
+        totalPromptBaseChars: promptBase.length,
+        totalPromptBaseEstTokens: Math.round(promptBase.length / 4),
+        studentsCount: students.length,
+        pagesPerStudent: students.map(s => s.pages?.length || 0)
+    });
 
     console.log(`📤 Uploading batch input (${inlinedRequests.length} students) to Google Cloud Storage (gs://${gcsBucket}/${inputFileName})...`);
     let gcsInputUri = body.gcsInputUri || "";
