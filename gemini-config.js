@@ -1,4 +1,5 @@
 // 🔹 Gemini API Configuration (Robust - Supports Vercel Backend & Client-Side Fallback)
+import { getNerdAuthHeaders } from './js/client-auth.js';
 
 // 🔹 Main Evaluation Function
 export async function evaluateWithGemini({ question, modelAnswer, studentAnswer, maxMarks }) {
@@ -8,7 +9,7 @@ export async function evaluateWithGemini({ question, modelAnswer, studentAnswer,
         // 1. Try Vercel Backend First
         const response = await fetch('/api/evaluate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await getNerdAuthHeaders(),
             body: JSON.stringify({ question, modelAnswer, studentAnswer, maxMarks })
         });
 
@@ -60,7 +61,7 @@ export async function evaluateBatchWithGemini(questions, answers) {
         // 1. Try Vercel Backend First
         const response = await fetch('/api/evaluate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await getNerdAuthHeaders(),
             body: JSON.stringify({
                 questions,
                 answers: answersObj
@@ -120,7 +121,7 @@ export async function evaluateWithOCR({ image, mimeType, question, modelAnswer, 
 
         const response = await fetch('/api/ocr-evaluate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await getNerdAuthHeaders(),
             body: JSON.stringify({
                 mode: 'single',
                 image,
@@ -158,7 +159,7 @@ export async function evaluateBatchWithOCR({ image, mimeType, questions }) {
 
         const response = await fetch('/api/ocr-evaluate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: await getNerdAuthHeaders(),
             body: JSON.stringify({
                 mode: 'full-sheet',
                 image,

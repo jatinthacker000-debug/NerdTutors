@@ -11,6 +11,13 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getVertexAccessToken } from './vertex-auth.js';
+import {
+    handleCors,
+    validateInvocation,
+    verifyAuth,
+    sendError
+} from './_security.js';
+
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -85,20 +92,19 @@ function getSubjectDirectives(subject) {
 }
 
 export default async function handler(req, res) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-gate-token");
-
-    if (req.method === "OPTIONS") {
-        return res.status(200).end();
-    }
+    if (handleCors(req, res)) return;
+    if (validateInvocation(req, res)) return;
 
     if (req.method !== "POST") {
-        return res.status(405).json({ error: "Method not allowed. Use POST." });
+        return sendError(res, 405, "Method not allowed. Use POST.");
     }
 
-    // Gate security check disabled (direct access enabled)
-    const clientToken = req.headers['x-gate-token'] || "";
+    // Require authentication
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+        return sendError(res, 401, "Unauthorized: Authentication required to create context cache.");
+    }
+
 
     let body = req.body;
     if (typeof body === 'string') {
@@ -180,6 +186,9 @@ Return STRICT JSON in the following format:
       "questionNumber": "Q1",
       "questionText": "",
       "maxMarks": <number - immutable question weight>,
+      "studentOption": "<uppercase letter A/B/C/D if MCQ, else null>",
+      "correctOption": "<uppercase letter A/B/C/D from marking scheme if MCQ, else null>",
+      "stanceCorrect": "<boolean true/false if Defend/Refute question, else null>",
       "studentAnswerText": "<brief quote if marks lost, else ''>",
       "feedback": "<concise feedback under 15 words>",
       "score": <number - awarded marks>,

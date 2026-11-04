@@ -1,17 +1,18 @@
+import { formatExamName } from './student-progress-chart.js';
+import { getNerdAuthHeaders, apiUrl } from './client-auth.js';
 // ============================================
 // QUESTION PERFORMANCE MATRIX MODULE
 // Generates and manages the Question-by-Student Marks Grid
 // with full cross-sectional analytics, drawer flyouts, and CSV export.
 // ============================================
 
-function escapeHtml(text) {
-    if (typeof text !== 'string') return text;
-    return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+export function escapeHtml(str) {
+    if (!str && str !== 0) return '';
+    return String(str).replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
+}
+if (typeof window !== 'undefined') {
+    window.escapeHtml = escapeHtml;
 }
 
 let matrixState = {
@@ -157,8 +158,8 @@ export function populateMatrixSessionDropdown(sessions) {
 
     let html = '<option value="all">All Test Sessions (Combined View)</option>';
     filtered.forEach(s => {
-        const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` · ${s.examSet}` : '';
-        html += `<option value="${s.id}">${escapeHtml(s.name)}${setTag} (${s.class} · ${s.subject})</option>`;
+        const setTag = s.examSet && s.examSet !== 'Standard / All' ? ` - ${s.examSet}` : '';
+        html += `<option value="${escapeHtml(s.id)}">${escapeHtml(formatExamName(s.name))}${escapeHtml(setTag)} (${escapeHtml(s.class)} - ${escapeHtml(s.subject)})</option>`;
     });
 
     sessionSelect.innerHTML = html;
@@ -382,18 +383,54 @@ export function renderQuestionMatrix(results) {
     let sortedQuestions = Array.from(questionIndex.keys()).sort(naturalQuestionSort);
 
     // Filter questions based on Question Filter mode
-    if (qTypeVal === 'mistakes') {
+    if (qTypeVal === 'weak') {
         sortedQuestions = sortedQuestions.filter(qNum => {
             const q = questionIndex.get(qNum);
+            if (!q) return false;
+            let earned = 0;
+            let possible = 0;
+            q.responses.forEach(resp => {
+                earned += Number(resp.score) || 0;
+                possible += Number(resp.maxMarks) || q.maxMarks || 1;
+            });
+            return possible > 0 && (earned / possible) < 0.60;
+        });
+    } else if (qTypeVal === 'critical') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            if (!q) return false;
+            let earned = 0;
+            let possible = 0;
+            q.responses.forEach(resp => {
+                earned += Number(resp.score) || 0;
+                possible += Number(resp.maxMarks) || q.maxMarks || 1;
+            });
+            return possible > 0 && (earned / possible) < 0.40;
+        });
+    } else if (qTypeVal === 'mcq') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            return q && q.maxMarks === 1;
+        });
+    } else if (qTypeVal === 'subjective') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            return q && q.maxMarks > 1;
+        });
+    } else if (qTypeVal === 'mistakes') {
+        sortedQuestions = sortedQuestions.filter(qNum => {
+            const q = questionIndex.get(qNum);
+            if (!q) return false;
             // Include question if at least one student scored less than maxMarks
-            return Array.from(q.responses.values()).some(resp => resp.score < resp.maxMarks);
+            return Array.from(q.responses.values()).some(resp => (Number(resp.score) || 0) < (Number(resp.maxMarks) || q.maxMarks));
         });
     } else if (qTypeVal === 'full') {
         sortedQuestions = sortedQuestions.filter(qNum => {
             const q = questionIndex.get(qNum);
+            if (!q) return false;
             // Include question only if every student scored full marks
             const resps = Array.from(q.responses.values());
-            return resps.length > 0 && resps.every(resp => resp.score >= resp.maxMarks);
+            return resps.length > 0 && resps.every(resp => (Number(resp.score) || 0) >= (Number(resp.maxMarks) || q.maxMarks));
         });
     }
 
@@ -401,6 +438,9 @@ export function renderQuestionMatrix(results) {
     updateMatrixKpis(activeStudents, sortedQuestions, questionIndex);
 
     const activeSession = matrixState.sessions.find(s => s.id === sessionVal);
+    matrixState.lastQuestionIndex = questionIndex;
+    matrixState.activeSession = activeSession;
+    matrixState.activeStudents = activeStudents;
 
     // 7. Render Matrix Header (<thead>)
     let theadHtml = `
@@ -414,7 +454,7 @@ export function renderQuestionMatrix(results) {
         const totalScored = st.score !== undefined ? st.score : (st.totalScore || 0);
         const maxMarks = st.maxMarks || 40;
         theadHtml += `
-            <th class="th-student" onclick="window.setStudentProgressName &amp;&amp; window.setStudentProgressName('${escapeHtml(st.studentName)}')" style="cursor: pointer;" title="Click to load progress chart for ${escapeHtml(st.studentName)}">
+            <th class="th-student" data-student-name="${encodeURIComponent(st.studentName)}" style="cursor: pointer;" title="Click to load progress chart for ${escapeHtml(st.studentName)}">
                 <div style="font-size: 0.95rem; font-weight: 700; color: #1e293b;">${escapeHtml(st.studentName)}</div>
                 <div style="margin-top: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
                     <span style="background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">${escapeHtml(batchTag)}</span>
@@ -429,6 +469,15 @@ export function renderQuestionMatrix(results) {
         </tr>
     `;
     tableHead.innerHTML = theadHtml;
+    tableHead.onclick = (e) => {
+        const th = e.target.closest('.th-student');
+        if (th && th.dataset.studentName) {
+            const studentName = decodeURIComponent(th.dataset.studentName);
+            if (typeof window.setStudentProgressName === 'function') {
+                window.setStudentProgressName(studentName);
+            }
+        }
+    };
 
     // 8. Render Matrix Body (<tbody>)
     let tbodyHtml = '';
@@ -595,9 +644,10 @@ export async function triggerTopicAnalysisForSession(sessionId) {
     }
 
     try {
-        const res = await fetch('/api/analyze-topics', {
+        const authHeaders = await getNerdAuthHeaders();
+        const res = await fetch(apiUrl('/api/analyze-topics'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({
                 sessionId: session.id,
                 questions: session.questions || '',
@@ -632,6 +682,11 @@ export async function triggerTopicAnalysisForSession(sessionId) {
 
         // Re-render
         renderTopicAnalysis(session, matrixState.questionIndex, matrixState.activeQuestions);
+
+        // Sync with Students Hub in real-time
+        if (typeof window.renderStudentsPage === 'function') {
+            window.renderStudentsPage();
+        }
     } catch (err) {
         console.error('Topic analysis error:', err);
         alert(`Topic Analysis Notice: ${err.message}`);
@@ -648,9 +703,20 @@ if (typeof window !== 'undefined') {
 /**
  * Render CBSE Topic Mastery & Class Weakness Analysis Section
  */
+function formatCurriculumSummary(summary) {
+    if (!summary) return '';
+    let text = escapeHtml(summary);
+    // Bold quoted chapter names
+    text = text.replace(/'([^']+)'/g, '<strong style="color: #1e293b; background: #e0e7ff; padding: 1px 6px; border-radius: 4px; font-weight: 700;">$1</strong>');
+    // Highlight marks breakdown
+    text = text.replace(/\((\d+)\s*marks?\)/gi, '<span style="font-weight: 700; color: #4338ca; background: #ede9fe; padding: 1px 6px; border-radius: 4px; font-size: 0.8rem;">$1 Marks</span>');
+    return text;
+}
+
 function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
     const container = document.getElementById('matrixTopicAnalysisSection');
     if (!container) return;
+    try {
 
     if (!activeSession || activeSession.id === 'all') {
         container.style.display = 'none';
@@ -741,132 +807,169 @@ function renderTopicAnalysis(activeSession, questionIndex, sortedQuestions) {
     const developing = questionItems.filter(q => q.accuracy >= 60 && q.accuracy <= 90).sort((a, b) => a.accuracy - b.accuracy);
     const mastered = questionItems.filter(q => q.accuracy > 90).sort((a, b) => b.accuracy - a.accuracy);
 
-    let html = `
-        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
-                <div>
-                    <div style="font-weight: 800; color: #1e3c72; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span>🧠</span> CBSE Topic Mastery & Class Weakness Analysis
-                        <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">AI Diagnosed</span>
+    // Determine default filter: focus on critical weaknesses first, or fallback if 0
+    let defaultFilter = 'critical';
+    if (criticalWeak.length === 0) {
+        if (developing.length > 0) defaultFilter = 'developing';
+        else defaultFilter = 'mastered';
+    }
+
+    // Helper to generate question card HTML
+    function generateQuestionCard(q, tier) {
+        let accentBorder = '#ef4444';
+        let badgeBg = '#ef4444';
+        let pillBg = '#fee2e2';
+        let pillColor = '#991b1b';
+        let barColor = '#ef4444';
+
+        if (tier === 'developing') {
+            accentBorder = '#f59e0b';
+            badgeBg = '#f59e0b';
+            pillBg = '#fef3c7';
+            pillColor = '#92400e';
+            barColor = '#f59e0b';
+        } else if (tier === 'mastered') {
+            accentBorder = '#10b981';
+            badgeBg = '#10b981';
+            pillBg = '#dcfce7';
+            pillColor = '#166534';
+            barColor = '#10b981';
+        }
+
+        const isVisible = defaultFilter === 'all' || defaultFilter === tier;
+
+        return `
+            <div class="topic-q-card" data-tier="${tier}" onclick="window.openWeakQuestionDrilldown('${escapeHtml(q.qNum)}')" style="background: #ffffff; border: 1.5px solid #e2e8f0; border-left: 5px solid ${accentBorder}; border-radius: 12px; padding: 1rem 1.15rem; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; display: ${isVisible ? 'block' : 'none'};" onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.06)';" onmouseleave="this.style.transform='none'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.03)';">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                            <span style="background: ${badgeBg}; color: #ffffff; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.76rem; display: inline-block;">
+                                ${escapeHtml(q.qNum)}
+                            </span>
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.92rem;" title="${escapeHtml(q.topic)}">
+                                ${escapeHtml(q.topic)}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.76rem; color: #64748b; margin-top: 0.35rem; line-height: 1.3;">
+                            ${escapeHtml(q.chapter)} ${q.subtopic ? `· <span style="color: #94a3b8;">${escapeHtml(q.subtopic)}</span>` : ''}
+                        </div>
                     </div>
-                    <p style="color: #64748b; font-size: 0.85rem; margin: 0.35rem 0 0 0;">
-                        ${escapeHtml(activeSession.curriculumSummary || `Curriculum breakdown across ${questionItems.length} evaluated questions mapped to syllabus topics.`)}
-                    </p>
+                    <div style="text-align: right; flex-shrink: 0;">
+                        <span style="background: ${pillBg}; color: ${pillColor}; font-weight: 800; font-size: 0.82rem; padding: 3px 8px; border-radius: 6px; display: inline-block;">
+                            ${q.accuracy}%
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Accuracy Progress Bar -->
+                <div style="background: #f1f5f9; border-radius: 9999px; height: 6px; width: 100%; margin: 0.75rem 0 0.5rem 0; overflow: hidden;">
+                    <div style="background: ${barColor}; height: 100%; width: ${q.accuracy}%; border-radius: 9999px;"></div>
+                </div>
+
+                <div style="margin-top: 0.4rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.74rem; color: #94a3b8; border-top: 1px dashed #f1f5f9; padding-top: 0.45rem;">
+                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
+                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong> (${q.responsesCount} responses)</span>
+                </div>
+
+                <button type="button" class="btn-inspect-responses" onclick="event.stopPropagation(); window.openWeakQuestionDrilldown('${escapeHtml(q.qNum)}')" style="width: 100%; margin-top: 0.75rem; padding: 0.45rem 0.75rem; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; color: #1e293b; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: all 0.2s ease;">
+                    <span>🔍</span> Inspect Responses (${q.responsesCount} Students)
+                </button>
+            </div>
+        `;
+    }
+
+    let html = `
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 1.5rem 1.6rem; box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05); margin-bottom: 1.5rem;">
+            <!-- Header Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <div style="font-weight: 800; color: #0f172a; font-size: 1.25rem; display: flex; align-items: center; gap: 0.6rem; letter-spacing: -0.3px;">
+                        <span style="font-size: 1.4rem;">🧠</span> CBSE Topic Mastery &amp; Class Weakness Analysis
+                        <span style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35); display: inline-flex; align-items: center; gap: 4px;">✨ Gemini 3.8 Flash AI Diagnosed</span>
+                    </div>
+                    <div style="color: #64748b; font-size: 0.82rem; margin-top: 0.25rem; font-weight: 500;">
+                        Curriculum topic extraction and class-wide misconception audit powered by Google Vertex AI deep reasoning.
+                    </div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                    <button id="btnToggleTopicCollapse" onclick="window.toggleTopicAnalysisCollapse()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <button id="btnToggleTopicCollapse" onclick="window.toggleTopicAnalysisCollapse()" style="background: #f8fafc; color: #475569; border: 1.5px solid #e2e8f0; padding: 0.45rem 0.95rem; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s ease;">
                         <span id="topicCollapseIcon">▲</span> <span id="topicCollapseText">Collapse View</span>
                     </button>
-                    <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <button id="btnTriggerTopicAnalysis" onclick="window.triggerTopicAnalysisForSession('${activeSession.id}')" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; padding: 0.45rem 0.95rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s ease;">
                         <span>🔄</span> Re-Analyze Topics
                     </button>
                 </div>
             </div>
 
+            <!-- Curriculum Blueprint & Scope Callout -->
+            ${activeSession.curriculumSummary ? `
+                <div style="background: linear-gradient(135deg, #f8faff 0%, #f1f5f9 100%); border: 1px solid #e0e7ff; border-left: 4px solid #4f46e5; border-radius: 10px; padding: 1rem 1.25rem; margin: 1.15rem 0 1.35rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                    <div style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #4338ca; display: flex; align-items: center; gap: 6px; margin-bottom: 0.35rem;">
+                        <span>📋</span> Curriculum Blueprint &amp; Chapter Weightage
+                    </div>
+                    <div style="color: #334155; font-size: 0.88rem; line-height: 1.65;">
+                        ${formatCurriculumSummary(activeSession.curriculumSummary)}
+                    </div>
+                </div>
+            ` : ''}
+
+            <!-- Category Filter Tabs & Layout Switcher Bar -->
+            <div id="topicFilterToolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; margin-bottom: 1.15rem; padding-bottom: 0.85rem; border-bottom: 1px solid #f1f5f9;">
+                <!-- Filter Pills -->
+                <div id="topicFilterPillsWrap" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'critical' ? 'active' : ''}" data-filter="critical" onclick="window.setTopicAnalysisFilter('critical')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'critical' ? 'background: #fef2f2; color: #991b1b; border: 1.5px solid #fecaca; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>🔴 Critical (&lt; 60%)</span>
+                        <span style="background: ${defaultFilter === 'critical' ? '#ef4444' : '#f1f5f9'}; color: ${defaultFilter === 'critical' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${criticalWeak.length}</span>
+                    </button>
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'developing' ? 'active' : ''}" data-filter="developing" onclick="window.setTopicAnalysisFilter('developing')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'developing' ? 'background: #fffbeb; color: #92400e; border: 1.5px solid #fde68a; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>🟡 Need Improvement (60%–90%)</span>
+                        <span style="background: ${defaultFilter === 'developing' ? '#f59e0b' : '#f1f5f9'}; color: ${defaultFilter === 'developing' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${developing.length}</span>
+                    </button>
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'mastered' ? 'active' : ''}" data-filter="mastered" onclick="window.setTopicAnalysisFilter('mastered')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'mastered' ? 'background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>🟢 Strong Topics (&gt; 90%)</span>
+                        <span style="background: ${defaultFilter === 'mastered' ? '#10b981' : '#f1f5f9'}; color: ${defaultFilter === 'mastered' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${mastered.length}</span>
+                    </button>
+                    <button type="button" class="topic-filter-btn ${defaultFilter === 'all' ? 'active' : ''}" data-filter="all" onclick="window.setTopicAnalysisFilter('all')" style="padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; ${defaultFilter === 'all' ? 'background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);' : 'background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;'}">
+                        <span>📋 All Questions</span>
+                        <span style="background: ${defaultFilter === 'all' ? '#3b82f6' : '#f1f5f9'}; color: ${defaultFilter === 'all' ? '#ffffff' : '#64748b'}; padding: 1px 7px; border-radius: 12px; font-size: 0.74rem; font-weight: 800;">${questionItems.length}</span>
+                    </button>
+                </div>
+
+                <!-- Grid Column Toggle (1 Col vs 2 Col) -->
+                <div style="display: inline-flex; background: #f1f5f9; padding: 3px; border-radius: 8px; border: 1px solid #e2e8f0; align-items: center;">
+                    <button type="button" id="btnTopicGrid1Col" onclick="window.setTopicGridLayout(1)" title="1 Column List View" style="border: none; background: transparent; padding: 5px 11px; border-radius: 6px; font-size: 0.78rem; font-weight: 700; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.15s ease;">
+                        <span>🔲 1 Column</span>
+                    </button>
+                    <button type="button" id="btnTopicGrid2Col" onclick="window.setTopicGridLayout(2)" title="2 Column Grid View" style="border: none; background: #ffffff; padding: 5px 11px; border-radius: 6px; font-size: 0.78rem; font-weight: 700; color: #1e293b; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.15s ease;">
+                        <span>▦ 2 Columns</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Topic Performance Grid -->
-            <div id="topicAnalysisGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
-                
-                <!-- 🔴 Critical Weakness Column -->
-                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 1.1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                        <span style="font-weight: 800; color: #991b1b; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🔴</span> Critical Questions (&lt; 60%)
-                        </span>
-                        <span style="background: #fee2e2; color: #991b1b; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${criticalWeak.length}</span>
-                    </div>
-                    ${criticalWeak.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">🎉 No critical question weaknesses (&lt; 60%) detected across class!</div>`
-            : criticalWeak.map(q => `
-                            <div style="background: white; border: 1px solid #fee2e2; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div>
-                                        <span style="background: #ef4444; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
-                                            ${escapeHtml(q.qNum)}
-                                        </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
-                                            ${escapeHtml(q.topic)}
-                                        </span>
-                                    </div>
-                                    <span style="background: #fee2e2; color: #991b1b; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
-                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
-                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
-                                </div>
-                            </div>
-                        `).join('')}
-                </div>
+            <div id="topicAnalysisGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 0.95rem;">
+                ${questionItems.length === 0
+                    ? `<div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 2rem; font-style: italic;">No question items evaluated for this session.</div>`
+                    : questionItems.map(q => {
+                        const tier = q.accuracy < 60 ? 'critical' : (q.accuracy <= 90 ? 'developing' : 'mastered');
+                        return generateQuestionCard(q, tier);
+                    }).join('')
+                }
+            </div>
 
-                <!-- 🟡 Developing Column -->
-                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 1.1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                        <span style="font-weight: 800; color: #92400e; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🟡</span> Need Improvement (60% – 90%)
-                        </span>
-                        <span style="background: #fef3c7; color: #92400e; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${developing.length}</span>
-                    </div>
-                    ${developing.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No questions in 60% – 90% range.</div>`
-            : developing.map(q => `
-                            <div style="background: white; border: 1px solid #fef3c7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div>
-                                        <span style="background: #f59e0b; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
-                                            ${escapeHtml(q.qNum)}
-                                        </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
-                                            ${escapeHtml(q.topic)}
-                                        </span>
-                                    </div>
-                                    <span style="background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
-                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
-                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
-                                </div>
-                            </div>
-                        `).join('')}
-                </div>
-
-                <!-- 🟢 Mastered Column -->
-                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 1.1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                        <span style="font-weight: 800; color: #166534; font-size: 0.92rem; display: flex; align-items: center; gap: 0.35rem;">
-                            <span>🟢</span> Strong Questions (&gt; 90%)
-                        </span>
-                        <span style="background: #dcfce7; color: #166534; padding: 1px 7px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">${mastered.length}</span>
-                    </div>
-                    ${mastered.length === 0
-            ? `<div style="font-size: 0.82rem; color: #64748b; font-style: italic;">No questions currently above 90%.</div>`
-            : mastered.map(q => `
-                            <div style="background: white; border: 1px solid #dcfce7; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.6rem; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                                    <div>
-                                        <span style="background: #10b981; color: white; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; margin-right: 0.35rem; display: inline-block;">
-                                            ${escapeHtml(q.qNum)}
-                                        </span>
-                                        <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
-                                            ${escapeHtml(q.topic)}
-                                        </span>
-                                    </div>
-                                    <span style="background: #dcfce7; color: #166534; font-weight: 800; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">${q.accuracy}%</span>
-                                </div>
-                                <div style="font-size: 0.74rem; color: #64748b; margin-top: 0.3rem;">${escapeHtml(q.chapter)} ${q.subtopic ? `· ${escapeHtml(q.subtopic)}` : ''}</div>
-                                <div style="margin-top: 0.35rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: #94a3b8;">
-                                    <span>Weight: <strong style="color: #475569;">${q.maxMarks}M</strong></span>
-                                    <span>Class Avg: <strong style="color: #475569;">${q.earned}/${q.possible} pts</strong></span>
-                                </div>
-                            </div>
-                        `).join('')}
-                </div>
-
+            <!-- Dynamic Empty Tier Message -->
+            <div id="topicAnalysisEmptyMsg" style="display: none; text-align: center; color: #64748b; padding: 2rem; font-style: italic; background: #f8fafc; border-radius: 10px; border: 1px dashed #cbd5e1; margin-top: 0.75rem;">
+                🎉 No questions in this performance category!
             </div>
         </div>
     `;
 
     container.innerHTML = html;
+    } catch (err) {
+        console.error("renderTopicAnalysis error:", err);
+        container.style.display = "block";
+        container.innerHTML = `<div style=\"background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 1rem; border-radius: 8px; font-size: 0.85rem;\">Notice: Unable to render AI topic analytics: ${escapeHtml(err.message)}</div>`;
+    }
 }
 
 if (typeof window !== 'undefined') {
@@ -896,9 +999,28 @@ function updateMatrixKpis(students, questions, questionIndex) {
     if (studentsEl) studentsEl.textContent = students.length;
     if (questionsEl) questionsEl.textContent = questions.length;
 
+    const toughestCard = toughestQEl ? (toughestQEl.closest('.kpi-card') || toughestQEl.parentElement) : null;
+    const easiestCard = easiestQEl ? (easiestQEl.closest('.kpi-card') || easiestQEl.parentElement) : null;
+
     if (!questions || questions.length === 0 || !questionIndex) {
-        if (toughestQEl) toughestQEl.textContent = '-';
-        if (easiestQEl) easiestQEl.textContent = '-';
+        if (toughestQEl) {
+            toughestQEl.textContent = '-';
+            toughestQEl.style.cursor = 'default';
+        }
+        if (toughestCard) {
+            toughestCard.style.cursor = 'default';
+            toughestCard.title = '';
+            toughestCard.onclick = null;
+        }
+        if (easiestQEl) {
+            easiestQEl.textContent = '-';
+            easiestQEl.style.cursor = 'default';
+        }
+        if (easiestCard) {
+            easiestCard.style.cursor = 'default';
+            easiestCard.title = '';
+            easiestCard.onclick = null;
+        }
         return;
     }
 
@@ -933,10 +1055,43 @@ function updateMatrixKpis(students, questions, questionIndex) {
     if (toughestQEl && toughestQ) {
         toughestQEl.textContent = `${toughestQ.qNum} (${toughestQ.pct}%)`;
         if (toughestQSub) toughestQSub.textContent = `Lowest accuracy across class`;
+        if (toughestCard) {
+            toughestCard.style.cursor = 'pointer';
+            toughestCard.title = `Click to inspect Question ${toughestQ.qNum} drilldown`;
+            toughestCard.onclick = () => window.openWeakQuestionDrilldown(toughestQ.qNum);
+        }
+        toughestQEl.style.cursor = 'pointer';
+    } else {
+        if (toughestQEl) {
+            toughestQEl.textContent = '-';
+            toughestQEl.style.cursor = 'default';
+        }
+        if (toughestCard) {
+            toughestCard.style.cursor = 'default';
+            toughestCard.title = '';
+            toughestCard.onclick = null;
+        }
     }
+
     if (easiestQEl && easiestQ) {
         easiestQEl.textContent = `${easiestQ.qNum} (${easiestQ.pct}%)`;
         if (easiestQSub) easiestQSub.textContent = `Highest accuracy across class`;
+        if (easiestCard) {
+            easiestCard.style.cursor = 'pointer';
+            easiestCard.title = `Click to inspect Question ${easiestQ.qNum} drilldown`;
+            easiestCard.onclick = () => window.openWeakQuestionDrilldown(easiestQ.qNum);
+        }
+        easiestQEl.style.cursor = 'pointer';
+    } else {
+        if (easiestQEl) {
+            easiestQEl.textContent = '-';
+            easiestQEl.style.cursor = 'default';
+        }
+        if (easiestCard) {
+            easiestCard.style.cursor = 'default';
+            easiestCard.title = '';
+            easiestCard.onclick = null;
+        }
     }
 }
 
@@ -983,6 +1138,188 @@ if (typeof window !== 'undefined') {
         }
 
         backdrop.classList.add('active');
+    };
+
+    /**
+     * Open Weak-Question Drilldown Drawer showing Question, CBSE Answer, and student responses
+     */
+    window.openWeakQuestionDrilldown = function (qNum) {
+        if (!qNum) return;
+        const backdrop = document.getElementById('weakQuestionDrilldownBackdrop');
+        if (!backdrop) return;
+
+        const qRec = matrixState.lastQuestionIndex?.get(qNum);
+        const activeSession = matrixState.activeSession || matrixState.sessions?.find(s => s.id === document.getElementById('matrixSessionFilter')?.value) || matrixState.sessions?.[0];
+
+        const sessionLabel = document.getElementById('weakDrilldownSessionLabel');
+        if (sessionLabel) sessionLabel.textContent = activeSession ? formatExamName(activeSession.name) : 'Exam Session';
+
+        const qBadge = document.getElementById('weakDrilldownQBadge');
+        if (qBadge) qBadge.textContent = qNum;
+
+        const topicTitle = document.getElementById('weakDrilldownTopicTitle');
+        const topicName = resolveQuestionTopic(qNum, qRec, activeSession, matrixState.sessions);
+        if (topicTitle) topicTitle.textContent = topicName && topicName !== '-' ? topicName : `Question ${qNum}`;
+
+        const metaEl = document.getElementById('weakDrilldownMeta');
+        const maxMarks = qRec ? qRec.maxMarks : 1;
+
+        // Calculate accuracy for this question across responses
+        let earned = 0;
+        let possible = 0;
+        const responsesList = qRec && qRec.responses ? Array.from(qRec.responses.values()) : [];
+        responsesList.forEach(r => {
+            earned += Number(r.score) || 0;
+            possible += Number(r.maxMarks) || maxMarks;
+        });
+        const accPct = possible > 0 ? Math.round((earned / possible) * 100) : 0;
+        if (metaEl) {
+            metaEl.textContent = `${activeSession?.subject || 'Syllabus'} · Max Marks: ${maxMarks}M · Class Accuracy: ${accPct}% (${earned}/${possible} pts)`;
+        }
+
+        // Resolve question text and marking scheme model answer
+        let qPrompt = qRec?.text || '';
+        let modelAns = '';
+
+        if (activeSession) {
+            // Helper to extract question/answer text from plain text blocks with leaf-subpart matching
+            const matchInText = (text, targetQ) => {
+                if (!text || typeof text !== 'string') return '';
+                // 1. First attempt exact leaf-level match for qNum (e.g. Q17(a) or 17(a)) by escaping parentheses
+                const cleanNum = targetQ.replace(/^q\s*\.?\s*/i, '').trim();
+                const escapedLeaf = cleanNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const flexLeaf = escapedLeaf.replace(/\\\(/g, '\\s*\\(');
+                const escapedExact = targetQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+                const leafPattern = `(?:(?:q\\.?|question\\s*)?${escapedExact}|(?:q\\.?|question\\s*)${flexLeaf}|(?:^|\\n)\\s*${flexLeaf})`;
+                const regLeaf = new RegExp(`${leafPattern}[^\\n]*(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*`, 'i');
+                const mLeaf = text.match(regLeaf);
+                if (mLeaf && mLeaf[0].trim()) {
+                    return mLeaf[0].trim();
+                }
+
+                // 2. If not found, fallback to digit-only regex
+                const qRawNum = targetQ.replace(/\D/g, '');
+                if (qRawNum) {
+                    const regDigit = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*`, 'i');
+                    const mDigit = text.match(regDigit);
+                    if (mDigit && mDigit[0].trim()) {
+                        return mDigit[0].trim();
+                    }
+                    const regFallback = new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*\\n([^\\n]+(?:\\n(?!\\s*(?:q\\.?|question|section))[^\n]+)*)`, 'i');
+                    const mFb = text.match(regFallback);
+                    if (mFb && mFb[0].trim()) {
+                        return mFb[0].trim();
+                    }
+                }
+                return '';
+            };
+
+            if (!qPrompt && activeSession.questions) {
+                if (typeof activeSession.questions === 'string') {
+                    const extracted = matchInText(activeSession.questions, qNum);
+                    if (extracted) qPrompt = extracted;
+                } else if (Array.isArray(activeSession.questions)) {
+                    const foundQ = activeSession.questions.find(q => {
+                        const idStr = String(q.id || q.questionNumber || q.qNo || '');
+                        return idStr.toLowerCase().includes(qNum.toLowerCase());
+                    });
+                    if (foundQ) {
+                        qPrompt = foundQ.text || foundQ.question || '';
+                        modelAns = foundQ.modelAnswer || foundQ.markingScheme || foundQ.answer || '';
+                    }
+                }
+            }
+
+            if (!modelAns && activeSession.markingScheme) {
+                if (typeof activeSession.markingScheme === 'string') {
+                    const extracted = matchInText(activeSession.markingScheme, qNum);
+                    if (extracted) modelAns = extracted;
+                    else modelAns = activeSession.markingScheme;
+                }
+            }
+        }
+
+        const qTextEl = document.getElementById('weakDrilldownQuestionText');
+        if (qTextEl) qTextEl.textContent = qPrompt || 'Refer to the test session question paper for full prompt statement.';
+
+        const modelAnsEl = document.getElementById('weakDrilldownModelAnswer');
+        if (modelAnsEl) modelAnsEl.textContent = modelAns || 'Refer to official CBSE marking scheme for key value points and solution guidelines.';
+
+        const countEl = document.getElementById('weakDrilldownCount');
+        if (countEl) countEl.textContent = responsesList.length;
+
+        // Sort responses with lowest score first (weakest students prioritized)
+        responsesList.sort((a, b) => {
+            const scoreA = Number(a.score) || 0;
+            const scoreB = Number(b.score) || 0;
+            return scoreA - scoreB;
+        });
+
+        const listEl = document.getElementById('weakDrilldownResponsesList');
+        if (listEl) {
+            if (responsesList.length === 0) {
+                listEl.innerHTML = '<div style="text-align: center; color: #64748b; padding: 2rem; font-style: italic;">No student responses recorded for this question yet.</div>';
+            } else {
+                listEl.innerHTML = responsesList.map(r => {
+                    const score = Number(r.score) || 0;
+                    const mMarks = Number(r.maxMarks) || maxMarks;
+                    let badgeBg = '#fef2f2';
+                    let badgeColor = '#991b1b';
+                    let badgeBorder = '#fecaca';
+                    let markIcon = '✗ Zero Marks';
+
+                    if (score >= mMarks) {
+                        badgeBg = '#f0fdf4';
+                        badgeColor = '#166534';
+                        badgeBorder = '#bbf7d0';
+                        markIcon = '✓ Full Marks';
+                    } else if (score > 0) {
+                        badgeBg = '#fffbeb';
+                        badgeColor = '#92400e';
+                        badgeBorder = '#fde68a';
+                        markIcon = '! Partial Marks';
+                    }
+
+                    return `
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #e0e7ff; color: #3730a3; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem;">
+                                        ${escapeHtml((r.studentName || 'A').charAt(0).toUpperCase())}
+                                    </div>
+                                    <div>
+                                        <strong style="color: #1e293b; font-size: 0.95rem;">${escapeHtml(r.studentName || 'Anonymous Student')}</strong>
+                                        <div style="font-size: 0.74rem; color: #64748b;">${escapeHtml(r.sessionName || '')}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.76rem;">
+                                        ${markIcon}
+                                    </span>
+                                    <span style="font-weight: 800; font-size: 1.05rem; color: #1e293b;">
+                                        ${score} / ${mMarks}M
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.65rem 0.85rem; font-size: 0.85rem; color: #334155; margin-bottom: 0.5rem; font-style: italic; white-space: pre-wrap;">
+                                <strong>Student's Written Answer:</strong> "${escapeHtml(r.studentAnswerText || r.rawStudentText || '(No answer text provided)')}"
+                            </div>
+
+                            <div style="font-size: 0.84rem; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 0.6rem 0.85rem;">
+                                <strong>Examiner Feedback:</strong> ${escapeHtml(r.feedback || 'Evaluated according to CBSE criteria.')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        backdrop.style.display = 'flex';
+        requestAnimationFrame(() => {
+            backdrop.classList.add('active');
+        });
     };
 }
 
@@ -1063,10 +1400,30 @@ function setupMatrixDomListeners(appState) {
         });
     }
 
+    // Weak Question Drilldown close events
+    const closeWeakBtn = document.getElementById('btnCloseWeakDrilldown');
+    const weakBackdrop = document.getElementById('weakQuestionDrilldownBackdrop');
+    if (closeWeakBtn && weakBackdrop) {
+        const hideWeak = () => {
+            weakBackdrop.classList.remove('active');
+            setTimeout(() => { weakBackdrop.style.display = 'none'; }, 250);
+        };
+        closeWeakBtn.addEventListener('click', hideWeak);
+        weakBackdrop.addEventListener('click', (e) => {
+            if (e.target === weakBackdrop) hideWeak();
+        });
+    }
+
     // Close on Escape key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && drawerBackdrop?.classList.contains('active')) {
-            drawerBackdrop.classList.remove('active');
+        if (e.key === 'Escape') {
+            if (drawerBackdrop?.classList.contains('active')) {
+                drawerBackdrop.classList.remove('active');
+            }
+            if (weakBackdrop?.classList.contains('active')) {
+                weakBackdrop.classList.remove('active');
+                setTimeout(() => { weakBackdrop.style.display = 'none'; }, 250);
+            }
         }
     });
 }
@@ -1150,4 +1507,83 @@ export function exportMatrixCsv() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+
+if (typeof window !== 'undefined') {
+    window.setTopicAnalysisFilter = function(filter) {
+        const cards = document.querySelectorAll('.topic-q-card');
+        let visibleCount = 0;
+
+        cards.forEach(card => {
+            const match = filter === 'all' || card.dataset.tier === filter;
+            card.style.display = match ? 'block' : 'none';
+            if (match) visibleCount++;
+        });
+
+        const emptyMsg = document.getElementById('topicAnalysisEmptyMsg');
+        if (emptyMsg) {
+            emptyMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+
+        const btns = document.querySelectorAll('.topic-filter-btn');
+        btns.forEach(btn => {
+            const bFilter = btn.dataset.filter;
+            const isActive = bFilter === filter;
+            btn.classList.toggle('active', isActive);
+            const badge = btn.querySelector('span:last-child');
+
+            if (isActive) {
+                if (bFilter === 'critical') {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #fef2f2; color: #991b1b; border: 1.5px solid #fecaca; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15);';
+                    if (badge) { badge.style.background = '#ef4444'; badge.style.color = '#ffffff'; }
+                } else if (bFilter === 'developing') {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #fffbeb; color: #92400e; border: 1.5px solid #fde68a; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15);';
+                    if (badge) { badge.style.background = '#f59e0b'; badge.style.color = '#ffffff'; }
+                } else if (bFilter === 'mastered') {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15);';
+                    if (badge) { badge.style.background = '#10b981'; badge.style.color = '#ffffff'; }
+                } else {
+                    btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);';
+                    if (badge) { badge.style.background = '#3b82f6'; badge.style.color = '#ffffff'; }
+                }
+            } else {
+                btn.style.cssText = 'padding: 0.45rem 0.95rem; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.45rem; transition: all 0.2s ease; background: #ffffff; color: #64748b; border: 1.5px solid #e2e8f0;';
+                if (badge) { badge.style.background = '#f1f5f9'; badge.style.color = '#64748b'; }
+            }
+        });
+    };
+
+    window.setTopicGridLayout = function(cols) {
+        const grid = document.getElementById('topicAnalysisGrid');
+        const btn1 = document.getElementById('btnTopicGrid1Col');
+        const btn2 = document.getElementById('btnTopicGrid2Col');
+        if (!grid) return;
+
+        if (cols === 1) {
+            grid.style.gridTemplateColumns = '1fr';
+            if (btn1) {
+                btn1.style.background = '#ffffff';
+                btn1.style.color = '#1e293b';
+                btn1.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            }
+            if (btn2) {
+                btn2.style.background = 'transparent';
+                btn2.style.color = '#64748b';
+                btn2.style.boxShadow = 'none';
+            }
+        } else {
+            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(360px, 1fr))';
+            if (btn2) {
+                btn2.style.background = '#ffffff';
+                btn2.style.color = '#1e293b';
+                btn2.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            }
+            if (btn1) {
+                btn1.style.background = 'transparent';
+                btn1.style.color = '#64748b';
+                btn1.style.boxShadow = 'none';
+            }
+        }
+    };
 }

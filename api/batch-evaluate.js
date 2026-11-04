@@ -1,6 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { getVertexAccessToken, getVertexCredentialsInfo } from './vertex-auth.js';
+import {
+    handleCors,
+    validateInvocation,
+    verifyAuth,
+    sendError
+} from './_security.js';
 
 // Force load .env.local if present locally
 try {
@@ -127,13 +133,17 @@ function saveDeletedJobIds(ids) {
 }
 
 export default async function handler(req, res) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (handleCors(req, res)) return;
+    if (validateInvocation(req, res)) return;
 
-    if (req.method === "OPTIONS") return res.status(200).end();
     if (req.method !== "POST" && req.method !== "GET") {
-        return res.status(405).json({ error: "Method not allowed." });
+        return sendError(res, 405, "Method not allowed. Use GET or POST.");
+    }
+
+    // Mandatory Authentication Guard
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+        return sendError(res, 401, "Unauthorized: Authentication required to access batch evaluation service.");
     }
 
     let body = req.body;
@@ -142,6 +152,13 @@ export default async function handler(req, res) {
     }
     if (req.method === "GET") {
         body = req.query;
+    }
+
+    const action = body.action || req.query?.action || "create";
+
+    // Creating or deleting batch jobs requires administrator privileges
+    if ((action === "create" || action === "delete") && !authResult.user?.isAdmin) {
+        return sendError(res, 403, "Forbidden: Administrator privileges required to create or delete batch prediction jobs.");
     }
 
     let authToken = null;
@@ -156,17 +173,11 @@ export default async function handler(req, res) {
 
     const rawKeys = process.env.GEMINI_API_KEY || process.env.VERTEX_API_KEY || process.env.GEMINI_KEY || process.env.GOOGLE_API_KEY || "";
     if (!rawKeys && !authToken) {
-        return res.status(500).json({
-            error: "Neither Gemini/Vertex API key nor GCP Service Account key is configured in server environment.",
-            authAudit: {
-                serviceAccountFetched: false,
-                error: credsInfo.error || authError || "Missing API Key or GCP_SERVICE_ACCOUNT_KEY"
-            }
-        });
+        return sendError(res, 500, "Neither Gemini/Vertex API key nor GCP Service Account key is configured in server environment.");
     }
 
     const apiKey = rawKeys ? rawKeys.split(",")[0].trim() : "";
-    const action = body.action || req.query?.action || "create";
+
 
     const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
     const location = process.env.GCP_LOCATION || "global";
@@ -524,6 +535,7 @@ export default async function handler(req, res) {
             for (let i = 0; i < responsesList.length; i++) {
                 const item = responsesList[i];
                 const meta = studentsMetadata[i] || { studentName: `Student ${i + 1}` };
+                const usageMetadata = item.response?.usageMetadata || null;
 
                 let rawText = "";
                 if (item.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -581,12 +593,14 @@ export default async function handler(req, res) {
                     parsedResults.push({
                         studentName: resolvedStudentName,
                         result: evalObj,
+                        usageMetadata: usageMetadata,
                         rawOutput: cleaned
                     });
                 } catch (pErr) {
                     parsedResults.push({
                         studentName: meta.studentName || `Student ${i + 1}`,
                         error: "JSON parse failed: " + pErr.message,
+                        usageMetadata: usageMetadata,
                         rawOutput: rawText
                     });
                 }
@@ -656,6 +670,7 @@ ${reasoningGuardrailPrompt}
 CRITICAL CONSTRAINTS:
 1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
+3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
 4. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
    - Always use canonical numbering matching the official exam paper.
    - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
@@ -690,11 +705,9 @@ Return STRICT JSON:
     // Package each student into an inline GenerateContentRequest
     const inlinedRequests = students.map((st, idx) => {
         const studentName = st.studentName || `Student ${idx + 1}`;
-        const studentPrompt = `STUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}
-(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")
-
-${promptBase}`;
-        const parts = [{ text: studentPrompt }];
+        const candidateSuffix = `\n\n--- EVALUATION TARGET ---\nSTUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}\n(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")\nEvaluate the student's handwritten answer sheet pages below against the master criteria above.`;
+        // Static promptBase MUST come FIRST at Token 0 to trigger Google Cloud Vertex AI implicit prefix KV-caching across all students!
+        const parts = [{ text: promptBase + candidateSuffix }];
 
         if (Array.isArray(st.pages)) {
             st.pages.forEach(p => {
@@ -710,7 +723,8 @@ ${promptBase}`;
         const genConfig = {
             responseMimeType: "application/json",
             temperature: 0.0,
-            seed: 42
+            seed: 42,
+            mediaResolution: "MEDIA_RESOLUTION_MEDIUM"
         };
 
         if (isArgon) {
@@ -744,6 +758,19 @@ ${promptBase}`;
     const gcsBucket = process.env.GCP_STORAGE_BUCKET || `${projectId}-batch-evals`;
     const inputFileName = `inputs/${cleanSession}_${Date.now()}.jsonl`;
     const jsonlData = inlinedRequests.map(req => JSON.stringify({ request: req })).join('\n') + '\n';
+
+    console.log("📊 [BATCH INPUT PAYLOAD AUDIT]", {
+        isExplicitCache,
+        cachedContentId,
+        questionsChars: (questions || "").length,
+        questionsEstTokens: Math.round((questions || "").length / 4),
+        markingSchemeChars: (markingScheme || "").length,
+        markingSchemeEstTokens: Math.round((markingScheme || "").length / 4),
+        totalPromptBaseChars: promptBase.length,
+        totalPromptBaseEstTokens: Math.round(promptBase.length / 4),
+        studentsCount: students.length,
+        pagesPerStudent: students.map(s => s.pages?.length || 0)
+    });
 
     console.log(`📤 Uploading batch input (${inlinedRequests.length} students) to Google Cloud Storage (gs://${gcsBucket}/${inputFileName})...`);
     let gcsInputUri = body.gcsInputUri || "";

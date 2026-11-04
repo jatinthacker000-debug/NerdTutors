@@ -1,3 +1,8 @@
+# ZERO WORKSPACE BRANCHING / ZERO REPOSITORY INVOCATION (MANDATORY)
+- **ALREADY IN WORKSPACE:** You are executing directly inside the existing, active repository at `d:\Trinno\NerdTutors`.
+- **STRICT PROHIBITION:** You MUST NEVER run `git clone`, `git init`, `git worktree add`, or create new repository folders.
+- **NO SUBAGENTS / NO BUREAUCRACY:** Do NOT spawn subagents, do not spawn background coordinators, and do not create branched workspaces. Work directly and immediately on the files in this directory.
+
 # Nerd Tutors Workspace Specifications
 
 ## 1. Evaluation & OCR Grading Standards (`api/ocr-evaluate.js`)
@@ -10,8 +15,8 @@
   * **Left Side:** Final Score block, grade/performance metrics, badge counts (Correct, Partial, Incorrect).
   * **Right Side:** Question-by-Question performance badges grid (Checks, Exclamations, Crosses) and dynamic legend.
 * **Print Styling:**
-  * `@page { margin: 0; }` must be used inside printing style blocks to hide the default browser headers (date/time) and footers (`about:blank`, page counts).
-  * Page borders/margins must instead be styled inside the `body` tag using `padding: 10mm 15mm !important;`.
+  * `@page { size: A4 portrait; margin: 8mm 10mm; }` is used inside printing style blocks to enforce standard narrow PDF borders.
+  * In `@media print`, `body` is styled with `margin: 0 !important; padding: 0 !important;` so `@page` controls the narrow print boundary cleanly without double margins.
   * Ensure color backgrounds print by applying `-webkit-print-color-adjust: exact !important;` and `print-color-adjust: exact !important;`.
   * The evaluation date goes in the top metadata table (date-only via `.toLocaleDateString()`), and the detailed evaluation time (via `.toLocaleTimeString()`) is placed at the bottom of the left Final Score card to preserve clean formatting.
 

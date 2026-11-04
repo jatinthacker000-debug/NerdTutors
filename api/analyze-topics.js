@@ -1,37 +1,24 @@
-import fs from 'fs';
-import path from 'path';
 import { getVertexAccessToken, getVertexCredentialsInfo } from './vertex-auth.js';
-
-// Force load .env.local if present locally
-try {
-    const envPath = path.join(process.cwd(), '.env.local');
-    if (fs.existsSync(envPath)) {
-        const content = fs.readFileSync(envPath, 'utf8');
-        content.split('\n').forEach(line => {
-            const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-            if (match) {
-                const key = match[1];
-                let value = match[2] || '';
-                if (value.startsWith('"') && value.endsWith('"')) {
-                    value = value.substring(1, value.length - 1);
-                } else if (value.startsWith("'") && value.endsWith("'")) {
-                    value = value.substring(1, value.length - 1);
-                }
-                process.env[key] = value;
-            }
-        });
-    }
-} catch (e) {
-    console.warn("Env force load notice in analyze-topics:", e.message);
-}
+import {
+    handleCors,
+    validateInvocation,
+    verifyAuth,
+    sendError
+} from './_security.js';
 
 export default async function handler(req, res) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (handleCors(req, res)) return;
+    if (validateInvocation(req, res)) return;
 
-    if (req.method === "OPTIONS") return res.status(200).end();
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed. Use POST." });
+    if (req.method !== "POST") {
+        return sendError(res, 405, "Method not allowed. Use POST.");
+    }
+
+    // Require authentication
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+        return sendError(res, 401, "Unauthorized: Authentication required to analyze topics.");
+    }
 
     let body = req.body;
     if (typeof body === 'string') {
@@ -47,7 +34,7 @@ export default async function handler(req, res) {
     } = body;
 
     if (!questions && !markingScheme) {
-        return res.status(400).json({ error: "questions or markingScheme text is required for topic analysis." });
+        return sendError(res, 400, "questions or markingScheme text is required for topic analysis.");
     }
 
     // Auth & Endpoint setup
@@ -55,7 +42,7 @@ export default async function handler(req, res) {
     const credsInfo = getVertexCredentialsInfo();
     try {
         authToken = await getVertexAccessToken();
-    } catch (_) {}
+    } catch (_) { }
 
     const rawKeys = process.env.VERTEX_API_KEY || process.env.GEMINI_API_KEY || process.env.GEMINI_API || process.env.GEMINI_KEY || "";
     const apiKey = rawKeys ? rawKeys.split(",")[0].trim() : "";
@@ -66,8 +53,8 @@ export default async function handler(req, res) {
 
     const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
     const location = process.env.GCP_LOCATION || "global";
-    const host = location === "global" 
-        ? "aiplatform.googleapis.com" 
+    const host = location === "global"
+        ? "aiplatform.googleapis.com"
         : (location === "us" ? "aiplatform.us.rep.googleapis.com" : `${location}-aiplatform.googleapis.com`);
 
     const promptText = `You are a master CBSE Curriculum Coordinator and Exam Analyst.
@@ -114,9 +101,9 @@ Return STRICT JSON ONLY in this format:
 
     if (isVertex) {
         headers["Authorization"] = `Bearer ${authToken}`;
-        targetUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-4-argon:generateContent`;
+        targetUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-3.8-flash:generateContent`;
     } else {
-        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
     }
 
     const payload = {
@@ -128,7 +115,7 @@ Return STRICT JSON ONLY in this format:
         ],
         generationConfig: {
             responseMimeType: "application/json",
-            temperature: 0.1,
+            temperature: 0.0,
             seed: 42
         }
     };
@@ -140,10 +127,10 @@ Return STRICT JSON ONLY in this format:
             body: JSON.stringify(payload)
         });
 
-        // Failover to gemini-3.8-flash if primary encounters error
+        // Failover if primary encounters error
         if (!response.ok && isVertex) {
-            console.warn(`Argon topic analysis status ${response.status}. Failing over to gemini-3.8-flash...`);
-            const fallbackUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-3.8-flash:generateContent`;
+            console.warn(`Gemini 3.8 Flash topic analysis status ${response.status}. Failing over to gemini-4-argon...`);
+            const fallbackUrl = `https://${host}/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-4-argon:generateContent`;
             response = await fetch(fallbackUrl, {
                 method: "POST",
                 headers: headers,
@@ -153,17 +140,17 @@ Return STRICT JSON ONLY in this format:
 
         if (!response.ok) {
             const errTxt = await response.text();
-            return res.status(response.status).json({ error: `Model call failed: ${errTxt}` });
+            return sendError(res, response.status, "Model call failed", errTxt);
         }
 
         const data = await response.json();
         const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        
+
         let parsed = {};
         try {
             parsed = JSON.parse(rawContent.trim().replace(/^```json/i, '').replace(/```$/i, '').trim());
         } catch (e) {
-            return res.status(500).json({ error: "Failed to parse topic analysis model JSON.", rawContent });
+            return sendError(res, 500, "Failed to parse topic analysis model JSON.", rawContent);
         }
 
         // Canonical Key Normalization for topicMap
@@ -193,6 +180,7 @@ Return STRICT JSON ONLY in this format:
         });
     } catch (err) {
         console.error("Topic analysis handler error:", err);
-        return res.status(500).json({ error: err.message });
+        return sendError(res, 500, "Internal server error", err.message);
     }
 }
+

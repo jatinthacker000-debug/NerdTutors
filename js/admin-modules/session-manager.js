@@ -1,3 +1,36 @@
+function formatExamName(raw) {
+    if (!raw) return 'Exam';
+    let cleaned = raw.replace(/[_-]\d{10,}\b/g, '');
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    cleaned = cleaned.replace(/\(?\b(\d{1,2})[_\s\/\.-](\d{1,2})[_\s\/\.-](20\d{2})\b\)?/g, (match, d, m, y) => {
+        const day = parseInt(d, 10);
+        const monthNum = parseInt(m, 10);
+        const year = parseInt(y, 10);
+        if (monthNum >= 1 && monthNum <= 12 && day >= 1 && day <= 31) {
+            return ' (' + day + ' ' + months[monthNum - 1] + ' ' + year + ')';
+        }
+        return match;
+    });
+    cleaned = cleaned.replace(/\(?\b(\d{1,2})[_\/\.-](\d{1,2})[_\/\.-](\d{2})\b\)?/g, (match, d, m, y) => {
+        const day = parseInt(d, 10);
+        const monthNum = parseInt(m, 10);
+        const year = parseInt(y, 10) + 2000;
+        if (monthNum >= 1 && monthNum <= 12 && day >= 1 && day <= 31) {
+            return ' (' + day + ' ' + months[monthNum - 1] + ' ' + year + ')';
+        }
+        return match;
+    });
+    let prev = '';
+    while (prev !== cleaned) {
+        prev = cleaned;
+        cleaned = cleaned.replace(/\(\s*\(/g, '(').replace(/\)\s*\)/g, ')');
+    }
+    cleaned = cleaned.replace(/_/g, ' ');
+    cleaned = cleaned.replace(/^NerdTutors\s*[-:]?\s*/i, '');
+    cleaned = cleaned.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+    return cleaned || raw;
+}
+
 // ============================================
 // SESSION MANAGER
 // Test session creation & management, student results
@@ -21,6 +54,7 @@ import {
 
 import { showToast, escapeHtml, syncClassSubjects } from './admin-utils.js';
 import { smartExtractPdf, runExtractionDiagnosticTest, initPdfJs } from './pdf-extractor.js';
+import { getNerdAuthHeaders, apiUrl } from '../client-auth.js';
 
 export async function createTestSession() {
     const btn = document.getElementById('btnCreateSession');
@@ -81,6 +115,8 @@ export async function createTestSession() {
 }
 
 let allTestSessions = [];
+let orphanedResultsList = [];
+
 export async function loadTestSessionsForDropdown() {
     const selectEl = document.getElementById('resultSessionSelect');
     if (!selectEl) return;
@@ -89,16 +125,48 @@ export async function loadTestSessionsForDropdown() {
         const q = query(collection(db, 'testSessions'), orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
         allTestSessions = [];
+        const validSessionIds = new Set();
 
         let optionsHtml = '<option value="">-- Select a Test Session --</option>';
         querySnapshot.forEach(docSnap => {
             const data = docSnap.data();
             const id = docSnap.id;
             allTestSessions.push({ id, ...data });
+            validSessionIds.add(id);
             const yearTag = data.examYear && data.examYear !== 'Standard' ? ` (${data.examYear})` : '';
             const setTag = data.examSet && data.examSet !== 'Standard / All' ? ` [${data.examSet}]` : '';
-            optionsHtml += `<option value="${id}">${data.name}${yearTag}${setTag} (${data.class} - ${data.subject})</option>`;
+            optionsHtml += `<option value="${id}">${formatExamName(data.name)}${yearTag}${setTag} (${data.class} - ${data.subject})</option>`;
         });
+
+        // Scan for orphaned testResults whose sessionId does NOT exist in testSessions
+        try {
+            const resultsSnap = await getDocs(collection(db, 'testResults'));
+            orphanedResultsList = [];
+            resultsSnap.forEach(d => {
+                const rData = d.data();
+                if (!rData.sessionId || !validSessionIds.has(rData.sessionId)) {
+                    orphanedResultsList.push({ id: d.id, ...rData });
+                }
+            });
+
+            // Update header warning button
+            const cleanBtn = document.getElementById('btnCleanOrphanedData');
+            if (cleanBtn) {
+                if (orphanedResultsList.length > 0) {
+                    cleanBtn.style.display = 'inline-flex';
+                    cleanBtn.innerHTML = `⚠️ Clean Orphaned Records (${orphanedResultsList.length})`;
+                } else {
+                    cleanBtn.style.display = 'none';
+                }
+            }
+
+            // Append orphaned option to dropdown if any exist
+            if (orphanedResultsList.length > 0) {
+                optionsHtml += `<option value="__ORPHANED__" style="color: #e11d48; font-weight: 700; background: #fff1f2;">⚠️ Orphaned Evaluations (${orphanedResultsList.length} from deleted tests)</option>`;
+            }
+        } catch (resErr) {
+            console.warn('Could not scan for orphaned results:', resErr);
+        }
 
         selectEl.innerHTML = optionsHtml;
     } catch (error) {
@@ -117,6 +185,7 @@ export async function loadResultsForSession(sessionId) {
     const countBadge = document.getElementById('resultsCountBadge');
     const countText = document.getElementById('resultsCountText');
     const sessionDetails = document.getElementById('sessionDetailsBadge');
+    const purgeBatchBtn = document.getElementById('btnPurgeOrphanedBatch');
 
     if (actionsBar) actionsBar.style.display = 'none';
 
@@ -129,21 +198,35 @@ export async function loadResultsForSession(sessionId) {
     `;
 
     try {
-        const querySnapshot = await getDocs(collection(db, 'testResults'));
+        const isOrphaned = sessionId === '__ORPHANED__';
         let results = [];
 
-        querySnapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            if (data.sessionId === sessionId) {
-                results.push({ id: docSnap.id, ...data });
-            }
-        });
+        if (isOrphaned) {
+            // Re-verify orphaned results live against current testSessions
+            const validSessionIds = new Set(allTestSessions.map(s => s.id));
+            const querySnapshot = await getDocs(collection(db, 'testResults'));
+            querySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (!data.sessionId || !validSessionIds.has(data.sessionId)) {
+                    results.push({ id: docSnap.id, ...data });
+                }
+            });
+            orphanedResultsList = [...results];
+        } else {
+            const querySnapshot = await getDocs(collection(db, 'testResults'));
+            querySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (data.sessionId === sessionId) {
+                    results.push({ id: docSnap.id, ...data });
+                }
+            });
+        }
 
         if (results.length === 0) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">
-                        No student evaluations found for this session yet.
+                        ${isOrphaned ? 'No orphaned student evaluations found. All records belong to active tests.' : 'No student evaluations found for this session yet.'}
                     </td>
                 </tr>
             `;
@@ -157,34 +240,51 @@ export async function loadResultsForSession(sessionId) {
         results.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
         let html = '';
+        if (isOrphaned) {
+            html += `
+                <tr style="background: #fff1f2; border-bottom: 2px solid #fecaca;">
+                    <td colspan="7" style="padding: 0.85rem 1rem; color: #9f1239; font-size: 0.88rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;">
+                            <span>⚠️ <strong>Orphaned Student Records (${results.length}):</strong> These evaluations belong to tests that were previously deleted. You can delete rows individually below or click <strong>Purge All Orphaned Records</strong> to delete them in bulk.</span>
+                            <button type="button" onclick="window.cleanOrphanedResults()" style="background: #e11d48; color: white; border: none; padding: 0.35rem 0.85rem; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer;">🗑️ Purge All (${results.length})</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
         results.forEach(res => {
             const dateStr = res.createdAt ? new Date(res.createdAt.seconds * 1000).toLocaleDateString() : 'N/A';
+            const testLabel = isOrphaned ? `<div style="font-size: 0.72rem; color: #e11d48; font-weight: 600;">[From Deleted: ${escapeHtml(res.sessionName || res.testType || 'Unknown')}]</div>` : '';
             html += `
                 <tr style="border-bottom: 1px solid #e2e8f0;">
-                    <td style="padding: 1rem; font-weight: 600; color: #2d3748;">${escapeHtml(res.studentName)}</td>
+                    <td style="padding: 1rem; font-weight: 600; color: #2d3748;">
+                        ${escapeHtml(res.studentName)}
+                        ${testLabel}
+                    </td>
                     <td style="padding: 1rem;">
                         <span style="background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;">${escapeHtml(res.batch || res.targetGroup || 'Both')}</span>
                     </td>
-                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.class)}</td>
-                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.subject)}</td>
+                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.class || 'Class 12th')}</td>
+                    <td style="padding: 1rem; color: #4a5568;">${escapeHtml(res.subject || 'General')}</td>
                     <td style="padding: 1rem;">
                         <span style="background: #edf2f7; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 700; color: #2b6cb0; display: inline-flex; align-items: center; gap: 0.35rem;">
-                            <span>${res.score} / ${res.maxMarks}</span>
-                            <span style="cursor: pointer; color: #718096; font-size: 0.9rem;" title="Edit Score" onclick="window.editStudentScore('${res.id}', ${res.score}, ${res.maxMarks})">✏️</span>
+                            <span>${Number(res.score) || 0} / ${Number(res.maxMarks) || 0}</span>
+                            <span style="cursor: pointer; color: #718096; font-size: 0.9rem;" title="Edit Score" data-id="${escapeHtml(res.id)}" onclick="window.editStudentScore(this.dataset.id, ${Number(res.score) || 0}, ${Number(res.maxMarks) || 0})">✏️</span>
                         </span>
                     </td>
                     <td style="padding: 1rem; color: #718096;">${dateStr}</td>
                     <td style="padding: 1rem; text-align: right;">
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #3182ce; margin-right: 0.35rem; width: auto;" onclick="window.viewReportCard('${res.id}')">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #3182ce; margin-right: 0.35rem; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.viewReportCard(this.dataset.id)">
                             👁️ View Card
                         </button>
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #4f46e5; margin-right: 0.35rem; width: auto;" onclick="window.downloadSingleStudentPdf('${res.id}')" title="Download single PDF">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #4f46e5; margin-right: 0.35rem; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.downloadSingleStudentPdf(this.dataset.id)" title="Download single PDF">
                             📥 PDF
                         </button>
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #2f855a; margin-right: 0.35rem; width: auto;" onclick="window.printReportCard('${res.id}')">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #2f855a; margin-right: 0.35rem; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.printReportCard(this.dataset.id)">
                             🖨️ Print
                         </button>
-                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #e53e3e; width: auto;" onclick="window.deleteResult('${res.id}')">
+                        <button class="btn-submit" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: #e53e3e; width: auto;" data-id="${escapeHtml(res.id)}" onclick="window.deleteResult(this.dataset.id)">
                             🗑️ Delete
                         </button>
                     </td>
@@ -199,14 +299,22 @@ export async function loadResultsForSession(sessionId) {
         // Show and configure the action bar
         if (actionsBar) {
             actionsBar.style.display = 'flex';
-            if (countText) countText.textContent = `${results.length} Submissions`;
+            if (countText) countText.textContent = isOrphaned ? `${results.length} Orphaned Evaluations` : `${results.length} Submissions`;
 
-            const sessionObj = allTestSessions.find(s => s.id === sessionId);
+            if (purgeBatchBtn) {
+                purgeBatchBtn.style.display = isOrphaned ? 'inline-flex' : 'none';
+            }
+
             if (sessionDetails) {
-                const sTitle = sessionObj?.name || results[0]?.sessionName || 'Exam';
-                const sSub = sessionObj?.subject || results[0]?.subject || '';
-                const sCls = sessionObj?.class || results[0]?.class || '';
-                sessionDetails.innerHTML = `&bull; <strong>${escapeHtml(sTitle)}</strong> (${escapeHtml(sCls)}${sSub ? ' - ' + escapeHtml(sSub) : ''})`;
+                if (isOrphaned) {
+                    sessionDetails.innerHTML = `&bull; <span style="color: #e11d48; font-weight: 700;">Leftover records from deleted tests</span>`;
+                } else {
+                    const sessionObj = allTestSessions.find(s => s.id === sessionId);
+                    const sTitle = sessionObj?.name || results[0]?.sessionName || 'Exam';
+                    const sSub = sessionObj?.subject || results[0]?.subject || '';
+                    const sCls = sessionObj?.class || results[0]?.class || '';
+                    sessionDetails.innerHTML = `&bull; <strong>${escapeHtml(sTitle)}</strong> (${escapeHtml(sCls)}${sSub ? ' - ' + escapeHtml(sSub) : ''})`;
+                }
             }
 
             const zipBtn = document.getElementById('btnDownloadZipReports');
@@ -275,8 +383,8 @@ window.viewReportCard = function(resultId) {
         appealHtml = `
             <div style="background: #fffaf0; border: 1px solid #feebc8; border-left: 4px solid #dd6b20; border-radius: 8px; padding: 1.25rem; margin-top: 1.5rem;">
                 <h4 style="color: #dd6b20; margin: 0 0 0.5rem 0; font-size: 1.1rem; font-weight: 700;">⚖️ Re-evaluation Appeal Advisor</h4>
-                <p style="color: #7b341e; font-weight: 700; margin: 0 0 0.25rem 0; font-size: 0.95rem;">Appeal Case: ${res.totalAppealPotential}</p>
-                <p style="color: #7b341e; margin: 0; font-size: 0.9rem; line-height: 1.5;">${res.appealSummary}</p>
+                <p style="color: #7b341e; font-weight: 700; margin: 0 0 0.25rem 0; font-size: 0.95rem;">Appeal Case: ${escapeHtml(res.totalAppealPotential)}</p>
+                <p style="color: #7b341e; margin: 0; font-size: 0.9rem; line-height: 1.5;">${escapeHtml(res.appealSummary)}</p>
             </div>
         `;
     }
@@ -453,7 +561,7 @@ window.viewReportCard = function(resultId) {
                                 <strong>${escapeHtml(qText)}</strong>
                                 <span style="background: #e2e8f0; padding: 0.25rem 0.75rem; border-radius: 12px; font-weight: bold; font-size: 0.9rem; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem;">
                                     <span>${earned} / ${max}</span>
-                                    <span style="cursor: pointer; color: #1e3c72; font-size: 0.85rem;" title="Edit Question Marks" onclick="window.editQuestionScore('${res.id}', ${originalIndex})">✏️</span>
+                                    <span style="cursor: pointer; color: #1e3c72; font-size: 0.85rem;" title="Edit Question Marks" data-id="${escapeHtml(res.id)}" data-index="${Number(originalIndex) || 0}" onclick="window.editQuestionScore(this.dataset.id, Number(this.dataset.index))">✏️</span>
                                 </span>
                             </div>
                             ${studentAns ? `<div style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #4a5568;"><strong>Student Answer:</strong> ${escapeHtml(studentAns)}</div>` : ''}
@@ -857,9 +965,9 @@ export function buildReportCardContent(res, markingSchemeText = '') {
         ` : ''}
 
         ${wrongQuestions.length > 0 ? `
-        <div class="report-block">
+        <div class="mistakes-section-wrapper" style="margin-top: 1.25rem;">
             <h3 class="section-title">🔍 Detailed Question-by-Question Mistakes</h3>
-            <div style="margin-top: 1rem;">
+            <div style="margin-top: 0.85rem;">
                 ${wrongQuestions.map((q, idx) => {
                     const originalIndex = questionsArr.findIndex(x => x.questionNumber === q.questionNumber || x.questionText === q.questionText);
                     const earned = q.earnedMarks !== undefined ? q.earnedMarks : (q.score || 0);
@@ -871,7 +979,7 @@ export function buildReportCardContent(res, markingSchemeText = '') {
                     const correctAns = cleanModelAnswer(rawAns, isMcq);
                     
                     return `
-                    <div class="report-block" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: inline-block; width: 100%; break-inside: avoid; page-break-inside: avoid;">
+                    <div class="question-mistake-card report-block" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 0.85rem; display: block; width: 100%; break-inside: avoid; page-break-inside: avoid; box-sizing: border-box;">
                         <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #edf2f7; padding-bottom: 0.5rem; margin-bottom: 0.5rem; gap: 1rem; align-items: flex-start;">
                             <strong>${formatDisplayText(qText)}</strong>
                             <span style="font-weight: bold; background: #fed7d7; color: #9b2c2c; padding: 0.25rem 0.75rem; border-radius: 12px; white-space: nowrap; flex-shrink: 0;">${earned} / ${max}</span>
@@ -965,34 +1073,28 @@ window.printReportCard = async function(resultId) {
     <title>Report Card - ${escapeHtml(res.studentName || 'Student')}</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @page {
-            size: auto;
-            margin: 0;
-        }
+        @page { size: A4 portrait; margin: 5mm 6mm; }
         *, *:before, *:after {
             box-sizing: border-box !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
-        body { 
-            font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            padding: 10mm 15mm !important;
-            margin: 0;
+        body { font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 6mm 6mm; margin: 0 auto; max-width: 100%; box-sizing: border-box;
             color: #2d3748; 
             line-height: 1.5; 
         }
-        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
+        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; break-inside: avoid !important; page-break-inside: avoid !important; }
         .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
         .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
         
-        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; break-inside: avoid !important; page-break-inside: avoid !important; }
         .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
         .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
         .meta-item .value { font-weight: 700; color: #2d3748; }
 
-        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; }
-        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; }
+        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; break-inside: avoid !important; page-break-inside: avoid !important; }
         
         .card-title { font-weight: 700; font-size: 0.8rem; color: #c53030; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
         .score-display { font-size: 2.75rem; font-weight: 900; color: #c53030; line-height: 1; margin: 0.25rem 0 0.5rem 0; text-align: center; }
@@ -1016,22 +1118,28 @@ window.printReportCard = async function(resultId) {
         .legend-row { display: flex; gap: 0.5rem; font-size: 0.68rem; font-weight: 600; color: #718096; margin-top: auto; border-top: 1px solid #edf2f7; padding-top: 0.5rem; flex-wrap: wrap; }
         .info-note { background-color: #f0f4f8; border: 1px solid #d0d7de; border-left: 4px solid #1e3c72; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #3182ce; line-height: 1.3; display: flex; align-items: flex-start; gap: 0.35rem; margin-top: 0.75rem; text-align: left; }
 
-        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; }
+        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; break-after: avoid !important; page-break-after: avoid !important; }
         ul { padding-left: 1.25rem; }
         li { margin-bottom: 0.4rem; font-size: 0.9rem; color: #4a5568; }
         p { font-size: 0.9rem; color: #4a5568; }
         
         .report-block {
-            display: inline-block;
+            display: block;
             width: 100%;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+            box-sizing: border-box !important;
         }
 
         @media print {
             .no-print, .no-print * {
                 display: none !important;
                 visibility: hidden !important;
+            }
+            body {
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #ffffff !important;
             }
         }
     </style>
@@ -1095,23 +1203,23 @@ export function getReportCardPrintCss() {
             color: #2d3748;
             background: #ffffff;
             line-height: 1.5;
-            padding: 10mm 14mm;
-            width: 800px;
+            padding: 0;
+            width: 100%;
             margin: 0 auto;
             box-sizing: border-box;
         }
-        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
+        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; break-inside: avoid !important; page-break-inside: avoid !important; }
         .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
         .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
         
-        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; break-inside: avoid !important; page-break-inside: avoid !important; }
         .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
         .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
         .meta-item .value { font-weight: 700; color: #2d3748; }
 
-        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; }
-        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; }
+        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; break-inside: avoid !important; page-break-inside: avoid !important; }
         
         .card-title { font-weight: 700; font-size: 0.8rem; color: #c53030; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
         .score-display { font-size: 2.75rem; font-weight: 900; color: #c53030; line-height: 1; margin: 0.25rem 0 0.5rem 0; text-align: center; }
@@ -1135,16 +1243,17 @@ export function getReportCardPrintCss() {
         .legend-row { display: flex; gap: 0.5rem; font-size: 0.68rem; font-weight: 600; color: #718096; margin-top: auto; border-top: 1px solid #edf2f7; padding-top: 0.5rem; flex-wrap: wrap; }
         .info-note { background-color: #f0f4f8; border: 1px solid #d0d7de; border-left: 4px solid #1e3c72; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #3182ce; line-height: 1.3; display: flex; align-items: flex-start; gap: 0.35rem; margin-top: 0.75rem; text-align: left; }
 
-        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; }
+        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; break-after: avoid !important; page-break-after: avoid !important; }
         ul { padding-left: 1.25rem; }
         li { margin-bottom: 0.4rem; font-size: 0.9rem; color: #4a5568; }
         p { font-size: 0.9rem; color: #4a5568; }
         
         .report-block {
-            display: inline-block;
+            display: block;
             width: 100%;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+            box-sizing: border-box !important;
         }
     `;
 }
@@ -1199,10 +1308,7 @@ export async function downloadAllReportsForCurrentSession() {
     <title>${escapeHtml(sessionTitle)} - All Student Report Cards (${results.length})</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @page {
-            size: auto;
-            margin: 0;
-        }
+        @page { size: A4 portrait; margin: 5mm 6mm; }
         *, *:before, *:after {
             box-sizing: border-box !important;
             -webkit-print-color-adjust: exact !important;
@@ -1211,37 +1317,41 @@ export async function downloadAllReportsForCurrentSession() {
         body { 
             font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             margin: 0;
-            padding: 0;
-            background: #f1f5f9;
+            padding: 6mm 6mm; background: #f1f5f9; max-width: 100%; box-sizing: border-box;
             color: #2d3748; 
             line-height: 1.5; 
         }
         .student-report-page {
             background: #ffffff;
-            padding: 10mm 15mm !important;
-            margin: 15px auto;
-            max-width: 960px;
+            padding: 10mm 15mm;
+            margin: 20px auto;
+            max-width: 900px;
             box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-            page-break-after: always !important;
-            break-after: page !important;
+            page-break-before: always !important;
+            break-before: page !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+        .student-report-page:first-child {
+            page-break-before: avoid !important;
+            break-before: avoid !important;
+            margin-top: 0;
         }
         .student-report-page:last-child {
-            page-break-after: avoid !important;
-            break-after: avoid !important;
             margin-bottom: 0;
         }
-        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; }
+        .header { border-bottom: 4px solid #1e3c72; padding-bottom: 0.5rem; margin-bottom: 1rem; text-align: center; break-inside: avoid !important; page-break-inside: avoid !important; }
         .header h1 { margin: 0; color: #1e3c72; font-size: 2rem; font-weight: 800; letter-spacing: 1px; }
         .header p { margin: 6px 0 0 0; color: #718096; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
         
-        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem; background: #f8fafc; padding: 0.75rem; border-radius: 12px; border: 1px solid #e2e8f0; break-inside: avoid !important; page-break-inside: avoid !important; }
         .meta-item { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.95rem; }
         .meta-item .label { font-weight: 500; color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
         .meta-item .value { font-weight: 700; color: #2d3748; }
 
-        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; }
-        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
-        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; }
+        .dashboard-split { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .score-card-left { flex: 1; min-width: 250px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: space-between; break-inside: avoid !important; page-break-inside: avoid !important; }
+        .perf-card-right { flex: 1.5; min-width: 300px; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1rem; display: flex; flex-direction: column; break-inside: avoid !important; page-break-inside: avoid !important; }
         
         .card-title { font-weight: 700; font-size: 0.8rem; color: #c53030; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
         .score-display { font-size: 2.75rem; font-weight: 900; color: #c53030; line-height: 1; margin: 0.25rem 0 0.5rem 0; text-align: center; }
@@ -1265,16 +1375,17 @@ export async function downloadAllReportsForCurrentSession() {
         .legend-row { display: flex; gap: 0.5rem; font-size: 0.68rem; font-weight: 600; color: #718096; margin-top: auto; border-top: 1px solid #edf2f7; padding-top: 0.5rem; flex-wrap: wrap; }
         .info-note { background-color: #f0f4f8; border: 1px solid #d0d7de; border-left: 4px solid #1e3c72; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #3182ce; line-height: 1.3; display: flex; align-items: flex-start; gap: 0.35rem; margin-top: 0.75rem; text-align: left; }
 
-        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; }
+        .section-title { color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.4rem; margin-top: 1.5rem; font-size: 1.15rem; font-weight: 700; break-after: avoid !important; page-break-after: avoid !important; }
         ul { padding-left: 1.25rem; }
         li { margin-bottom: 0.4rem; font-size: 0.9rem; color: #4a5568; }
         p { font-size: 0.9rem; color: #4a5568; }
         
         .report-block {
-            display: inline-block;
+            display: block;
             width: 100%;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+            box-sizing: border-box !important;
         }
 
         @media print {
@@ -1285,11 +1396,21 @@ export async function downloadAllReportsForCurrentSession() {
             body {
                 background: #ffffff !important;
                 padding: 0 !important;
+                margin: 0 !important;
             }
             .student-report-page {
                 box-shadow: none !important;
                 margin: 0 !important;
+                padding: 0 !important;
                 max-width: 100% !important;
+                page-break-before: always !important;
+                break-before: page !important;
+                page-break-inside: auto !important;
+                break-inside: auto !important;
+            }
+            .student-report-page:first-child {
+                page-break-before: avoid !important;
+                break-before: avoid !important;
             }
         }
     </style>
@@ -1376,11 +1497,14 @@ export async function downloadZipReportsForCurrentSession() {
     <title>Report Card - ${escapeHtml(res.studentName || 'Student')}</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @page { size: auto; margin: 0; }
+        @page { size: A4 portrait; margin: 5mm 6mm; }
         *, *:before, *:after { box-sizing: border-box !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        body { font-family: 'Poppins', sans-serif; padding: 10mm 15mm !important; margin: 0; color: #2d3748; line-height: 1.5; }
+        body { font-family: 'Poppins', sans-serif; padding: 6mm 6mm; margin: 0 auto; max-width: 100%; box-sizing: border-box; color: #2d3748; line-height: 1.5; }
         ${getReportCardPrintCss()}
-        @media print { .no-print { display: none !important; } }
+        @media print { 
+            .no-print { display: none !important; } 
+            body { padding: 0 !important; margin: 0 !important; }
+        }
     </style>
 </head>
 <body>
@@ -1693,25 +1817,30 @@ export async function loadTestSessionsForManagement() {
                         <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end; align-items: center; white-space: nowrap;">
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid ${data.cachedContentId ? '#86efac' : '#cbd5e1'}; background: ${data.cachedContentId ? '#dcfce7' : '#ffffff'}; color: ${data.cachedContentId ? '#15803d' : '#475569'}; cursor: pointer; font-weight: 700; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.cacheTestSession('${id}')" 
+                                data-id="${escapeHtml(id)}"
+                                onclick="window.cacheTestSession(this.dataset.id)" 
                                 title="${data.cachedContentId ? 'Gemini context cache active (75% token discount)' : 'Generate Gemini context cache for 75% token discount'}">
                                 ${data.cachedContentId ? '⚡ 75% Cached' : '⚡ Cache (75% Off)'}
                             </button>
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.editSession('${id}')" 
+                                data-id="${escapeHtml(id)}"
+                                onclick="window.editSession(this.dataset.id)" 
                                 title="Edit Session">
                                 ✏️ Edit
                             </button>
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; gap: 0.3rem; height: 32px; padding: 0 0.65rem; font-size: 0.78rem; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.toggleSessionStatus('${id}', '${status}')" 
+                                data-id="${escapeHtml(id)}"
+                                data-status="${escapeHtml(status)}"
+                                onclick="window.toggleSessionStatus(this.dataset.id, this.dataset.status)" 
                                 title="${isActive ? 'Deactivate Session' : 'Activate Session'}">
                                 ${isActive ? '⏸️ Deactivate' : '▶️ Activate'}
                             </button>
                             <button type="button" 
                                 style="display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 0.55rem; font-size: 0.8rem; border-radius: 6px; border: 1px solid #fecaca; background: #fff1f2; color: #e11d48; cursor: pointer; font-weight: 600; white-space: nowrap; transition: all 0.15s ease;" 
-                                onclick="window.deleteSession('${id}')" 
+                                data-id="${escapeHtml(id)}"
+                                onclick="window.deleteSession(this.dataset.id)" 
                                 title="Delete Session">
                                 🗑️
                             </button>
@@ -1750,13 +1879,56 @@ async function toggleSessionStatus(id, currentStatus) {
 }
 
 async function deleteSession(id) {
-    if (!confirm("Are you sure you want to delete this test session? Students will no longer be able to submit results for it.")) return;
-
     try {
+        const sessionSnap = await getDoc(doc(db, 'testSessions', id));
+        const sessionData = sessionSnap.exists() ? sessionSnap.data() : null;
+        const sessionName = sessionData ? (sessionData.name || 'Test Session') : 'this test session';
+
+        // Query all student evaluations associated with this sessionId or matching sessionName
+        const resultsSnap = await getDocs(collection(db, 'testResults'));
+        const matchingResults = [];
+        resultsSnap.forEach(d => {
+            const data = d.data();
+            if (data.sessionId === id || (sessionData && data.sessionName && data.sessionName === sessionData.name && !data.sessionId)) {
+                matchingResults.push({ id: d.id, studentName: data.studentName || 'Student' });
+            }
+        });
+
+        const count = matchingResults.length;
+        const confirmMsg = count > 0
+            ? `Are you sure you want to delete "${sessionName}"?\n\n⚠️ CASCADING DELETE: This test session has ${count} student evaluation record(s) in Firestore.\nDeleting this test will ALSO permanently delete all ${count} associated student evaluation(s).\n\nDo you want to proceed?`
+            : `Are you sure you want to delete "${sessionName}"? Students will no longer be able to submit results for it.`;
+
+        if (!confirm(confirmMsg)) return;
+
+        // Cascade delete all student results
+        if (count > 0) {
+            await Promise.all(matchingResults.map(r => deleteDoc(doc(db, 'testResults', r.id))));
+            console.log(`Cascade deleted ${count} student evaluation(s) for session ${id}`);
+        }
+
+        // Delete test session
         await deleteDoc(doc(db, 'testSessions', id));
-        showToast("Test Session deleted successfully!", "success");
+
+        showToast(
+            count > 0
+                ? `Test Session & all ${count} student evaluation(s) deleted successfully!`
+                : "Test Session deleted successfully!",
+            "success"
+        );
+
         loadTestSessionsForManagement();
-        loadTestSessionsForDropdown();
+        await loadTestSessionsForDropdown();
+
+        // If results table was displaying this session, reset it
+        const resultSessionSelect = document.getElementById('resultSessionSelect');
+        if (resultSessionSelect && resultSessionSelect.value === id) {
+            resultSessionSelect.value = '';
+            const tbody = document.getElementById('resultsTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">Select a test session above to view student evaluations.</td></tr>';
+            const actionsBar = document.getElementById('resultsActionsBar');
+            if (actionsBar) actionsBar.style.display = 'none';
+        }
     } catch (error) {
         console.error("Error deleting session:", error);
         showToast("Failed to delete session: " + error.message, "error");
@@ -1774,9 +1946,62 @@ async function deleteResult(id) {
         if (resultSessionSelect && resultSessionSelect.value) {
             loadResultsForSession(resultSessionSelect.value);
         }
+        // Also refresh orphaned count in dropdown
+        loadTestSessionsForDropdown();
     } catch (error) {
         console.error("Error deleting student result:", error);
         showToast("Failed to delete result: " + error.message, "error");
+    }
+}
+
+export async function cleanOrphanedResults() {
+    try {
+        const sessionsSnap = await getDocs(collection(db, 'testSessions'));
+        const validSessionIds = new Set();
+        sessionsSnap.forEach(s => validSessionIds.add(s.id));
+
+        const resultsSnap = await getDocs(collection(db, 'testResults'));
+        const orphans = [];
+        resultsSnap.forEach(d => {
+            const data = d.data();
+            if (!data.sessionId || !validSessionIds.has(data.sessionId)) {
+                orphans.push({
+                    id: d.id,
+                    studentName: data.studentName || 'Student',
+                    sessionName: data.sessionName || data.testType || 'Deleted Session'
+                });
+            }
+        });
+
+        if (orphans.length === 0) {
+            showToast("No orphaned student evaluations found! All data matches active test sessions.", "info");
+            return;
+        }
+
+        const sampleNames = orphans.slice(0, 5).map(o => `• ${o.studentName} (${o.sessionName})`).join('\n');
+        const extraMsg = orphans.length > 5 ? `\n...and ${orphans.length - 5} more` : '';
+        const msg = `Found ${orphans.length} orphaned student evaluation(s) from deleted tests:\n\n${sampleNames}${extraMsg}\n\nAre you sure you want to permanently delete all ${orphans.length} orphaned record(s) from Firestore? This action cannot be undone.`;
+
+        if (!confirm(msg)) return;
+
+        await Promise.all(orphans.map(o => deleteDoc(doc(db, 'testResults', o.id))));
+
+        showToast(`Successfully deleted ${orphans.length} orphaned student record(s)!`, "success");
+
+        orphanedResultsList = [];
+        await loadTestSessionsForDropdown();
+
+        const resultSessionSelect = document.getElementById('resultSessionSelect');
+        if (resultSessionSelect && resultSessionSelect.value === '__ORPHANED__') {
+            resultSessionSelect.value = '';
+            const tbody = document.getElementById('resultsTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="padding: 2rem; text-align: center; color: #666; font-style: italic;">All orphaned records cleaned! Select a test session above.</td></tr>';
+            const actionsBar = document.getElementById('resultsActionsBar');
+            if (actionsBar) actionsBar.style.display = 'none';
+        }
+    } catch (error) {
+        console.error("Error cleaning orphaned results:", error);
+        showToast("Failed to clean orphaned records: " + error.message, "error");
     }
 }
 
@@ -2014,14 +2239,11 @@ async function cacheTestSession(id) {
         }
 
         showToast("⚡ Building Gemini Context Cache for 75% savings...", "info");
-        const gateToken = localStorage.getItem('gate_token') || '';
+        const authHeaders = await getNerdAuthHeaders();
 
-        const res = await fetch('/api/create-cache', {
+        const res = await fetch(apiUrl('/api/create-cache'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Gate-Token': gateToken
-            },
+            headers: authHeaders,
             body: JSON.stringify({
                 sessionId: id,
                 examName: data.name,
@@ -2064,6 +2286,7 @@ async function cacheTestSession(id) {
 window.toggleSessionStatus = toggleSessionStatus;
 window.deleteSession = deleteSession;
 window.deleteResult = deleteResult;
+window.cleanOrphanedResults = cleanOrphanedResults;
 window.editStudentScore = editStudentScore;
 window.editQuestionScore = editQuestionScore;
 window.editSession = editSession;

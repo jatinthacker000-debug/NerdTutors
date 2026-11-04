@@ -157,29 +157,62 @@
                 </div>
             </div>
 
-            <!-- ==================== STUDENTS PAGE ==================== -->
+            <!-- ==================== STUDENTS HUB & COHORT ROSTER ==================== -->
             <div class="page-section" id="studentsPage" style="display: none;">
                 <div class="content-section">
-                    <div class="section-header">
-                        <h3 class="section-title">👥 Student Management</h3>
+                    <div class="section-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+                        <div>
+                            <h3 class="section-title">👥 Students Hub &amp; Cohort Roster</h3>
+                            <p style="color: #64748b; font-size: 0.9rem; margin-top: 0.25rem;">
+                                Track student mastery tiers, examine longitudinal score trajectories, and review historical exam portfolios.
+                            </p>
+                        </div>
+                        <!-- Quick Tier Counters Strip -->
+                        <div class="student-tier-summary" id="studentTierSummary" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                            <span class="tier-pill tier-all active" id="tierPillAll" data-filter-tier="all">Total: <strong id="tierCountAll">0</strong></span>
+                            <span class="tier-pill tier-critical" id="tierPillCritical" data-filter-tier="critical">🔴 Critical (&lt;60%): <strong id="tierCountCritical">0</strong></span>
+                            <span class="tier-pill tier-improving" id="tierPillImproving" data-filter-tier="improving">🟡 Need Improvement (60-90%): <strong id="tierCountImproving">0</strong></span>
+                            <span class="tier-pill tier-strong" id="tierPillStrong" data-filter-tier="strong">🟢 Mastered (&gt;90%): <strong id="tierCountStrong">0</strong></span>
+                        </div>
                     </div>
 
-                    <div class="filters-bar">
-                        <div class="search-box">
+                    <!-- Multi-Dimensional Filters Bar -->
+                    <div class="filters-bar" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; background: #f8fafc; padding: 1rem; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem;">
+                        <!-- Search by Name or Roll Number -->
+                        <div class="search-box" style="grid-column: span 2; min-width: 240px;">
                             <span class="search-icon">🔍</span>
-                            <input type="text" class="search-input" id="studentSearchInput"
-                                placeholder="Search students...">
+                            <input type="text" class="search-input" id="studentSearchInput" placeholder="Search students by name...">
                         </div>
+
+                        <!-- Filter Class -->
+                        <select class="filter-select" id="studentClassFilter">
+                            <option value="all">All Classes</option>
+                            <option value="Class 10th">Class 10th</option>
+                            <option value="Class 12th">Class 12th</option>
+                        </select>
+
+                        <!-- Filter Subject (dynamically synchronized) -->
+                        <select class="filter-select" id="studentSubjectFilter">
+                            <option value="all">All Subjects</option>
+                            <option value="Economics">Economics</option>
+                            <option value="Business Studies">Business Studies</option>
+                            <option value="Accountancy">Accountancy</option>
+                            <option value="Social Science">Social Science</option>
+                        </select>
+
+                        <!-- Sort By -->
                         <select class="filter-select" id="studentSortFilter">
-                            <option value="name">Sort by Name</option>
-                            <option value="tests">Sort by Tests Taken</option>
-                            <option value="score">Sort by Avg Score</option>
-                            <option value="recent">Sort by Recent Activity</option>
+                            <option value="name">Sort by Name (A-Z)</option>
+                            <option value="score-desc">Highest Avg Score</option>
+                            <option value="score-asc">Lowest Avg Score</option>
+                            <option value="tests-desc">Most Tests Taken</option>
+                            <option value="recent">Most Recent Activity</option>
                         </select>
                     </div>
 
-                    <div class="students-grid" id="studentsGrid">
-                        <!-- Student cards will be populated here -->
+                    <!-- Bento Grid Container -->
+                    <div class="students-grid students-bento-grid" id="studentsGrid">
+                        <!-- Dynamically populated Bento cards -->
                     </div>
                 </div>
             </div>
@@ -501,8 +534,12 @@
                             <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">Question Filter</label>
                             <select class="filter-select" id="matrixQuestionTypeFilter" style="width: 100%; height: 38px; padding: 0 0.5rem; border-radius: 6px; border: 1px solid #cbd5e0;">
                                 <option value="all">All Questions</option>
+                                <option value="weak">⚠️ Weak Questions (&lt; 60% Avg)</option>
+                                <option value="critical">🚨 Critical / Tough (&lt; 40% Avg)</option>
                                 <option value="mistakes">Mistakes Only (Zero / Partial)</option>
                                 <option value="full">Full Marks Only</option>
+                                <option value="mcq">MCQs Only (1 Mark)</option>
+                                <option value="subjective">Subjective Questions (&gt; 1 Mark)</option>
                             </select>
                         </div>
                     </div>
@@ -587,30 +624,46 @@
                                 <h3 class="progress-heading">
                                     <span>📈</span> <span id="progressChartTitle">Student Multi-Exam Progress</span>
                                 </h3>
-                                <div class="sub">Hover over any block to view granular subject marks and score deltas.</div>
+                                <div class="sub">Longitudinal performance analysis and score delta trajectories across examinations.</div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                                <select id="progressStudentSelect" style="padding: 6px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-weight: 700; color: #1e3c72; background: white; cursor: pointer; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                    <option value="">Loading students...</option>
-                                </select>
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <span style="font-size: 0.8rem; font-weight: 700; color: #64748b;">Student:</span>
+                                    <select id="progressStudentSelect" style="padding: 7px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-weight: 700; color: #1e3c72; background: white; cursor: pointer; font-size: 0.88rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); outline: none;">
+                                        <option value="">Loading students...</option>
+                                    </select>
+                                </div>
                                 <div class="tog">
                                     <button id="progressBtnPct" class="on">Percentage</button>
                                     <button id="progressBtnMarks">Marks</button>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Filter Controls Bar: Subject Tabs & KPI Summary -->
+                        <div class="progress-filter-bar">
+                            <div class="progress-subject-section">
+                                <span class="filter-label">Filter by Subject:</span>
+                                <div id="progressSubjectTabs" class="subject-tabs-container">
+                                    <!-- Dynamic Subject Filter Tabs: [ All ] [ 📘 Economics (2) ] -->
+                                </div>
+                            </div>
+                            <div id="progressKpiStrip" class="progress-kpi-strip">
+                                <!-- Dynamic KPI metrics: Tests, Avg %, Top %, Delta -->
+                            </div>
+                        </div>
+
+                        <!-- Exam Selector Multi-Chip Bar -->
+                        <div id="progressExamSelectorWrap" class="progress-exam-selector-wrap">
+                            <span class="filter-label">Compare Tests:</span>
+                            <div id="progressExamChips" class="exam-chips-container">
+                                <!-- Dynamic toggleable exam chips -->
+                            </div>
+                        </div>
+
                         <div class="legend" id="progressLegend"></div>
                         <div class="plot" id="progressPlot"></div>
                         <div class="foot"></div>
-                        <details>
-                            <summary>⚙️ Edit Student &amp; Multi-Exam Performance Data</summary>
-                            <div style="margin-top: 10px; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                <label style="font-size: 0.82rem; font-weight: 700; color: #475569;">Student Name:</label>
-                                <input id="progressStudentInput" value="Aarav Shah" style="padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1e293b; font: inherit; font-size: 0.85rem;">
-                            </div>
-                            <div class="scroll"><table id="progressTbl"></table></div>
-                            <button class="progress-mini" id="progressAddExam">+ Add Exam</button>
-                        </details>
                     </div>
                     <div class="progress-tip" id="progressTip"></div>
                 </div>
@@ -705,8 +758,132 @@
         </div>
     </div>
 
+    <!-- ==================== STUDENT PROFILE SLIDE-OVER DRAWER ==================== -->
+    <div class="matrix-drawer-backdrop" id="studentProfileDrawerBackdrop" style="display: none;">
+        <div class="matrix-drawer" style="max-width: 680px; width: 100%;">
+            <div class="matrix-drawer-header" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);">
+                <div style="display: flex; align-items: center; gap: 0.85rem;">
+                    <div class="student-avatar" id="drawerStudentAvatar" style="width: 48px; height: 48px; font-size: 1.3rem;">A</div>
+                    <div>
+                        <h3 id="drawerStudentFullName" style="margin: 0; font-size: 1.25rem; color: #ffffff;">Student Name</h3>
+                        <div style="font-size: 0.82rem; color: #cbd5e1; margin-top: 2px;" id="drawerStudentMeta">Class 12th · Economics · Batch Both</div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span id="drawerMasteryBadge" class="score-badge" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 6px; font-weight: 700;">🟢 Mastered</span>
+                    <button type="button" id="btnCloseStudentDrawer" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 4px;">✕</button>
+                </div>
+            </div>
+
+            <div class="matrix-drawer-body" style="padding: 1.5rem; overflow-y: auto;">
+                <!-- Trajectory KPI Strip -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; background: #f8fafc; padding: 0.85rem; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem; text-align: center;">
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">TOTAL TESTS</div>
+                        <div style="font-size: 1.3rem; font-weight: 800; color: #1e293b;" id="drawerStatTests">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">OVERALL AVG</div>
+                        <div style="font-size: 1.3rem; font-weight: 800; color: #1e293b;" id="drawerStatAvg">0%</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">PEAK SCORE</div>
+                        <div style="font-size: 1.3rem; font-weight: 800; color: #10b981;" id="drawerStatPeak">0%</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">TRAJECTORY</div>
+                        <div style="font-size: 1.3rem; font-weight: 800;" id="drawerStatDelta">0%</div>
+                    </div>
+                </div>
+
+                <!-- Score Trajectory Visualization Area -->
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                        <h4 style="margin: 0; color: #334155; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <span>📈</span> Score Progression Curve
+                        </h4>
+                        <div style="font-size: 0.78rem; color: #64748b;">Longitudinal Trajectory</div>
+                    </div>
+                    <div id="drawerTrajectoryPlot" style="min-height: 190px; position: relative; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem 0.5rem; display: flex; align-items: flex-end; justify-content: space-around; overflow-x: auto;">
+                        <!-- Inline bars & SVG curve populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Recurring Critical Gaps & Weak Topics Diagnostic Panel -->
+                <div style="margin-bottom: 1.5rem;" id="drawerWeakTopicsSection">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                        <h4 style="margin: 0; color: #b45309; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <span>⚠️</span> Recurring Critical Learning Gaps &amp; Focus Topics
+                        </h4>
+                        <div style="font-size: 0.78rem; color: #64748b;" id="drawerWeakTopicsCount">0 Gaps Detected</div>
+                    </div>
+                    <div id="drawerWeakTopicsList" style="display: flex; flex-direction: column; gap: 0.65rem;">
+                        <!-- Rendered weak topic cards -->
+                    </div>
+                </div>
+
+                <!-- Historical Test Reports List -->
+                <div>
+                    <h4 style="margin: 0 0 0.75rem 0; color: #334155; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>📋</span> Examination History &amp; Reports Breakdown
+                    </h4>
+                    <div id="drawerReportsList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <!-- Rendered report cards -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== WEAK QUESTION DRILLDOWN MODAL / DRAWER ==================== -->
+    <div class="matrix-drawer-backdrop" id="weakQuestionDrilldownBackdrop" style="display: none;">
+        <div class="matrix-drawer" style="max-width: 760px; width: 100%;">
+            <div class="matrix-drawer-header" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div>
+                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8;" id="weakDrilldownSessionLabel">Test Session</div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                        <span id="weakDrilldownQBadge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.85rem;">Q1</span>
+                        <h3 id="weakDrilldownTopicTitle" style="margin: 0; font-size: 1.25rem; color: #ffffff;">Question Mastery &amp; Response Audit</h3>
+                    </div>
+                    <div style="font-size: 0.82rem; color: #cbd5e1; margin-top: 4px;" id="weakDrilldownMeta">Chapter · Max Marks: 4M · Accuracy: 45%</div>
+                </div>
+                <button type="button" id="btnCloseWeakDrilldown" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 4px;">✕</button>
+            </div>
+            <div class="matrix-drawer-body" style="padding: 1.5rem; overflow-y: auto;">
+                <!-- Official Question Prompt -->
+                <div style="margin-bottom: 1.25rem;">
+                    <h4 style="margin: 0 0 0.4rem 0; color: #334155; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>📖</span> Question Prompt
+                    </h4>
+                    <div id="weakDrilldownQuestionText" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem; font-size: 0.9rem; color: #1e293b; line-height: 1.5;">-</div>
+                </div>
+
+                <!-- CBSE Marking Scheme Answer -->
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="margin: 0 0 0.4rem 0; color: #15803d; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>🔑</span> CBSE Marking Scheme Model Answer &amp; Key Value Points
+                    </h4>
+                    <div id="weakDrilldownModelAnswer" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.85rem; font-size: 0.9rem; color: #166534; line-height: 1.5; white-space: pre-wrap;">-</div>
+                </div>
+
+                <!-- Responses Section Header & Count -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <h4 style="margin: 0; color: #334155; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>👥</span> Candidate Responses Breakdown (<span id="weakDrilldownCount">0</span> Students)
+                    </h4>
+                    <div style="font-size: 0.78rem; color: #64748b;">Sorted by lowest score first</div>
+                </div>
+
+                <!-- Student Responses List -->
+                <div id="weakDrilldownResponsesList" style="display: flex; flex-direction: column; gap: 0.85rem;">
+                    <!-- Rendered response cards -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ==================== FIREBASE & APP SCRIPTS ==================== -->
-    <script type="module" src="dashboard.js"></script>
+    <script type="module" src="dashboard.js?v=268"></script>
 </body>
 
 </html>
