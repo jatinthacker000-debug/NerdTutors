@@ -640,7 +640,12 @@ export default async function handler(req, res) {
                             }
 
                             // 2. Unattempted Question Handling
-                            const isUnattempted = feedbackText.includes("not attempted") || feedbackText.includes("unattempted") || feedbackText.includes("omitted");
+                            const isUnattempted = (Number(resObj.score) === 0) && (
+                                feedbackText.includes("not attempted") || 
+                                feedbackText.includes("unattempted") || 
+                                feedbackText.includes("was not attempted") || 
+                                feedbackText.includes("question was skipped")
+                            );
                             if (isUnattempted && !isMCQ) {
                                 resObj.score = 0;
                                 resObj.feedback = "The question was not attempted.";
@@ -744,7 +749,7 @@ export default async function handler(req, res) {
             const cachedRate = 0.000047994;
 
             const nonCachedPromptTokens = Math.max(0, totalPromptTokens - totalCachedTokens);
-            const estCostInr = (nonCachedPromptTokens * inputRate) + (totalCachedTokens * cachedRate) + (totalCandidatesTokens * outputRate);
+            const estCostInr = (nonCachedPromptTokens * inputRate) + (totalCachedTokens * cachedRate) + ((totalCandidatesTokens + totalThinkingTokens) * outputRate);
 
             console.log("📊 [VERTEX BATCH TOKEN & CACHE AUDIT]", {
                 batchId: data.name,
@@ -823,8 +828,8 @@ export default async function handler(req, res) {
         promptBase = `You are evaluating student handwritten answer sheets against the official exam questions and marking scheme below.
 ${reasoningGuardrailPrompt}
 --- CRITICAL CBSE BOARD EXAMINATION STANDARDS ---
-1. STRICT BINARY MCQs: Extract "studentOption" (A, B, C, D) and "correctOption" (A, B, C, D). Award full maxMarks (1.0 or 0.5) if matching; award exactly 0.0 if incorrect or unattempted.
-2. DEFEND / REFUTE STANCE CAP: If the student argues the incorrect stance, record "stanceCorrect": false and cap question score to a maximum of 1.0 mark.
+1. STRICT BINARY MCQs: Award full maxMarks (1.0 or 0.5) if correct; award exactly 0.0 if incorrect or unattempted.
+2. DEFEND / REFUTE STANCE CAP: If the student argues the incorrect stance, cap question score to a maximum of 1.0 mark.
 3. VALUE POINTS OVER RIGID WORDING: Suggested value points are guidelines. Award full due credit when the student conveys the core concept using valid alternative subject expression.
 4. ZERO LANGUAGE OR SPELLING PENALTIES: In non-language subjects (Economics, Accountancy, Business Studies, Social Science), deduct ZERO marks (0.0) for spelling slips or imperfect English phrasing.
 5. CANONICAL LEAF-LEVEL NUMBERING: If a question has sub-parts, evaluate ONLY at leaf level (e.g. "Q2(a)", "Q2(b)", "Q17(a)(i)"). Never output composite parent entries like "Q2".
@@ -843,13 +848,10 @@ Return STRICT JSON:
   "results": [
     {
       "questionNumber": "Q1",
-      "maxMarks": <number - immutable question weight>,
       "score": <number - awarded marks, 0 to maxMarks>,
-      "studentOption": "<uppercase letter A/B/C/D if MCQ, else null>",
-      "correctOption": "<uppercase letter A/B/C/D from marking scheme if MCQ, else null>",
-      "stanceCorrect": "<boolean true/false if Defend/Refute question, else null>",
-      "feedback": "<EMPTY STRING \"\" IF FULL MARKS; 1-2 sentences if partial; 3-4 sentences if major error; \"The question was not attempted.\" if skipped>",
-      "improvements": ["<1-2 short actionable tips IF marks lost, else []>"]
+      "maxMarks": <number - immutable question weight>,
+      "feedback": "<concise feedback under 15 words; empty string \"\" if full marks; \"The question was not attempted.\" if omitted>",
+      "improvements": ["<actionable tip under 15 words if marks lost, else []>"]
     }
   ],
   "totalScore": <number - sum of scores>,

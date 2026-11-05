@@ -160,7 +160,7 @@ ${subjectDirectivesText}
 - Keep your internal thought trace crisp, concise, and decisive.
 
 --- OFFICIAL CBSE EVALUATION STANDARDS & INSTRUCTIONS ---
-1. STRICT BINARY MCQs: Extract "studentOption" (A, B, C, D) and "correctOption" (A, B, C, D). Award full maxMarks (1.0 or 0.5) if matching; award exactly 0.0 if incorrect or unattempted.
+1. STRICT BINARY MCQs: Award full maxMarks (1.0 or 0.5) if matching correct option; award exactly 0.0 if incorrect or unattempted.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
 3. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
 4. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
