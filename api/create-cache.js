@@ -160,23 +160,14 @@ ${subjectDirectivesText}
 - Keep your internal thought trace crisp, concise, and decisive.
 
 --- OFFICIAL CBSE EVALUATION STANDARDS & INSTRUCTIONS ---
-1. DETERMINISTIC MCQ EXTRACTION: For MCQs, extract "studentOption" (A/B/C/D) and "correctOption" (A/B/C/D). Award full marks if match; 0 if wrong.
+1. STRICT BINARY MCQs: Extract "studentOption" (A, B, C, D) and "correctOption" (A, B, C, D). Award full maxMarks (1.0 or 0.5) if matching; award exactly 0.0 if incorrect or unattempted.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
-3. TIERED FEEDBACK PROTOCOL:
-   - Full marks (score === maxMarks): Set "feedback": "" (EMPTY STRING) and "improvements": [].
-   - Partial marks: 1 to 2 direct sentences explaining the exact gap.
-   - Major error (≥75% lost or 0 marks): 3 to 4 concise sentences explaining the correct treatment.
-   - Unattempted: Set "score": 0, "feedback": "The question was not attempted.", "improvements": [].
-4. MATHEMATICAL SUM INVARIANT: Total of question maxMarks must equal ${maxMarks || 40}.
-5. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
-6. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
-7. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
-9. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
-   - Always use canonical numbering matching the official exam paper.
-   - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
-   - 1-TIER SUB-PARTS: Format with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i".
-   - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)", or "Q17(i)(a)". NEVER skip parentheses.
-   - NEVER bundle multi-part questions into a single composite block.
+3. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
+4. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
+5. MATHEMATICAL SUM INVARIANT: Total of question maxMarks must equal ${maxMarks || 40}.
+6. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
+7. CANONICAL LEAF-LEVEL NUMBERING: If a question contains sub-parts, evaluate ONLY at leaf level ("Q2(a)", "Q2(b)", "Q17(a)(i)"). Never output composite parent entries like "Q2".
+8. STREAMLINED FEEDBACK: Full-mark answers output feedback: "" and improvements: []. Partial marks: 1 direct sentence under 15 words.
 
 --- MANDATORY OUTPUT JSON SCHEMA ---
 Return STRICT JSON in the following format:

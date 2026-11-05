@@ -65,7 +65,7 @@ function getSubjectDirectives(subject) {
         subjectHeader = "SOCIAL SCIENCE (CBSE CODE 087)";
     }
     if (!selectedRules) return "";
-    return `\n=== SUBJECT-SPECIFIC BOARD DIRECTIVES: ${subjectHeader} ===\n${JSON.stringify(selectedRules, null, 2)}\n`;
+    return `\n=== SUBJECT-SPECIFIC BOARD DIRECTIVES: ${subjectHeader} ===\n${JSON.stringify(selectedRules)}\n`;
 }
 
 function getBatchJobsFilePath() {
@@ -805,11 +805,12 @@ export default async function handler(req, res) {
 
     const reasoningGuardrailPrompt = `
 --- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
-- Formulate your evaluation directly against the marking scheme value points without discursive preamble.
+- Formulate evaluation directly against marking scheme value points in a single forward pass without discursive preamble.
 - Do NOT rewrite or transcribe the student's entire answer inside your internal thinking trace.
-- For MCQs: Simply identify the student's written option letter (A, B, C, D) and the key's option letter in a single step. Do NOT write paragraphs of theory or debate MCQs in thinking.
-- For Subjective Questions: Check directly for the presence or absence of mandatory textbook value points. Deduct marks immediately for missing points without repetitive deliberation.
-- Keep your internal thought trace crisp, concise, and decisive.
+- For MCQs: Identify the student's written option letter and compare against the key in a single step. Zero paragraphs of theory in thoughts.
+- For Numerical Steps: Check formula -> substitution -> final figure directly against rubric. Note deductions immediately without repetitive deliberation.
+- Eliminate Multi-Pass Deliberation: Grade decisively in a single forward pass; programmatic JavaScript safety nets handle post-flight clamping.
+- Keep internal thought trace crisp, structured, and focused on core calculations (~1,200–1,400 thinking tokens).
 `;
 
     // Streamlined prompt: if an explicit cachedContent resource exists, reference it.
@@ -821,30 +822,12 @@ export default async function handler(req, res) {
         const subjectDirectives = getSubjectDirectives(subject);
         promptBase = `You are evaluating student handwritten answer sheets against the official exam questions and marking scheme below.
 ${reasoningGuardrailPrompt}
-CRITICAL BOARD CONSTRAINTS:
-1. DETERMINISTIC MCQ EXTRACTION:
-   - For Multiple Choice Questions, extract the student's written option letter ("A", "B", "C", "D") into "studentOption" and the marking scheme option letter into "correctOption".
-   - If the option matches: award full maxMarks. If incorrect: award 0.
-2. DEFEND / REFUTE QUESTIONS:
-   - Record "stanceCorrect": true/false. If the student chose the incorrect stance, the score MUST be capped to a maximum of 1.0 mark.
-3. TIERED FEEDBACK PROTOCOL (TOKEN-OPTIMIZED):
-   - FULL MARKS (score === maxMarks, including correct MCQs): Set "feedback": "" (EMPTY STRING) and "improvements": []. Do NOT write praises, explanations, or quotes for answers that are already 100% correct.
-   - PARTIALLY CORRECT (some marks lost): Provide 1 to 2 direct sentences explaining the exact gap or missed value point.
-   - MAJOR MISTAKES / TOTALLY WRONG (≥75% marks lost or 0 marks): Provide 3 to 4 concise sentences explaining the error and the correct accounting/economic treatment. Keep it short and focused.
-   - UNATTEMPTED QUESTIONS: Set "score": 0, "feedback": "The question was not attempted.", and "improvements": [].
-   - PLAIN TEXT ONLY: No markdown formatting (**bold**, *italics*, # headers) inside JSON strings.
-4. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
-   - Always use canonical numbering matching the official exam paper.
-   - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
-   - 1-TIER SUB-PARTS: Always format with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i".
-   - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses:
-     * Letter + Roman: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)"
-     * Roman + Letter: "Q17(i)(a)", "Q17(i)(b)"
-     * Letter + Number: "Q17(a)(1)", "Q17(a)(2)"
-     * Never drop parentheses (e.g. NEVER write "Q17a(i)" or "Q17ai").
-   - NEVER bundle multi-part questions into a single composite block.
-5. ZERO LANGUAGE OR SPELLING PENALTY: In non-language subjects (Economics, Business Studies, Accountancy, Social Science), ZERO marks (0.0) shall be deducted for spelling errors or imperfect English phrasing as long as the core subject concept is conveyed.
-6. VALUE POINTS OVER RIGID WORDING: The marking scheme provides suggested value points. If a student conveys the core concept using valid alternative subject expression, award full due credit.
+--- CRITICAL CBSE BOARD EXAMINATION STANDARDS ---
+1. STRICT BINARY MCQs: Extract "studentOption" (A, B, C, D) and "correctOption" (A, B, C, D). Award full maxMarks (1.0 or 0.5) if matching; award exactly 0.0 if incorrect or unattempted.
+2. DEFEND / REFUTE STANCE CAP: If the student argues the incorrect stance, record "stanceCorrect": false and cap question score to a maximum of 1.0 mark.
+3. VALUE POINTS OVER RIGID WORDING: Suggested value points are guidelines. Award full due credit when the student conveys the core concept using valid alternative subject expression.
+4. ZERO LANGUAGE OR SPELLING PENALTIES: In non-language subjects (Economics, Accountancy, Business Studies, Social Science), deduct ZERO marks (0.0) for spelling slips or imperfect English phrasing.
+5. CANONICAL LEAF-LEVEL NUMBERING: If a question has sub-parts, evaluate ONLY at leaf level (e.g. "Q2(a)", "Q2(b)", "Q17(a)(i)"). Never output composite parent entries like "Q2".
 ${subjectDirectives}
 
 --- EXAM QUESTIONS ---
@@ -852,7 +835,7 @@ ${questions || ""}
 
 --- OFFICIAL MARKING SCHEME ---
 ${markingScheme || ""}
-${otherInstructions ? `\n--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructions}\n` : ""}
+${otherInstructions && otherInstructions.trim() ? `\n--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructions.trim().slice(0, 500).replace(/[`$]/g, "")}\n` : ""}
 
 Return STRICT JSON:
 {
@@ -879,7 +862,6 @@ Return STRICT JSON:
     const inlinedRequests = students.map((st, idx) => {
         const studentName = st.studentName || `Student ${idx + 1}`;
         const candidateSuffix = `\n\n--- EVALUATION TARGET ---\nSTUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}\n(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")\nEvaluate the student's handwritten answer sheet pages below against the master criteria above.`;
-        // Static promptBase MUST come FIRST at Token 0 to trigger Google Cloud Vertex AI implicit prefix KV-caching across all students!
         // Static promptBase is placed as an isolated first part at Token 0 to trigger Google Cloud Vertex AI implicit prefix KV-caching across all students!
         const parts = [{ text: promptBase }, { text: candidateSuffix }];
 

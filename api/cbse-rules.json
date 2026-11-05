@@ -232,11 +232,9 @@
           ],
           "explicit_working_note_omission_action": "SET Working_Note_Rubric_Bucket = 0.0",
           "telepathic_final_figure_cap_pct": 25.0,
-          "telepathic_rule": "IF 'working_notes_present' == false in Stage 1 OCR for a complex derived figure (e.g., Capital Reserve transfer or Hidden Goodwill), LOCK score for that entry at MAX 25% of allocated marks even if the numerical value matches the answer key."
+          "telepathic_rule": "IF working notes are visibly missing from student sheet for a complex derived figure (e.g., Capital Reserve transfer or Hidden Goodwill), LOCK score for that entry at MAX 25% of allocated marks even if the numerical value matches the answer key."
         },
         "ACC_03_ARITHMETIC_AND_AS3_BALANCE_VERIFICATION": {
-          "independent_vertical_sum_check": "MANDATORY",
-          "forced_balance_fraud_rule": "Compute True_Sum = SUM(extracted column line items). IF True_Sum != student_written_column_total THEN FLAG 'FORCED_BALANCE_FRAUD', DEDUCT 1.0 Mark immediately, and audit each row for the erroneous figure.",
           "company_balance_sheet_horizontal_t_format_penalty_pct": 50.0,
           "misclassified_schedule_iii_head_score": 0.0,
           "cash_flow_as3_revised_rules": {
@@ -326,7 +324,7 @@
 
       "ECONOMICS_030": {
         "ECO_01_DIAGRAM_GEOMETRIC_VALIDATION": {
-          "source_of_truth": "Use ONLY Stage 1 'diagrams[]' bounding-box metadata. Ignore body text.",
+          "source_of_truth": "Inspect visibly drawn student diagrams directly. Check axis labels, curve slopes, and directional arrows.",
           "deductions": {
             "missing_x_or_y_axis_variable_title_penalty_multiplier": 0.5,
             "missing_curve_labels_score_lock": 0.0,
