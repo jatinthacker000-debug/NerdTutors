@@ -160,9 +160,13 @@ ${subjectDirectivesText}
 - Keep your internal thought trace crisp, concise, and decisive.
 
 --- OFFICIAL CBSE EVALUATION STANDARDS & INSTRUCTIONS ---
-1. STRICT BINARY MCQ: Compare option letters directly. 1 mark if correct; 0 if wrong. Never award 0.5.
+1. DETERMINISTIC MCQ EXTRACTION: For MCQs, extract "studentOption" (A/B/C/D) and "correctOption" (A/B/C/D). Award full marks if match; 0 if wrong.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
-3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
+3. TIERED FEEDBACK PROTOCOL:
+   - Full marks (score === maxMarks): Set "feedback": "" (EMPTY STRING) and "improvements": [].
+   - Partial marks: 1 to 2 direct sentences explaining the exact gap.
+   - Major error (≥75% lost or 0 marks): 3 to 4 concise sentences explaining the correct treatment.
+   - Unattempted: Set "score": 0, "feedback": "The question was not attempted.", "improvements": [].
 4. MATHEMATICAL SUM INVARIANT: Total of question maxMarks must equal ${maxMarks || 40}.
 5. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
 6. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.

@@ -1077,6 +1077,12 @@ Return the response as a strict JSON object.`;
                     resObj.improvements = resObj.improvements.slice(0, 2);
                 }
 
+                // Zero-Feedback Protocol: If student scored full marks, clear feedback to save bandwidth
+                if (resObj.score >= resObj.maxMarks) {
+                    resObj.feedback = "";
+                    resObj.improvements = [];
+                }
+
                 // C1: clamp each score into [0, maxMarks] so the AI can never award
                 // a negative score or more than the question's maximum.
                 const maxForQ = Number(resObj.maxMarks);

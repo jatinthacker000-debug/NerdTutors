@@ -655,6 +655,7 @@ async function submitGoogleBatchJob() {
                     class: selectedBundleSession?.class || 'Class 12th',
                     subject: selectedBundleSession?.subject || 'Business Studies',
                     maxMarks: Number(selectedBundleSession?.maxMarks) || 30,
+                    markingScheme: selectedBundleSession?.markingScheme || "",
                     targetGroup: selectedBundleSession?.targetGroup || 'Both',
                     studentsMetadata: pendingStudents.map(st => ({ studentName: st.studentName || "Student" }))
                 };
@@ -1221,6 +1222,7 @@ async function submitGoogleBatchJob() {
                         action: 'sync',
                         batchId: batchId,
                         maxMarks: batchJobData.maxMarks || 30,
+                        markingScheme: batchJobData.markingScheme || selectedBundleSession?.markingScheme || "",
                         studentsMetadata: batchJobData.studentsMetadata || []
                     })
                 });
@@ -1248,6 +1250,15 @@ async function submitGoogleBatchJob() {
                             totalTokenCount: u.totalTokenCount
                         });
                     });
+                    console.groupEnd();
+                }
+
+                if (syncData.usageSummary) {
+                    const us = syncData.usageSummary;
+                    console.group("%c💰 VERTEX BATCH COST & CACHE SUMMARY", "background:#1e1b4b;color:#a5b4fc;font-weight:bold;padding:4px 8px;border-radius:4px;");
+                    console.log(`💵 Estimated Total Cost: ₹${us.estimatedCostInr} (₹${us.costPerStudentInr}/student)`);
+                    console.log(`📦 Cache Status: ${us.cacheHit ? '✅ HIT (' + us.totalCachedTokens + ' tokens cached)' : 'ℹ️ Standard Prefix'}`);
+                    console.log(`🧮 Prompt: ${us.totalPromptTokens} | Output: ${us.totalCandidatesTokens} (Thinking: ${us.totalThinkingTokens})`);
                     console.groupEnd();
                 }
 
