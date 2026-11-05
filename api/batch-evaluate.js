@@ -902,7 +902,7 @@ Return STRICT JSON:
         };
 
         if (isArgon) {
-            genConfig.thinkingConfig = { thinkingLevel: "low" };
+            genConfig.thinkingConfig = { thinkingLevel: "medium" };
         } else {
             genConfig.thinkingConfig = { thinkingBudget: 512 };
         }
