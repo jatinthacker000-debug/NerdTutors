@@ -11,13 +11,6 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getVertexAccessToken } from './vertex-auth.js';
-import {
-    handleCors,
-    validateInvocation,
-    verifyAuth,
-    sendError
-} from './_security.js';
-
 
 // Force load .env.local if present locally to bypass Vercel CLI sync overrides
 try {
@@ -92,19 +85,20 @@ function getSubjectDirectives(subject) {
 }
 
 export default async function handler(req, res) {
-    if (handleCors(req, res)) return;
-    if (validateInvocation(req, res)) return;
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-gate-token");
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
 
     if (req.method !== "POST") {
-        return sendError(res, 405, "Method not allowed. Use POST.");
+        return res.status(405).json({ error: "Method not allowed. Use POST." });
     }
 
-    // Require authentication
-    const authResult = await verifyAuth(req);
-    if (!authResult.authenticated) {
-        return sendError(res, 401, "Unauthorized: Authentication required to create context cache.");
-    }
-
+    // Gate security check disabled (direct access enabled)
+    const clientToken = req.headers['x-gate-token'] || "";
 
     let body = req.body;
     if (typeof body === 'string') {
@@ -160,14 +154,19 @@ ${subjectDirectivesText}
 - Keep your internal thought trace crisp, concise, and decisive.
 
 --- OFFICIAL CBSE EVALUATION STANDARDS & INSTRUCTIONS ---
-1. STRICT BINARY MCQs: Award full maxMarks (1.0 or 0.5) if matching correct option; award exactly 0.0 if incorrect or unattempted.
+1. STRICT BINARY MCQ: Compare option letters directly. 1 mark if correct; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
-3. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
-4. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
-5. MATHEMATICAL SUM INVARIANT: Total of question maxMarks must equal ${maxMarks || 40}.
-6. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
-7. CANONICAL LEAF-LEVEL NUMBERING: If a question contains sub-parts, evaluate ONLY at leaf level ("Q2(a)", "Q2(b)", "Q17(a)(i)"). Never output composite parent entries like "Q2".
-8. STREAMLINED FEEDBACK: Full-mark answers output feedback: "" and improvements: []. Partial marks: 1 direct sentence under 15 words.
+3. CONCISE FEEDBACK: Feedback per question MUST be strictly 15 words or fewer. Improvements max 2 items (max 15 words each).
+4. MATHEMATICAL SUM INVARIANT: Total of question maxMarks must equal ${maxMarks || 40}.
+5. UNATTEMPTED QUESTIONS: If question is missing from answer sheet, award score = 0 and feedback: "The question was not attempted."
+6. VALUE POINTS OVER RIGID WORDING: If student conveys core concept using valid alternative subject expression, award marks.
+7. ZERO LANGUAGE DEDUCTIONS: In non-language subjects, zero marks deducted for minor spelling or grammar errors.
+9. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
+   - Always use canonical numbering matching the official exam paper.
+   - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
+   - 1-TIER SUB-PARTS: Format with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i".
+   - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)", or "Q17(i)(a)". NEVER skip parentheses.
+   - NEVER bundle multi-part questions into a single composite block.
 
 --- MANDATORY OUTPUT JSON SCHEMA ---
 Return STRICT JSON in the following format:
@@ -181,9 +180,6 @@ Return STRICT JSON in the following format:
       "questionNumber": "Q1",
       "questionText": "",
       "maxMarks": <number - immutable question weight>,
-      "studentOption": "<uppercase letter A/B/C/D if MCQ, else null>",
-      "correctOption": "<uppercase letter A/B/C/D from marking scheme if MCQ, else null>",
-      "stanceCorrect": "<boolean true/false if Defend/Refute question, else null>",
       "studentAnswerText": "<brief quote if marks lost, else ''>",
       "feedback": "<concise feedback under 15 words>",
       "score": <number - awarded marks>,
