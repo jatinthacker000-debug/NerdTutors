@@ -740,8 +740,7 @@ ${promptBase}`;
         const genConfig = {
             responseMimeType: "application/json",
             temperature: 0.0,
-            seed: 42,
-            mediaResolution: "MEDIA_RESOLUTION_LOW"
+            seed: 42
         };
 
         if (isArgon) {
