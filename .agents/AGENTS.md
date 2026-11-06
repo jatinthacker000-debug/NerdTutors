@@ -1,5 +1,5 @@
 # ZERO WORKSPACE BRANCHING / ZERO REPOSITORY INVOCATION (MANDATORY)
-- **ALREADY IN WORKSPACE:** You are executing directly inside the existing, active repository at `d:\Trinno\NerdTutors`.
+- **ALREADY IN WORKSPACE:** You are executing directly inside the existing, active repository.
 - **STRICT PROHIBITION:** You MUST NEVER run `git clone`, `git init`, `git worktree add`, or create new repository folders.
 - **NO SUBAGENTS / NO BUREAUCRACY:** Do NOT spawn subagents, do not spawn background coordinators, and do not create branched workspaces. Work directly and immediately on the files in this directory.
 
@@ -7,12 +7,12 @@
 
 > [!IMPORTANT]
 > **AUTHORITATIVE SYSTEM ARCHITECTURE & DOCUMENTATION REPOSITORY (`docs/system/`)**:
-> The detailed, production-grade architecture guides, protocol specifications, data models, and API contracts for this system are permanently maintained inside [docs/system/](file:///d:/Trinno/NerdTutors/docs/system/). Any agent or developer working on this codebase MUST consult the corresponding guide in `docs/system/` before modifying subsystem logic:
-> - **Admin Portal & Batch Evaluator**: [docs/system/01-admin-portal.md](file:///d:/Trinno/NerdTutors/docs/system/01-admin-portal.md)
-> - **Student Dashboard & Performance Matrix**: [docs/system/02-dashboard-analytics.md](file:///d:/Trinno/NerdTutors/docs/system/02-dashboard-analytics.md) & [docs/system/dashboard-matrix.md](file:///d:/Trinno/NerdTutors/docs/system/dashboard-matrix.md)
-> - **Evaluation Engine & OCR Pipeline**: [docs/system/03-evaluation-ocr-engine.md](file:///d:/Trinno/NerdTutors/docs/system/03-evaluation-ocr-engine.md) & [docs/system/evaluation-ocr.md](file:///d:/Trinno/NerdTutors/docs/system/evaluation-ocr.md)
-> - **Serverless APIs (`batch-evaluate`, `ocr-evaluate`, `create-cache`)**: [docs/system/04-serverless-apis.md](file:///d:/Trinno/NerdTutors/docs/system/04-serverless-apis.md) & [docs/system/auxiliary-apis.md](file:///d:/Trinno/NerdTutors/docs/system/auxiliary-apis.md)
-> - **Firestore Data Schemas & Models**: [docs/system/05-firestore-data-models.md](file:///d:/Trinno/NerdTutors/docs/system/05-firestore-data-models.md) & [docs/system/data-schemas.md](file:///d:/Trinno/NerdTutors/docs/system/data-schemas.md)
+> The detailed, production-grade architecture guides, protocol specifications, data models, and API contracts for this system are permanently maintained inside [docs/system/](docs/system/). Any agent or developer working on this codebase MUST consult the corresponding guide in `docs/system/` before modifying subsystem logic:
+> - **Admin Portal & Batch Evaluator**: [docs/system/01-admin-portal.md](docs/system/01-admin-portal.md)
+> - **Student Dashboard & Performance Matrix**: [docs/system/02-dashboard-analytics.md](docs/system/02-dashboard-analytics.md) & [docs/system/dashboard-matrix.md](docs/system/dashboard-matrix.md)
+> - **Evaluation Engine & OCR Pipeline**: [docs/system/03-evaluation-ocr-engine.md](docs/system/03-evaluation-ocr-engine.md) & [docs/system/evaluation-ocr.md](docs/system/evaluation-ocr.md)
+> - **Serverless APIs (`batch-evaluate`, `ocr-evaluate`, `create-cache`)**: [docs/system/04-serverless-apis.md](docs/system/04-serverless-apis.md) & [docs/system/auxiliary-apis.md](docs/system/auxiliary-apis.md)
+> - **Firestore Data Schemas & Models**: [docs/system/05-firestore-data-models.md](docs/system/05-firestore-data-models.md) & [docs/system/data-schemas.md](docs/system/data-schemas.md)
 
 
 ## 1. Evaluation & OCR Grading Standards (`api/ocr-evaluate.js`)
@@ -41,27 +41,27 @@ This section contains the exact implementations, structures, and business logic 
 ### A. Secondary Authentication Gate
 * **Purpose**: Restrict access to the OCR scanner, preventing unauthorized API usage by students or non-moderators.
 * **Component Map**:
-  1. [api/verify-gate.js](file:///d:/Trinno/NerdTutors/api/verify-gate.js): Serverless POST endpoint. Checks credentials. Returns a Base64 token `Buffer.from(username + ":" + password).toString('base64')`. It checks against the `GATE_CREDENTIALS` environment variable (value format: `user1:pass1,user2:pass2`). If missing, it defaults to:
+  1. [api/verify-gate.js](api/verify-gate.js): Serverless POST endpoint. Checks credentials. Returns a Base64 token `Buffer.from(username + ":" + password).toString('base64')`. It checks against the `GATE_CREDENTIALS` environment variable (value format: `user1:pass1,user2:pass2`). If missing, it defaults to:
      - `nerd_tutor_alpha` / `nt_pass_alpha2026`
      - `nerd_tutor_beta` / `nt_pass_beta2026`
      - `nerd_tutor_gamma` / `nt_pass_gamma2026`
      - `nerd_tutor_delta` / `nt_pass_delta2026`
      - `nerd_tutor_epsilon` / `nt_pass_epsilon2026`
-  2. [gate-guard.js](file:///d:/Trinno/NerdTutors/gate-guard.js): Lightweight frontend script injected at the very top of `<head>` in all HTML files. Immediately checks `localStorage.getItem('gate_authenticated')`. If missing, blocks page load and redirects the window to `login-gate.html` (preserving query params for return redirection).
-  3. [login-gate.html](file:///d:/Trinno/NerdTutors/login-gate.html): Secure glassmorphism portal. Handles form submission, displays toasts on failure, and stores authentication states in `localStorage` upon success before redirecting.
-  4. [api/ocr-evaluate.js](file:///d:/Trinno/NerdTutors/api/ocr-evaluate.js): Enforces authentication. Reads `x-gate-token` from headers. Compares it against the valid Base64 credential sets. Returns `401 Unauthorized` on mismatch.
+  2. [gate-guard.js](gate-guard.js): Lightweight frontend script injected at the very top of `<head>` in all HTML files. Immediately checks `localStorage.getItem('gate_authenticated')`. If missing, blocks page load and redirects the window to `login-gate.html` (preserving query params for return redirection).
+  3. [login-gate.html](login-gate.html): Secure glassmorphism portal. Handles form submission, displays toasts on failure, and stores authentication states in `localStorage` upon success before redirecting.
+  4. [api/ocr-evaluate.js](api/ocr-evaluate.js): Enforces authentication. Reads `x-gate-token` from headers. Compares it against the valid Base64 credential sets. Returns `401 Unauthorized` on mismatch.
 
 ### B. In-Place Firestore Re-Evaluation
 * **Purpose**: Allow moderators to re-submit a student's answer sheet to correct grading anomalies or modify rules without generating duplicate test result entries.
 * **Component Map**:
-  - [ocr-scan.html](file:///d:/Trinno/NerdTutors/ocr-scan.html):
+  - [ocr-scan.html](ocr-scan.html):
     - Stores the initial submission's Firestore document ID in `currentSavedResultId` and the input payload string in `lastPayloadString`.
     - Displays a `🔄 Re-evaluate` button in the print actions panel after grading finishes.
     - Click event triggers `api/ocr-evaluate` with the cached payload, then updates the existing Firestore document in-place using `updateDoc()` and re-renders the updated report card without duplication.
 
 ### C. Programmatic Grading Override System
 * **Purpose**: Compensate for cognitive limits in smaller Vision-OCR models by programmatically enforcing strict academic board standards.
-* **Logic Location**: Inside the results parsing loop in [api/ocr-evaluate.js](file:///d:/Trinno/NerdTutors/api/ocr-evaluate.js#L520-L560).
+* **Logic Location**: Inside the results parsing loop in [api/ocr-evaluate.js](api/ocr-evaluate.js#L520-L560).
 * **Rule Overrides**:
   1. **Strict MCQ check**: Checks if `maxMarks === 1` AND question identifiers contain `"mcq"` or represent `Q1` to `Q8`. If the feedback text contains negative words (e.g. `"incorrect"`, `"wrong"`, `"should be"`, `"instead of"`, `"0/1"`), it forces `resObj.score = 0`. This keeps composite sections (like `Section A` worth 8 marks) safe from block-wide wipeouts.
   2. **Off-Topic check**: Checks if `maxMarks <= 3` (individual subjective questions) AND feedback contains `"off-topic"`, `"unrelated"`, or `"does not address"`. If matched, forces `resObj.score = 0` (strict zero marks).
@@ -70,7 +70,7 @@ This section contains the exact implementations, structures, and business logic 
 ### D. Mobile Camera Upload Integration
 * **Purpose**: Resolve the mobile OS browser bug where the `multiple` attribute disables the native camera capture menu.
 * **Component Map**:
-  - [ocr-scan.html](file:///d:/Trinno/NerdTutors/ocr-scan.html):
+  - [ocr-scan.html](ocr-scan.html):
     - HTML has two inputs: `#fileInput` (multiple, accept="image/*") and `#cameraInput` (accept="image/*", capture="environment").
     - UI dropzone contains two buttons: `📷 Open Camera` and `📁 Choose Files`.
     - Event handlers map both inputs to the unified `handleFiles` function, allowing students to capture images page-by-page sequentially using the camera, accumulating them in the upload queue.
@@ -80,32 +80,32 @@ This section contains the exact implementations, structures, and business logic 
 ## 5. Direct Single-Pass Vision Architecture (Gemini 4 Argon Primary + Gemini 3.8 Flash Backup)
 * **Strategy**:
   * **Primary Evaluator (`gemini-4-argon`)**: Google's frontier deep-reasoning multimodal model.
-    * **Direct Single-Pass Vision (Default Primary)**: Directly processes high-resolution student answer sheets (`mediaResolution: "MEDIA_RESOLUTION_HIGH"`), reasoning over handwritten answers, layout, and diagrams against questions and the CBSE 2.0 deterministic rules matrix ([api/cbse-rules.json](file:///d:/Trinno/NerdTutors/api/cbse-rules.json)) in a single API round-trip with qualitative `thinkingConfig: { thinkingLevel: "low" }`.
+    * **Direct Single-Pass Vision (Default Primary)**: Directly processes high-resolution student answer sheets (`mediaResolution: "MEDIA_RESOLUTION_HIGH"`), reasoning over handwritten answers, layout, and diagrams against questions and the CBSE 2.0 deterministic rules matrix ([api/cbse-rules.json](api/cbse-rules.json)) in a single API round-trip with qualitative `thinkingConfig: { thinkingLevel: "low" }`.
     * **Latency & Cost Optimization**: Single-Pass completes evaluations in **~8–12 seconds** (down from 100s+ in Dual-Pass), cuts token usage by over 65% (~8k–10k vs 33k tokens), and reduces evaluation cost from ₹11.03 to ~₹3.00 per paper with identical board-grade accuracy.
     * **Optional Forced Dual-Pass**: Preserved via `body.forceDualPass === true` if explicit text transcription is ever needed.
   * **Resilient Failover Backup (`gemini-3.8-flash`)**:
     * If `gemini-4-argon` encounters rate limits (429), server errors (503/504), or regional unavailability, the system automatically and seamlessly fails over to `gemini-3.8-flash` Direct Single-Pass (and subsequent Dual-Pass if required).
     * `result.modelUsed` and `result.backupModelActivated` track the exact model path executed for full observability.
-* **Core File**: [api/ocr-evaluate.js](file:///d:/Trinno/NerdTutors/api/ocr-evaluate.js).
+* **Core File**: [api/ocr-evaluate.js](api/ocr-evaluate.js).
 
 ---
 
 ## 6. Firebase Gate Passwords Management & Access Keys Registry
 * **Purpose**: Store and manage all gate access credentials directly in **Firebase Firestore** (`collection: 'gateCredentials'`) rather than local application files, with document IDs mapped directly to usernames (`doc(db, 'gateCredentials', username)`).
 * **Component Map**:
-  - [api/manage-gate.js](file:///d:/Trinno/NerdTutors/api/manage-gate.js): Backend API handling credential actions (`add`, `delete`, `sync`, `GET`).
-  - [api/verify-gate.js](file:///d:/Trinno/NerdTutors/api/verify-gate.js): Validates submitted passwords on the backend against built-in defaults + persistent Firestore sync credentials and returns cryptographically signed HMAC tokens.
-  - [js/admin-modules/gate-manager.js](file:///d:/Trinno/NerdTutors/js/admin-modules/gate-manager.js): Native Firestore module saving directly to Firestore, auto-seeding/shifting default master credentials on admin login, handling deletions, and exposing `shiftCredentialsToFirebase()` (`window.shiftCredentialsToFirebase`).
-  - [admin.html](file:///d:/Trinno/NerdTutors/admin.html): Added **🔑 Gate Access Keys** tab with "🔥 Shift / Sync All to Firebase" action, random password generator, copy shortcuts, and real-time key registry.
+  - [api/manage-gate.js](api/manage-gate.js): Backend API handling credential actions (`add`, `delete`, `sync`, `GET`).
+  - [api/verify-gate.js](api/verify-gate.js): Validates submitted passwords on the backend against built-in defaults + persistent Firestore sync credentials and returns cryptographically signed HMAC tokens.
+  - [js/admin-modules/gate-manager.js](js/admin-modules/gate-manager.js): Native Firestore module saving directly to Firestore, auto-seeding/shifting default master credentials on admin login, handling deletions, and exposing `shiftCredentialsToFirebase()` (`window.shiftCredentialsToFirebase`).
+  - [admin.html](admin.html): Added **🔑 Gate Access Keys** tab with "🔥 Shift / Sync All to Firebase" action, random password generator, copy shortcuts, and real-time key registry.
 
 ---
 
 ## 7. Question-Wise Student Performance Matrix (`dashboard.html` / `js/matrix-manager.js`)
 * **Purpose**: Comprehensive item-response grid displaying Question Numbers (Q1..Q34) as rows and individual Students as columns with awarded marks, class accuracy rates, and cell drilldown drawers.
 * **Component Map**:
-  - [dashboard.html](file:///d:/Trinno/NerdTutors/dashboard.html): Added `#matrixPage` section and sidebar navigation item `#matrix`.
-  - [js/matrix-manager.js](file:///d:/Trinno/NerdTutors/js/matrix-manager.js): Core matrix data engine with natural question sorting (`Q1`, `Q2` ... `Q10`, `Q17(i)`, `Q17(ii)`, `Q34b(ii)`), dynamic session filtering, toughest/easiest question detection, and CSV export.
-  - [dashboard.css](file:///d:/Trinno/NerdTutors/dashboard.css): Sticky question column and header styling with green/amber/red performance pills.
+  - [dashboard.html](dashboard.html): Added `#matrixPage` section and sidebar navigation item `#matrix`.
+  - [js/matrix-manager.js](js/matrix-manager.js): Core matrix data engine with natural question sorting (`Q1`, `Q2` ... `Q10`, `Q17(i)`, `Q17(ii)`, `Q34b(ii)`), dynamic session filtering, toughest/easiest question detection, and CSV export.
+  - [dashboard.css](dashboard.css): Sticky question column and header styling with green/amber/red performance pills.
 
 ---
 
@@ -244,7 +244,7 @@ The evaluation subsystem underwent a documented evolution across 118 commits (`M
 
 ## 15. Google Cloud Vertex AI Asynchronous Batch Architecture & Operational Invariants
 
-The production batch engine in [api/batch-evaluate.js](file:///d:/Trinno/NerdTutors/api/batch-evaluate.js) and [js/admin-modules/bundle-evaluator.js](file:///d:/Trinno/NerdTutors/js/admin-modules/bundle-evaluator.js) enforces six core invariants:
+The production batch engine in [api/batch-evaluate.js](api/batch-evaluate.js) and [js/admin-modules/bundle-evaluator.js](js/admin-modules/bundle-evaluator.js) enforces six core invariants:
 
 1. **768px Single-Tile Geometric Lock**:
    - Client image downscaling in `readAndCompressImage(file, maxDim = 768, quality = 0.80)`.
@@ -262,7 +262,7 @@ The production batch engine in [api/batch-evaluate.js](file:///d:/Trinno/NerdTut
 5. **Universal Header Matching**:
    - Dynamic label alignment: matches question identifiers and weights directly to Marking Scheme headers, preventing composite grouping errors.
 6. **Payload & Storage Hygiene**:
-   - Strips `thinkingTrace` and `usageMetadata` from Firestore document writes in [bundle-evaluator.js](file:///d:/Trinno/NerdTutors/js/admin-modules/bundle-evaluator.js), keeping database footprints lean and fast.
+   - Strips `thinkingTrace` and `usageMetadata` from Firestore document writes in [bundle-evaluator.js](js/admin-modules/bundle-evaluator.js), keeping database footprints lean and fast.
 
 ---
 
@@ -270,14 +270,15 @@ The production batch engine in [api/batch-evaluate.js](file:///d:/Trinno/NerdTut
 
 All system specifications and operational runbooks are maintained across the following authoritative documentation files:
 
-| Documentation Guide | Absolute Path | Key Contents & Operational Scope |
+| Documentation Guide | Clean Repository Path | Key Contents & Operational Scope |
 |---|---|---|
-| **Admin Portal & Batch Registry** | [docs/system/01-admin-portal.md](file:///d:/Trinno/NerdTutors/docs/system/01-admin-portal.md) | Paper Bundle Evaluator, 768px canvas compression, asynchronous batch dispatch, student renaming, reverse-chronological batch registry. |
-| **Dashboard & Matrix Analytics** | [docs/system/02-dashboard-analytics.md](file:///d:/Trinno/NerdTutors/docs/system/02-dashboard-analytics.md) | Item-response matrix (Q1..Q34), cohort performance, score distribution graphs, student drilldown drawers. |
-| **Evaluation & OCR Engine** | [docs/system/03-evaluation-ocr-engine.md](file:///d:/Trinno/NerdTutors/docs/system/03-evaluation-ocr-engine.md) | Dual operational modes (Interactive Single-Pass vs Asynchronous Batch), resolution strategies, Zero-Feedback Mandate. |
-| **Serverless API Endpoints** | [docs/system/04-serverless-apis.md](file:///d:/Trinno/NerdTutors/docs/system/04-serverless-apis.md) | Full contract specifications for `api/ocr-evaluate.js`, `api/batch-evaluate.js`, `api/create-cache.js`, `api/extract-pdf.js`. |
-| **Firestore Data Schemas** | [docs/system/05-firestore-data-models.md](file:///d:/Trinno/NerdTutors/docs/system/05-firestore-data-models.md) | Document data schemas for `testSessions`, `testResults`, `questions`, `gateCredentials`, payload hygiene rules. |
-| **Auxiliary APIs & Cloud Engines** | [docs/system/auxiliary-apis.md](file:///d:/Trinno/NerdTutors/docs/system/auxiliary-apis.md) | Vertex AI Batch API implementation details, JSONL generation, service account auth, cost formulas. |
-| **Evaluation Architecture Deep Dive**| [docs/system/evaluation-ocr.md](file:///d:/Trinno/NerdTutors/docs/system/evaluation-ocr.md) | Multimodal visual reasoning mechanics, academic benchmarks, deterministic clamp invariants. |
+| **Admin Portal & Batch Registry** | [docs/system/01-admin-portal.md](docs/system/01-admin-portal.md) | Paper Bundle Evaluator, 768px canvas compression, asynchronous batch dispatch, student renaming, reverse-chronological batch registry. |
+| **Dashboard & Matrix Analytics** | [docs/system/02-dashboard-analytics.md](docs/system/02-dashboard-analytics.md) | Item-response matrix (Q1..Q34), cohort performance, score distribution graphs, student drilldown drawers. |
+| **Evaluation & OCR Engine** | [docs/system/03-evaluation-ocr-engine.md](docs/system/03-evaluation-ocr-engine.md) | Dual operational modes (Interactive Single-Pass vs Asynchronous Batch), resolution strategies, Zero-Feedback Mandate. |
+| **Serverless API Endpoints** | [docs/system/04-serverless-apis.md](docs/system/04-serverless-apis.md) | Full contract specifications for `api/ocr-evaluate.js`, `api/batch-evaluate.js`, `api/create-cache.js`, `api/extract-pdf.js`. |
+| **Firestore Data Schemas** | [docs/system/05-firestore-data-models.md](docs/system/05-firestore-data-models.md) | Document data schemas for `testSessions`, `testResults`, `questions`, `gateCredentials`, payload hygiene rules. |
+| **Auxiliary APIs & Cloud Engines** | [docs/system/auxiliary-apis.md](docs/system/auxiliary-apis.md) | Vertex AI Batch API implementation details, JSONL generation, service account auth, cost formulas. |
+| **Evaluation Architecture Deep Dive**| [docs/system/evaluation-ocr.md](docs/system/evaluation-ocr.md) | Multimodal visual reasoning mechanics, academic benchmarks, deterministic clamp invariants. |
+
 
 
