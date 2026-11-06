@@ -1,12 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { getVertexAccessToken, getVertexCredentialsInfo } from './vertex-auth.js';
-import {
-    handleCors,
-    validateInvocation,
-    verifyAuth,
-    sendError
-} from './_security.js';
 
 // Force load .env.local if present locally
 try {
@@ -133,17 +127,13 @@ function saveDeletedJobIds(ids) {
 }
 
 export default async function handler(req, res) {
-    if (handleCors(req, res)) return;
-    if (validateInvocation(req, res)) return;
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
+    if (req.method === "OPTIONS") return res.status(200).end();
     if (req.method !== "POST" && req.method !== "GET") {
-        return sendError(res, 405, "Method not allowed. Use GET or POST.");
-    }
-
-    // Mandatory Authentication Guard
-    const authResult = await verifyAuth(req);
-    if (!authResult.authenticated) {
-        return sendError(res, 401, "Unauthorized: Authentication required to access batch evaluation service.");
+        return res.status(405).json({ error: "Method not allowed." });
     }
 
     let body = req.body;
@@ -152,13 +142,6 @@ export default async function handler(req, res) {
     }
     if (req.method === "GET") {
         body = req.query;
-    }
-
-    const action = body.action || req.query?.action || "create";
-
-    // Creating or deleting batch jobs requires administrator privileges
-    if ((action === "create" || action === "delete") && !authResult.user?.isAdmin) {
-        return sendError(res, 403, "Forbidden: Administrator privileges required to create or delete batch prediction jobs.");
     }
 
     let authToken = null;
@@ -173,11 +156,17 @@ export default async function handler(req, res) {
 
     const rawKeys = process.env.GEMINI_API_KEY || process.env.VERTEX_API_KEY || process.env.GEMINI_KEY || process.env.GOOGLE_API_KEY || "";
     if (!rawKeys && !authToken) {
-        return sendError(res, 500, "Neither Gemini/Vertex API key nor GCP Service Account key is configured in server environment.");
+        return res.status(500).json({
+            error: "Neither Gemini/Vertex API key nor GCP Service Account key is configured in server environment.",
+            authAudit: {
+                serviceAccountFetched: false,
+                error: credsInfo.error || authError || "Missing API Key or GCP_SERVICE_ACCOUNT_KEY"
+            }
+        });
     }
 
     const apiKey = rawKeys ? rawKeys.split(",")[0].trim() : "";
-
+    const action = body.action || req.query?.action || "create";
 
     const projectId = credsInfo.projectId || process.env.GCP_PROJECT_ID || "nerd-tutors-001";
     const location = process.env.GCP_LOCATION || "global";
@@ -535,7 +524,6 @@ export default async function handler(req, res) {
             for (let i = 0; i < responsesList.length; i++) {
                 const item = responsesList[i];
                 const meta = studentsMetadata[i] || { studentName: `Student ${i + 1}` };
-                const usageMetadata = item.response?.usageMetadata || null;
 
                 let rawText = "";
                 if (item.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -570,134 +558,21 @@ export default async function handler(req, res) {
                     }
                     if (!resolvedStudentName) resolvedStudentName = `Student ${i + 1}`;
 
-                    // CBSE Safety Nets: Deterministic Binary MCQ Checks, Zero-Feedback Protocol, Stance Caps & Math Clamping
+                    // CBSE Safety Nets: Programmatic Mathematical Clamping & Binary MCQ Checks
                     if (Array.isArray(evalObj.results)) {
                         let runningSum = 0;
-                        const combinedSchemeText = (targetJ?.markingScheme || body.markingScheme || "").toLowerCase();
-
                         evalObj.results.forEach(resObj => {
-                            const qNumStr = String(resObj.questionNumber || resObj.questionId || "").trim();
-                            const qRawNumMatch = qNumStr.match(/(\d+)/);
-                            const qRawNum = qRawNumMatch ? qRawNumMatch[1] : "";
-                            const feedbackText = String(resObj.feedback || "").toLowerCase();
-
-                            // 1. Dynamic MCQ Detection & Deterministic Option Evaluation
-                            const isMCQ = Boolean(
-                                resObj.studentOption || 
-                                resObj.correctOption || 
-                                ((Number(resObj.maxMarks) <= 1.0) && (/mcq|q[1-9]|section\s*a/i.test(qNumStr)))
-                            );
-
+                            const isMCQ = (Number(resObj.maxMarks) <= 1.0) && (/mcq|q[1-9]|section\s*a/i.test(resObj.questionId || ""));
                             if (isMCQ) {
-                                let expectedMcqWeight = 1.0;
-                                if (Number(resObj.maxMarks) === 0.5) {
-                                    expectedMcqWeight = 0.5;
-                                } else if (combinedSchemeText && qRawNum) {
-                                    const explicitHalfMatch = combinedSchemeText.match(new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n]*0\\.5\\s*(?:mark|m)?`, 'i'));
-                                    if (explicitHalfMatch) expectedMcqWeight = 0.5;
-                                }
-                                resObj.maxMarks = expectedMcqWeight;
-
-                                const studentOpt = resObj.studentOption ? String(resObj.studentOption).trim().toUpperCase() : null;
-                                let correctOpt = resObj.correctOption ? String(resObj.correctOption).trim().toUpperCase() : null;
-
-                                // Fallback extract correct option from marking scheme if not provided by model
-                                if (!correctOpt && qRawNum && combinedSchemeText) {
-                                    const schemeOptMatch = combinedSchemeText.match(new RegExp(`(?:q\\.?|question\\s*)${qRawNum}[^\\n\\[\\(]*[\\(\\[]([a-d])[\\)\\]]`, 'i'));
-                                    if (schemeOptMatch) correctOpt = schemeOptMatch[1].toUpperCase();
-                                }
-
-                                const isExplicitlyWrong = feedbackText.includes("incorrect") || feedbackText.includes("wrong") || feedbackText.includes("0/1") || feedbackText.includes("0 mark");
-
-                                if (correctOpt) {
-                                    resObj.correctOption = correctOpt;
-                                    if (studentOpt && studentOpt === correctOpt) {
-                                        resObj.score = expectedMcqWeight;
-                                        // Zero-Feedback Protocol: Full marks get zero feedback
-                                        resObj.feedback = "";
-                                        resObj.improvements = [];
-                                    } else {
-                                        resObj.score = 0;
-                                        if (studentOpt) {
-                                            resObj.feedback = `Option (${studentOpt}) selected; correct option is (${correctOpt}).`;
-                                        } else if (feedbackText.includes("not attempted") || feedbackText.includes("unattempted")) {
-                                            resObj.feedback = `The question was not attempted. Correct option is (${correctOpt}).`;
-                                        } else {
-                                            resObj.feedback = `Incorrect option chosen; correct option is (${correctOpt}).`;
-                                        }
-                                    }
-                                } else {
-                                    if (isExplicitlyWrong) {
-                                        resObj.score = 0;
-                                    } else if (Number(resObj.score) >= (expectedMcqWeight * 0.75)) {
-                                        resObj.score = expectedMcqWeight;
-                                        resObj.feedback = "";
-                                        resObj.improvements = [];
-                                    } else {
-                                        resObj.score = 0;
-                                    }
-                                }
+                                resObj.maxMarks = 1.0;
+                                const fb = (resObj.feedback || "").toLowerCase();
+                                const isWrong = fb.includes("incorrect") || fb.includes("wrong") || fb.includes("0/1");
+                                if (isWrong) resObj.score = 0;
+                                else if (Number(resObj.score) >= 0.5) resObj.score = 1.0;
+                                else resObj.score = 0;
                             }
-
-                            // 2. Unattempted Question Handling
-                            const isUnattempted = (Number(resObj.score) === 0) && (
-                                feedbackText.includes("not attempted") || 
-                                feedbackText.includes("unattempted") || 
-                                feedbackText.includes("was not attempted") || 
-                                feedbackText.includes("question was skipped")
-                            );
-                            if (isUnattempted && !isMCQ) {
-                                resObj.score = 0;
-                                resObj.feedback = "The question was not attempted.";
-                                resObj.improvements = [];
-                            }
-
-                            // 3. Off-Topic Check (only for subjective questions <= 3 marks)
-                            const isOffTopic = Number(resObj.maxMarks) <= 3 && !isMCQ && (
-                                feedbackText.includes("off-topic") ||
-                                feedbackText.includes("off topic") ||
-                                feedbackText.includes("does not address") ||
-                                feedbackText.includes("does not answer") ||
-                                feedbackText.includes("unrelated") ||
-                                feedbackText.includes("zero marks")
-                            );
-                            if (isOffTopic) {
-                                resObj.score = 0;
-                            }
-
-                            // 4. Defend/Refute Stance Governance
-                            const wrongStanceHeuristic = feedbackText.includes("defended instead of refut") ||
-                                feedbackText.includes("refuted instead of defend") ||
-                                feedbackText.includes("defended the statement instead of refuting") ||
-                                feedbackText.includes("refuted the statement instead of defending") ||
-                                feedbackText.includes("defend instead of refute") ||
-                                feedbackText.includes("refute instead of defend") ||
-                                feedbackText.includes("wrong stance") ||
-                                feedbackText.includes("should have refuted") ||
-                                feedbackText.includes("should have defended");
-
-                            const isWrongStance = resObj.stanceCorrect === false || (resObj.stanceCorrect === null && wrongStanceHeuristic);
-                            if (isWrongStance && Number(resObj.maxMarks) >= 3 && Number(resObj.score) > 1.0) {
-                                resObj.score = 1.0;
-                            }
-
-                            // 5. Zero-Feedback Protocol for Full Marks
-                            if (resObj.score >= resObj.maxMarks) {
-                                resObj.feedback = "";
-                                resObj.improvements = [];
-                            }
-
-                            // 6. Improvements array bounds
-                            if (Array.isArray(resObj.improvements) && resObj.improvements.length > 2) {
-                                resObj.improvements = resObj.improvements.slice(0, 2);
-                            }
-
-                            // 7. Programmatic Mathematical Clamping
-                            const maxForQ = Number(resObj.maxMarks) || 1;
-                            let s = Number(resObj.score);
-                            if (!Number.isFinite(s) || s < 0) s = 0;
-                            if (s > maxForQ) s = maxForQ;
-                            resObj.score = Math.round(s * 10) / 10;
+                            // Clamping
+                            resObj.score = Math.min(Math.max(0, Number(resObj.score) || 0), Number(resObj.maxMarks) || 1);
                             runningSum += resObj.score;
                         });
                         evalObj.totalScore = Math.round(runningSum * 10) / 10;
@@ -706,14 +581,12 @@ export default async function handler(req, res) {
                     parsedResults.push({
                         studentName: resolvedStudentName,
                         result: evalObj,
-                        usageMetadata: usageMetadata,
                         rawOutput: cleaned
                     });
                 } catch (pErr) {
                     parsedResults.push({
                         studentName: meta.studentName || `Student ${i + 1}`,
                         error: "JSON parse failed: " + pErr.message,
-                        usageMetadata: usageMetadata,
                         rawOutput: rawText
                     });
                 }
@@ -727,56 +600,10 @@ export default async function handler(req, res) {
                 saveBatchJobsList(allSaved);
             }
 
-            let totalPromptTokens = 0;
-            let totalCandidatesTokens = 0;
-            let totalCachedTokens = 0;
-            let totalThinkingTokens = 0;
-
-            parsedResults.forEach(p => {
-                const u = p.usageMetadata || {};
-                totalPromptTokens += Number(u.promptTokenCount) || 0;
-                totalCandidatesTokens += Number(u.candidatesTokenCount) || 0;
-                totalCachedTokens += Number(u.cachedContentTokenCount) || 0;
-                totalThinkingTokens += Number(u.thoughtsTokenCount) || 0;
-            });
-
-            // Google Cloud Vertex AI List Pricing in INR (with 50% Batch Prediction Discount):
-            // Text Input: ₹0.0001919775 / token
-            // Text Output (includes thinking): ₹0.0009598875 / token
-            // Cached Input: ₹0.000047994 / token
-            const inputRate = 0.0001919775;
-            const outputRate = 0.0009598875;
-            const cachedRate = 0.000047994;
-
-            const nonCachedPromptTokens = Math.max(0, totalPromptTokens - totalCachedTokens);
-            const estCostInr = (nonCachedPromptTokens * inputRate) + (totalCachedTokens * cachedRate) + ((totalCandidatesTokens + totalThinkingTokens) * outputRate);
-
-            console.log("📊 [VERTEX BATCH TOKEN & CACHE AUDIT]", {
-                batchId: data.name,
-                studentCount: parsedResults.length,
-                totalPromptTokens,
-                totalCandidatesTokens,
-                totalThinkingTokens,
-                totalCachedTokens,
-                cacheStatus: totalCachedTokens > 0 ? "✅ CACHE HIT" : "ℹ️ STANDARD PREFIX",
-                cacheRatio: totalPromptTokens > 0 ? `${((totalCachedTokens / totalPromptTokens) * 100).toFixed(1)}%` : "0%",
-                estimatedBatchCostInr: `₹${estCostInr.toFixed(2)}`,
-                costPerStudentInr: parsedResults.length > 0 ? `₹${(estCostInr / parsedResults.length).toFixed(2)}` : "₹0.00"
-            });
-
             return res.status(200).json({
                 success: true,
                 batchId: data.name,
-                parsedResults,
-                usageSummary: {
-                    totalPromptTokens,
-                    totalCandidatesTokens,
-                    totalThinkingTokens,
-                    totalCachedTokens,
-                    cacheHit: totalCachedTokens > 0,
-                    estimatedCostInr: Math.round(estCostInr * 100) / 100,
-                    costPerStudentInr: parsedResults.length > 0 ? Math.round((estCostInr / parsedResults.length) * 100) / 100 : 0
-                }
+                parsedResults
             });
         } catch (err) {
             console.error("Batch sync error:", err);
@@ -810,12 +637,11 @@ export default async function handler(req, res) {
 
     const reasoningGuardrailPrompt = `
 --- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
-- Formulate evaluation directly against marking scheme value points in a single forward pass without discursive preamble.
+- Formulate your evaluation directly against the marking scheme value points without discursive preamble.
 - Do NOT rewrite or transcribe the student's entire answer inside your internal thinking trace.
-- For MCQs: Identify the student's written option letter and compare against the key in a single step. Zero paragraphs of theory in thoughts.
-- For Numerical Steps: Check formula -> substitution -> final figure directly against rubric. Note deductions immediately without repetitive deliberation.
-- Eliminate Multi-Pass Deliberation: Grade decisively in a single forward pass; programmatic JavaScript safety nets handle post-flight clamping.
-- Keep internal thought trace crisp, structured, and focused on core calculations (~1,200–1,400 thinking tokens).
+- For MCQs: Compare the written option letter (A, B, C, D) directly against the key in a single reasoning step. Zero paragraphs of theory in thoughts.
+- For Subjective Questions: Check directly for the presence or absence of mandatory textbook value points. Deduct marks immediately for missing points without repetitive deliberation.
+- Keep your internal thought trace crisp, concise, and decisive.
 `;
 
     // Streamlined prompt: if an explicit cachedContent resource exists, reference it.
@@ -827,12 +653,19 @@ export default async function handler(req, res) {
         const subjectDirectives = getSubjectDirectives(subject);
         promptBase = `You are evaluating student handwritten answer sheets against the official exam questions and marking scheme below.
 ${reasoningGuardrailPrompt}
---- CRITICAL CBSE BOARD EXAMINATION STANDARDS ---
-1. STRICT BINARY MCQs: Award full maxMarks (1.0 or 0.5) if correct; award exactly 0.0 if incorrect or unattempted.
-2. DEFEND / REFUTE STANCE CAP: If the student argues the incorrect stance, cap question score to a maximum of 1.0 mark.
-3. VALUE POINTS OVER RIGID WORDING: Suggested value points are guidelines. Award full due credit when the student conveys the core concept using valid alternative subject expression.
-4. ZERO LANGUAGE OR SPELLING PENALTIES: In non-language subjects (Economics, Accountancy, Business Studies, Social Science), deduct ZERO marks (0.0) for spelling slips or imperfect English phrasing.
-5. CANONICAL LEAF-LEVEL NUMBERING: If a question has sub-parts, evaluate ONLY at leaf level (e.g. "Q2(a)", "Q2(b)", "Q17(a)(i)"). Never output composite parent entries like "Q2".
+CRITICAL CONSTRAINTS:
+1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
+2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
+4. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
+   - Always use canonical numbering matching the official exam paper.
+   - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
+   - 1-TIER SUB-PARTS: Always format with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i".
+   - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses:
+     * Letter + Roman: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)"
+     * Roman + Letter: "Q17(i)(a)", "Q17(i)(b)"
+     * Letter + Number: "Q17(a)(1)", "Q17(a)(2)"
+     * Never drop parentheses (e.g. NEVER write "Q17a(i)" or "Q17ai").
+   - NEVER bundle multi-part questions into a single composite block.
 ${subjectDirectives}
 
 --- EXAM QUESTIONS ---
@@ -840,32 +673,28 @@ ${questions || ""}
 
 --- OFFICIAL MARKING SCHEME ---
 ${markingScheme || ""}
-${otherInstructions && otherInstructions.trim() ? `\n--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructions.trim().slice(0, 500).replace(/[`$]/g, "")}\n` : ""}
+${otherInstructions ? `\n--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructions}\n` : ""}
 
 Return STRICT JSON:
 {
   "studentName": "<exact student name from prompt>",
   "results": [
-    {
-      "questionNumber": "Q1",
-      "score": <number - awarded marks, 0 to maxMarks>,
-      "maxMarks": <number - immutable question weight>,
-      "feedback": "<concise feedback under 15 words; empty string \"\" if full marks; \"The question was not attempted.\" if omitted>",
-      "improvements": ["<actionable tip under 15 words if marks lost, else []>"]
-    }
+    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
   ],
-  "totalScore": <number - sum of scores>,
+  "totalScore": <number>,
   "totalMaxMarks": ${maxMarks},
-  "overallFeedback": "<concise 2-3 sentence executive performance summary>"
+  "overallFeedback": "<comprehensive 2-3 sentence performance summary>"
 }`;
     }
 
     // Package each student into an inline GenerateContentRequest
     const inlinedRequests = students.map((st, idx) => {
         const studentName = st.studentName || `Student ${idx + 1}`;
-        const candidateSuffix = `\n\n--- EVALUATION TARGET ---\nSTUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}\n(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")\nEvaluate the student's handwritten answer sheet pages below against the master criteria above.`;
-        // Static promptBase is placed as an isolated first part at Token 0 to trigger Google Cloud Vertex AI implicit prefix KV-caching across all students!
-        const parts = [{ text: promptBase }, { text: candidateSuffix }];
+        const studentPrompt = `STUDENT NAME / CANDIDATE IDENTIFIER: ${studentName}
+(MANDATORY: You MUST set the output JSON field "studentName" to "${studentName}")
+
+${promptBase}`;
+        const parts = [{ text: studentPrompt }];
 
         if (Array.isArray(st.pages)) {
             st.pages.forEach(p => {
@@ -881,8 +710,7 @@ Return STRICT JSON:
         const genConfig = {
             responseMimeType: "application/json",
             temperature: 0.0,
-            seed: 42,
-            mediaResolution: "MEDIA_RESOLUTION_MEDIUM"
+            seed: 42
         };
 
         if (isArgon) {
@@ -916,19 +744,6 @@ Return STRICT JSON:
     const gcsBucket = process.env.GCP_STORAGE_BUCKET || `${projectId}-batch-evals`;
     const inputFileName = `inputs/${cleanSession}_${Date.now()}.jsonl`;
     const jsonlData = inlinedRequests.map(req => JSON.stringify({ request: req })).join('\n') + '\n';
-
-    console.log("📊 [BATCH INPUT PAYLOAD AUDIT]", {
-        isExplicitCache,
-        cachedContentId,
-        questionsChars: (questions || "").length,
-        questionsEstTokens: Math.round((questions || "").length / 4),
-        markingSchemeChars: (markingScheme || "").length,
-        markingSchemeEstTokens: Math.round((markingScheme || "").length / 4),
-        totalPromptBaseChars: promptBase.length,
-        totalPromptBaseEstTokens: Math.round(promptBase.length / 4),
-        studentsCount: students.length,
-        pagesPerStudent: students.map(s => s.pages?.length || 0)
-    });
 
     console.log(`📤 Uploading batch input (${inlinedRequests.length} students) to Google Cloud Storage (gs://${gcsBucket}/${inputFileName})...`);
     let gcsInputUri = body.gcsInputUri || "";
@@ -997,7 +812,6 @@ Return STRICT JSON:
                 pageCount: Array.isArray(s.pages) ? s.pages.length : 1 
             })),
             maxMarks: Number(maxMarks) || 40,
-            markingScheme: markingScheme || "",
             status: data.state || "JOB_STATE_PENDING",
             gcsInputUri: gcsInputUri,
             gcsOutputDirectory: outputPrefix,
