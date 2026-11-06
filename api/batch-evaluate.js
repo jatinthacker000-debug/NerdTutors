@@ -660,13 +660,12 @@ export default async function handler(req, res) {
         const isExplicitCache = Boolean(cachedContentId && (cachedContentId.startsWith('cachedContents/') || cachedContentId.includes('/cachedContents/')));
 
     const reasoningGuardrailPrompt = `
---- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
-- Formulate your evaluation directly against the marking scheme value points without discursive preamble.
-- Do NOT rewrite or transcribe the student's entire answer inside your internal thinking trace.
-- When an answer is correct and matches the rubric, award full marks immediately in a single thought step without composing praise or commentary.
-- For MCQs: Compare the written option letter (A, B, C, D) directly against the key in a single reasoning step. Zero paragraphs of theory in thoughts.
-- For Subjective Questions: Check directly for the presence or absence of mandatory textbook value points. Deduct marks immediately for missing points without repetitive deliberation.
-- Keep your internal thought trace crisp, concise, and decisive.
+--- REASONING DIRECTIVES (STEP-BY-STEP EVALUATION) ---
+- Begin evaluation immediately with Question 1, Item 1. Check each bullet item against the student's answer sheet, award due marks, and advance sequentially.
+- When an item or answer is fully correct and matches the rubric, award full marks in a single step without writing justification in thoughts.
+- For MCQs: Compare the student's written option letter directly against the marking scheme key in a single step.
+- For Subjective Questions: Check directly for the presence or absence of mandatory value points. Deduct marks immediately for missing or incorrect points.
+- Do NOT rewrite or transcribe the student's entire answer inside your internal thoughts.
 `;
 
     // Streamlined prompt: if an explicit cachedContent resource exists, reference it.
@@ -685,21 +684,13 @@ CRITICAL CONSTRAINTS:
    - IF score === maxMarks (answer is 100% correct and earned full credit):
      * "feedback" MUST be exactly empty string: ""
      * "improvements" MUST be exactly empty array: []
-     * NEVER write affirmations, compliments, or explanations of why an answer is right (e.g. do NOT write "Account is completely accurate" or "Correct journal entry").
-     * In your internal thoughts, verify the value points match and immediately move to the next question without writing explanatory rationale.
+     * NEVER write affirmations, compliments, or explanations of why an answer is right.
    - ONLY IF score < maxMarks (student lost marks):
      * "feedback": State the exact factual error or missing point (strictly under 15 words).
      * "improvements": State 1 actionable remedy (strictly under 15 words).
-4. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
-   - Always use canonical numbering matching the official exam paper.
-   - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
-   - 1-TIER SUB-PARTS: Always format with parentheses: "Q2(a)", "Q2(b)", "Q5(i)", "Q5(ii)". NEVER output unparenthesized strings like "Q2a" or "Q5i".
-   - 2-TIER SUB-PARTS (SUBPART OF A SUBPART): If a sub-part has its own sub-parts, format every level with parentheses:
-     * Letter + Roman: "Q17(a)(i)", "Q17(a)(ii)", "Q17(b)(i)", "Q17(b)(ii)"
-     * Roman + Letter: "Q17(i)(a)", "Q17(i)(b)"
-     * Letter + Number: "Q17(a)(1)", "Q17(a)(2)"
-     * Never drop parentheses (e.g. NEVER write "Q17a(i)" or "Q17ai").
-   - NEVER bundle multi-part questions into a single composite block.
+4. UNIVERSAL QUESTION LABELS & WEIGHTS:
+   - Match the question numbers and maxMarks exactly as written in the Marking Scheme headers (e.g. if the scheme has Q1, Q2, Q3... or sub-parts like Q3(a), Q3(b), use those exact labels).
+   - Never invent unlisted question numbers, and never alter question maxMarks weights.
 ${subjectDirectives}
 
 ${markingScheme ? `--- OFFICIAL MARKING SCHEME & QUESTION RUBRIC ---\n${markingScheme}\n` : (questions ? `--- EXAM QUESTIONS ---\n${questions}\n` : "")}
