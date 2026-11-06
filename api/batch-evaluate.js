@@ -525,10 +525,23 @@ export default async function handler(req, res) {
                 const item = responsesList[i];
                 const meta = studentsMetadata[i] || { studentName: `Student ${i + 1}` };
 
+                const candidateParts = item.response?.candidates?.[0]?.content?.parts || [];
+                let thinkingTrace = "";
                 let rawText = "";
-                if (item.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                    rawText = item.response.candidates[0].content.parts[0].text;
-                } else if (item.response?.text) {
+
+                for (const p of candidateParts) {
+                    if (p.thought) {
+                        thinkingTrace += (thinkingTrace ? "\n" : "") + (p.text || "");
+                    } else if (p.text) {
+                        rawText += p.text;
+                    }
+                }
+
+                if (!rawText && candidateParts.length > 0) {
+                    const nonThoughtPart = candidateParts.find(p => !p.thought);
+                    if (nonThoughtPart) rawText = nonThoughtPart.text;
+                    else rawText = candidateParts[candidateParts.length - 1].text || "";
+                } else if (!rawText && item.response?.text) {
                     rawText = item.response.text;
                 }
 
@@ -562,7 +575,8 @@ export default async function handler(req, res) {
                     if (Array.isArray(evalObj.results)) {
                         let runningSum = 0;
                         evalObj.results.forEach(resObj => {
-                            const isMCQ = (Number(resObj.maxMarks) <= 1.0) && (/mcq|q[1-9]|section\s*a/i.test(resObj.questionId || ""));
+                            const qNum = resObj.questionNumber || resObj.questionId || "";
+                            const isMCQ = (Number(resObj.maxMarks) <= 1.0) && (/mcq|q0?[1-8]\b|section\s*a/i.test(qNum));
                             if (isMCQ) {
                                 resObj.maxMarks = 1.0;
                                 const fb = (resObj.feedback || "").toLowerCase();
@@ -573,6 +587,13 @@ export default async function handler(req, res) {
                             }
                             // Clamping
                             resObj.score = Math.min(Math.max(0, Number(resObj.score) || 0), Number(resObj.maxMarks) || 1);
+                            
+                            // Post-processing safety net: If score is full marks, ensure feedback is empty string
+                            if (resObj.score >= Number(resObj.maxMarks)) {
+                                resObj.feedback = "";
+                                resObj.improvements = [];
+                            }
+
                             runningSum += resObj.score;
                         });
                         evalObj.totalScore = Math.round(runningSum * 10) / 10;
@@ -581,12 +602,15 @@ export default async function handler(req, res) {
                     parsedResults.push({
                         studentName: resolvedStudentName,
                         result: evalObj,
+                        thinkingTrace: thinkingTrace || null,
+                        usageMetadata: item.response?.usageMetadata || null,
                         rawOutput: cleaned
                     });
                 } catch (pErr) {
                     parsedResults.push({
                         studentName: meta.studentName || `Student ${i + 1}`,
                         error: "JSON parse failed: " + pErr.message,
+                        thinkingTrace: thinkingTrace || null,
                         rawOutput: rawText
                     });
                 }
@@ -639,6 +663,7 @@ export default async function handler(req, res) {
 --- REASONING BUDGET GOVERNANCE & THINKING GUARDRAIL (CRITICAL) ---
 - Formulate your evaluation directly against the marking scheme value points without discursive preamble.
 - Do NOT rewrite or transcribe the student's entire answer inside your internal thinking trace.
+- When an answer is correct and matches the rubric, award full marks immediately in a single thought step without composing praise or commentary.
 - For MCQs: Compare the written option letter (A, B, C, D) directly against the key in a single reasoning step. Zero paragraphs of theory in thoughts.
 - For Subjective Questions: Check directly for the presence or absence of mandatory textbook value points. Deduct marks immediately for missing points without repetitive deliberation.
 - Keep your internal thought trace crisp, concise, and decisive.
@@ -656,6 +681,15 @@ ${reasoningGuardrailPrompt}
 CRITICAL CONSTRAINTS:
 1. STRICT BINARY MCQ: 1 mark if correct option letter matches; 0 if wrong. Never award 0.5.
 2. DEFEND / REFUTE: Choosing incorrect stance caps question score to maximum 1.0 mark.
+3. ZERO-FEEDBACK MANDATE FOR FULL-MARK ANSWERS (CRITICAL TOKEN EFFICIENCY):
+   - IF score === maxMarks (answer is 100% correct and earned full credit):
+     * "feedback" MUST be exactly empty string: ""
+     * "improvements" MUST be exactly empty array: []
+     * NEVER write affirmations, compliments, or explanations of why an answer is right (e.g. do NOT write "Account is completely accurate" or "Correct journal entry").
+     * In your internal thoughts, verify the value points match and immediately move to the next question without writing explanatory rationale.
+   - ONLY IF score < maxMarks (student lost marks):
+     * "feedback": State the exact factual error or missing point (strictly under 15 words).
+     * "improvements": State 1 actionable remedy (strictly under 15 words).
 4. CANONICAL QUESTION NUMBERING & SUB-PARTS (CRITICAL):
    - Always use canonical numbering matching the official exam paper.
    - LEAF-LEVEL ONLY: If a question contains sub-parts (e.g. Q2 has (a) and (b)), evaluate ONLY at the leaf level ("Q2(a)", "Q2(b)"). NEVER output a composite parent entry like "Q2" when evaluating sub-parts!
@@ -679,7 +713,7 @@ Return STRICT JSON:
 {
   "studentName": "<exact student name from prompt>",
   "results": [
-    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words>", "improvements": ["<max 15 words>"] }
+    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words or empty string if full marks>", "improvements": ["<max 15 words or empty array if full marks>"] }
   ],
   "totalScore": <number>,
   "totalMaxMarks": ${maxMarks},
@@ -714,9 +748,9 @@ ${promptBase}`;
         };
 
         if (isArgon) {
-            genConfig.thinkingConfig = { thinkingLevel: "medium" };
+            genConfig.thinkingConfig = { thinkingLevel: "medium", includeThoughts: true };
         } else {
-            genConfig.thinkingConfig = { thinkingBudget: 512 };
+            genConfig.thinkingConfig = { thinkingBudget: 512, includeThoughts: true };
         }
 
         const reqItem = {
