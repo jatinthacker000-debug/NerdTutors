@@ -357,7 +357,7 @@ async function handleBulkFilesIngest(fileList) {
     showToast(`🎉 Created ${Object.keys(groups).length} distinct student segments (${validFiles.length} pages total)!`, "success");
 }
 
-function readAndCompressImage(file, maxDim = 1200, quality = 0.75) {
+function readAndCompressImage(file, maxDim = 1024, quality = 0.75) {
     return new Promise((resolve, reject) => {
         if (!file.type || !file.type.startsWith('image/')) {
             const reader = new FileReader();

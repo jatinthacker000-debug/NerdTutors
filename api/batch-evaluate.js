@@ -702,11 +702,7 @@ CRITICAL CONSTRAINTS:
    - NEVER bundle multi-part questions into a single composite block.
 ${subjectDirectives}
 
---- EXAM QUESTIONS ---
-${questions || ""}
-
---- OFFICIAL MARKING SCHEME ---
-${markingScheme || ""}
+${markingScheme ? `--- OFFICIAL MARKING SCHEME & QUESTION RUBRIC ---\n${markingScheme}\n` : (questions ? `--- EXAM QUESTIONS ---\n${questions}\n` : "")}
 ${otherInstructions ? `\n--- TEACHER OVERRIDE INSTRUCTIONS ---\n${otherInstructions}\n` : ""}
 
 Return STRICT JSON:
@@ -744,7 +740,8 @@ ${promptBase}`;
         const genConfig = {
             responseMimeType: "application/json",
             temperature: 0.0,
-            seed: 42
+            seed: 42,
+            mediaResolution: "MEDIA_RESOLUTION_LOW"
         };
 
         if (isArgon) {
