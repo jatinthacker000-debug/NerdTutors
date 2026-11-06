@@ -14,7 +14,6 @@
 > - **Serverless APIs (`batch-evaluate`, `ocr-evaluate`, `create-cache`)**: [docs/system/04-serverless-apis.md](docs/system/04-serverless-apis.md) & [docs/system/auxiliary-apis.md](docs/system/auxiliary-apis.md)
 > - **Firestore Data Schemas & Models**: [docs/system/05-firestore-data-models.md](docs/system/05-firestore-data-models.md) & [docs/system/data-schemas.md](docs/system/data-schemas.md)
 
-
 ## 1. Evaluation & OCR Grading Standards (`api/ocr-evaluate.js`)
 * **Strict Evaluation Standard:** The evaluation prompt MUST prioritize strict, objective moderator rules (strict MCQ option matches, zero marks for off-topic content, terminology/spelling check penalties, brevity caps, etc.). Do not relax these into proportional/moderate rubrics.
 * **Safety Nets:** Clamping of individual scores to `[0, maxMarks]` and programmatic sum recalculation is enforced at the end of the API handler to ensure mathematical correctness.
