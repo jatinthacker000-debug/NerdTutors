@@ -169,12 +169,23 @@ Normalizes `topicMap` keys using regular expressions (`/^(?:question|q)?\s*\.?\s
   }
   ```
 - **Storage & Cloud Execution**:
-  1. Compiles an array of `GenerateContentRequest` objects (one per student) with `responseMimeType: "application/json"`, `temperature: 0.0`, `seed: 42`, and `thinkingConfig: { thinkingLevel: "medium" }`.
-  2. Formats requests as JSONL lines (`{"request": {...}}\n`).
-  3. Uploads input to `gs://${gcsBucket}/inputs/${cleanSession}_${Date.now()}.jsonl` (with automatic bucket creation if non-existent).
-  4. Dispatches request to `https://${host}/v1/projects/${projectId}/locations/${location}/batchPredictionJobs`.
-  5. Uploads a persistent job manifest to `gs://${gcsBucket}/manifests/${shortBatchId}.json` for cross-device synchronization.
-  6. Returns HTTP 200 with job ID, creation timestamp, and `authAudit`.
+  1. Compiles an array of `GenerateContentRequest` objects (one per student) with:
+     ```javascript
+     const genConfig = {
+         responseMimeType: "application/json",
+         temperature: 0.0,
+         seed: 42,
+         mediaResolution: "MEDIA_RESOLUTION_MEDIUM",
+         thinkingConfig: { thinkingLevel: "medium" }
+     };
+     ```
+  2. **Marking-Scheme Prompt Deduplication**: If `markingScheme` is present, it is exclusively supplied as the question/rubric source, avoiding 1,500–3,500 redundant prompt tokens per student.
+  3. **Positive Forward Framing**: Employs sequential reasoning directives (*"Begin immediately with Q1, Item 1; check rubric; award marks in single step; advance sequentially"*) and Universal Question Labels matching exact Marking Scheme headers.
+  4. Formats requests as JSONL lines (`{"request": {...}}\n`).
+  5. Uploads input to `gs://${gcsBucket}/inputs/${cleanSession}_${Date.now()}.jsonl` (with automatic bucket creation if non-existent).
+  6. Dispatches request to `https://${host}/v1/projects/${projectId}/locations/${location}/batchPredictionJobs`.
+  7. Uploads a persistent job manifest to `gs://${gcsBucket}/manifests/${shortBatchId}.json` for cross-device synchronization.
+  8. Returns HTTP 200 with job ID, creation timestamp, and `authAudit`.
 
 #### Action 2: Status Polling (`action: "status"`)
 - **Request Payload**: `{ "action": "status", "batchId": "projects/.../batchPredictionJobs/34827491823" }`
@@ -196,15 +207,26 @@ Normalizes `topicMap` keys using regular expressions (`/^(?:question|q)?\s*\.?\s
 - Reads GCS prediction files from `outputInfo.gcsOutputDirectory` (reading and parsing all `.jsonl` chunks via Google Cloud Storage JSON API with Service Account Bearer token).
 - Resolves student identities: Priority order is **Model Output `studentName` > Manifest Metadata > Student Index**.
 - **CBSE Programmatic Safety Nets & Rule Enforcement**:
+  - **Zero-Feedback Programmatic Wipe**: If `score >= maxMarks`, forces `feedback = ""` and `improvements = []`, eliminating verbose praise strings and saving candidate tokens.
   - **Binary MCQ Gate**: Detects 1-mark MCQs (`maxMarks <= 1.0` and `mcq|q[1-9]|section a`). If feedback contains negative tokens (`"incorrect"`, `"wrong"`, `"0/1"`), forces `score = 0`. Correct answers forced to `score = 1.0`. Fractional/partial scores are eliminated.
   - **Score Clamping**: Programmatically clamps every score to `[0, maxMarks]`.
   - **Sum Invariant**: Sums all question scores using floating-point rounding (`Math.round(runningSum * 10) / 10`) to guarantee `totalScore` matches question totals.
+  - **Payload Hygiene (M284)**: Omits `thinkingTrace` and `usageMetadata` from returned results to keep payloads ultra-compact.
 - Marks registry entry as `SYNCED`.
 - Returns HTTP 200 with `parsedResults`.
 
 #### Action 4: Registry Listing & Deletion (`list`, `delete`)
 - `list`: Combines local `api/batch-jobs.json` with live Vertex AI `batchPredictionJobs`, resolving missing metadata via GCS manifests and filtering out IDs present in `api/deleted-batch-jobs.json`.
 - `delete`: Sends HTTP `DELETE` to Vertex AI, removes job from local file registry, and appends ID to deleted blacklists so it cannot reappear on future list refreshes.
+
+#### Batch Evaluation Economics
+
+| Stage | Token Footprint (6-Page Paper) | Cost per Paper (INR) | Primary Driver of Savings |
+|---|---|---|---|
+| **Legacy Dual-Pass** | ~33,000 tokens | ₹11.03 | Two sequential network passes, OCR transcription |
+| **Batch Baseline (Run 1)** | 19,931 tokens | ₹7.40 | Multi-tile vision (1,092 tokens/pg), duplicate rubric, rambling thoughts |
+| **Production Batch (M284)** | **10,396 tokens** | **₹2.57** | **768px Single-Tile (`MEDIUM`), Deduplicated Rubric, Zero-Feedback Mandate** |
+
 
 ---
 

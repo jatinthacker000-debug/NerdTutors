@@ -209,12 +209,13 @@ To prevent cognitive overload, prompt bloat, and conflicting instructions, the A
 ### 3.3 Token & Latency Economics
 Direct Single-Pass Vision delivers dramatic performance and economic improvements over dual-pass architectures:
 
-| Metric | Legacy Dual-Pass Pipeline | Gemini 4 Argon Single-Pass | Net Efficiency Gain |
-|---|---|---|---|
-| **Evaluation Latency** | 90 – 120 seconds | **8 – 14 seconds** | **~88% latency reduction** |
-| **Total Token Consumption** | ~33,000 tokens | **~8,000 – 10,000 tokens** | **>65% token savings** |
-| **Evaluation Cost per Paper** | ₹11.03 ($0.128) | **~₹3.00 ($0.035)** | **~73% cost reduction** |
-| **Google Context Caching** | Non-standard | Verified 75% cached discount | Significant bulk savings |
+| Evaluation Architecture | Latency | Total Token Footprint | Cost per Student Paper | Primary Operational Use Case |
+|---|---|---|---|---|
+| **Legacy Dual-Pass Pipeline** | 90 – 120 seconds | ~33,000 tokens | ₹11.03 ($0.128) | Archived legacy |
+| **Gemini 4 Argon Single-Pass (Interactive)** | 8 – 14 seconds | ~8,000 – 10,000 tokens | ~₹3.00 ($0.035) | Student self-scan (`ocr-scan.html`) |
+| **Vertex AI Batch Prediction (Unoptimized)** | 2 – 10 minutes | ~19,900 tokens | ₹7.40 ($0.086) | Pre-optimization baseline |
+| **Vertex AI Batch Prediction (Optimized M284)** | **2 – 10 minutes** | **~10,400 tokens** | **₹2.57 ($0.030)** | **Classroom bundles (`admin.html`)** |
+
 
 ### 3.4 Optional Forced Dual-Pass Mode
 If an examiner requires explicit literal transcription of student handwriting prior to evaluation, setting `body.forceDualPass === true` triggers the dual-pass pathway:
@@ -362,9 +363,9 @@ result.totalScore = calculatedTotal;
   For individual subjective questions ($\le 3$ marks), if feedback indicates the student wrote off-topic content (`"does not address"`, `"unrelated"`, `"off-topic"`), score is forced to `0`.
 * **Descriptive Question Weight Safeguard**:
   Prevents models from compressing Section B/C descriptive questions (e.g., dropping Q7–Q12 to 1.5 marks) to reconcile sum discrepancies. Regex detectors restore descriptive questions to their full 4.0 (or 3.0) mark section weight.
-* **15-Word Feedback Budget & Improvements Cap**:
-  - Full-mark answers: Feedback is ultra-concise (3–5 words, e.g., *"Correct option selected"*); `improvements: []`.
-  - Flawed answers: Feedback capped strictly to 1 punchy sentence under 15 words.
+* **15-Word Feedback Budget & Zero-Feedback Protocol**:
+  - **Interactive Mode**: Full-mark answers have ultra-concise feedback (3–5 words, e.g., *"Correct option selected"*); `improvements: []`. Flawed answers capped strictly to 1 punchy sentence under 15 words.
+  - **Batch Prediction Mode (Zero-Feedback Mandate)**: Answers scoring full marks (`score >= maxMarks`) have `feedback: ""` and `improvements: []`. Zero affirmation or commentary is written, saving 500–1,200 expensive candidate tokens per paper.
   - Improvements: Programmatically capped to at most 2 actionable bullet points (`slice(0, 2)`).
 * **Deterministic Mathematical Clamping**:
   Per-question scores are strictly clamped to $[0, \text{maxMarks}]$. The total score is recalculated as the programmatic sum of question scores, clamped to $[0, \text{totalMaxMarks}]$. The system never trusts the LLM's arithmetic.

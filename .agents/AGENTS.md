@@ -5,6 +5,16 @@
 
 # Nerd Tutors Workspace Specifications
 
+> [!IMPORTANT]
+> **AUTHORITATIVE SYSTEM ARCHITECTURE & DOCUMENTATION REPOSITORY (`docs/system/`)**:
+> The detailed, production-grade architecture guides, protocol specifications, data models, and API contracts for this system are permanently maintained inside [docs/system/](file:///d:/Trinno/NerdTutors/docs/system/). Any agent or developer working on this codebase MUST consult the corresponding guide in `docs/system/` before modifying subsystem logic:
+> - **Admin Portal & Batch Evaluator**: [docs/system/01-admin-portal.md](file:///d:/Trinno/NerdTutors/docs/system/01-admin-portal.md)
+> - **Student Dashboard & Performance Matrix**: [docs/system/02-dashboard-analytics.md](file:///d:/Trinno/NerdTutors/docs/system/02-dashboard-analytics.md) & [docs/system/dashboard-matrix.md](file:///d:/Trinno/NerdTutors/docs/system/dashboard-matrix.md)
+> - **Evaluation Engine & OCR Pipeline**: [docs/system/03-evaluation-ocr-engine.md](file:///d:/Trinno/NerdTutors/docs/system/03-evaluation-ocr-engine.md) & [docs/system/evaluation-ocr.md](file:///d:/Trinno/NerdTutors/docs/system/evaluation-ocr.md)
+> - **Serverless APIs (`batch-evaluate`, `ocr-evaluate`, `create-cache`)**: [docs/system/04-serverless-apis.md](file:///d:/Trinno/NerdTutors/docs/system/04-serverless-apis.md) & [docs/system/auxiliary-apis.md](file:///d:/Trinno/NerdTutors/docs/system/auxiliary-apis.md)
+> - **Firestore Data Schemas & Models**: [docs/system/05-firestore-data-models.md](file:///d:/Trinno/NerdTutors/docs/system/05-firestore-data-models.md) & [docs/system/data-schemas.md](file:///d:/Trinno/NerdTutors/docs/system/data-schemas.md)
+
+
 ## 1. Evaluation & OCR Grading Standards (`api/ocr-evaluate.js`)
 * **Strict Evaluation Standard:** The evaluation prompt MUST prioritize strict, objective moderator rules (strict MCQ option matches, zero marks for off-topic content, terminology/spelling check penalties, brevity caps, etc.). Do not relax these into proportional/moderate rubrics.
 * **Safety Nets:** Clamping of individual scores to `[0, maxMarks]` and programmatic sum recalculation is enforced at the end of the API handler to ensure mathematical correctness.
@@ -164,4 +174,110 @@ Derived from the 23 Oct 2026 academic study *"Reliable AI Marking of Handwritten
 | **Run-to-run variance at temperature 0** | Locked `temperature: 0.0` AND hard-pinned `seed: 42` across all API calls | ✅ Active in `api/ocr-evaluate.js` |
 | **Blank & skipped question hallucinations** | Explicit presence check: omitted questions forced to `score: 0` with "The question was not attempted" | ✅ Active in `api/ocr-evaluate.js` |
 | **Transcriber over-correction hiding mistakes** | Gemini 4 Argon Direct Single-Pass Vision reads raw handwriting directly against rubric without autocorrecting | ✅ Active in `api/ocr-evaluate.js` |
+
+---
+
+## 14. The Chronological Grading Engine Evolution & Token Optimization Odyssey
+
+The evaluation subsystem underwent a documented evolution across 118 commits (`M167` through `M284`), solving high latency, transcriber hallucinations, and severe token bloat to achieve an optimized production grading engine.
+
+### The 5+1 Historical Phases
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Phase 1: Dual-Pass Synchronous Pipeline (M167–M184)                                    │
+│ OCR Transcribe -> LLM Grade | ~100s latency | 33,000 tokens | ₹11.03 / student paper   │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Phase 2: Direct Single-Pass Multimodal Vision (M185–M189)                              │
+│ Gemini 4 Argon reads handwriting directly | 8–12s latency | ~9,000 tokens | ~₹3.00     │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Phase 3: Vertex AI Asynchronous Batch Predictions (M248–M269)                          │
+│ 50% official Google Cloud discount | 30–100 papers asynchronously | Benchmark: ₹4.00   │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Phase 4: Forensic Token & Cost Crisis (M262–M273)                                      │
+│ Baseline Run 1: 19,931 tokens | ₹7.40 / paper | Multi-tile vision & thinking explosion │
+│ Failed Low-Thinking Attempt (M272): Starved reasoning, marks collapsed 24/30 -> 19/30   │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Phase 5: The Cost-Cutting Optimization Sprint (M279–M284)                              │
+│ • M279: Zero-Feedback Mandate on full-mark answers (candidate output: 1,335 -> 771)    │
+│ • M280: Marking-scheme deduplication (prompt text: 9,396 -> 6,433)                     │
+│ • M281/M282: 768px Medium Resolution 1-Tile Lock (image tokens: 6,552 -> 3,192)        │
+│ • M283: Positive forward reasoning directives & universal header matching             │
+│ • M284: Stripping thinkingTrace and usageMetadata from database payloads               │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Phase 6: Final Production Ground Truth Benchmark (Job 5211983770504134656)             │
+│ 10,396 tokens | ₹2.57 / 6-page paper (65.3% net savings) | 24.0 / 30 100% board grade │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Empirical Ground Truth Comparison (6-Page Class XII Accountancy Paper)
+
+| Metric | Phase 1 (Dual-Pass) | Phase 4 Baseline (Run 1) | Phase 4 Low-Thinking (M272) | Phase 6 Final Production (M284) |
+|---|---|---|---|---|
+| **Model** | Flash + Kimi/Argon | `gemini-4-argon` | `gemini-4-argon` | `gemini-4-argon` |
+| **Thinking Level** | N/A | `"medium"` (unconstrained) | `"low"` (starved) | `"medium"` (forward guided) |
+| **Vision Resolution** | Uncompressed | 1200px Multi-tile | 768px Medium | **768px Single-Tile (`MEDIUM`)** |
+| **Text Prompt Tokens** | ~18,000 | 9,396 | 9,227 | **6,433 (-31.5%)** |
+| **Image Tokens** | ~8,000 | 6,552 (1,092/pg) | 3,192 (532/pg) | **3,192 (532/pg, -51.3%)** |
+| **Total Prompt Tokens** | ~26,000 | 15,948 | 12,419 | **9,625 (-39.6%)** |
+| **Output Candidates** | ~4,500 | 1,335 | 1,500 | **771 (-42.2%)** |
+| **Total Billable Tokens**| **~33,000** | **19,931** | **14,602** | **10,396 (-47.8%)** |
+| **Cost per 6-Page Paper**| **₹11.03** | **₹7.40** | **₹4.48** | **₹2.57 (65.3% net savings)** |
+| **Grading Accuracy** | Inconsistent | 24.0 / 30 | 19.0 / 30 (FATAL ERROR) | **24.0 / 30 (100% EXACT)** |
+
+---
+
+## 15. Google Cloud Vertex AI Asynchronous Batch Architecture & Operational Invariants
+
+The production batch engine in [api/batch-evaluate.js](file:///d:/Trinno/NerdTutors/api/batch-evaluate.js) and [js/admin-modules/bundle-evaluator.js](file:///d:/Trinno/NerdTutors/js/admin-modules/bundle-evaluator.js) enforces six core invariants:
+
+1. **768px Single-Tile Geometric Lock**:
+   - Client image downscaling in `readAndCompressImage(file, maxDim = 768, quality = 0.80)`.
+   - Vertex AI generation config locked with `mediaResolution: "MEDIA_RESOLUTION_MEDIUM"`.
+   - Every 768px page fits into **exactly 1 vision tile (258 text-equivalent tokens)**, eliminating multi-tile boundary fragmentation while preserving razor-sharp handwriting legibility.
+2. **Marking-Scheme Priority & Prompt Deduplication**:
+   - If `markingScheme` is supplied, it completely supersedes `questions` in the prompt payload, saving ~3,000 prompt tokens per student request.
+3. **Zero-Feedback Mandate for Full Marks**:
+   - Prompt directive: Answers earning `score === maxMarks` must return `"feedback": ""` and `"improvements": []`.
+   - Deterministic programmatic clamp in `api/batch-evaluate.js` wipes feedback on full-mark items, saving 500–1,200 output tokens per paper.
+4. **Positive Forward Step-by-Step Reasoning Directives**:
+   - Avoids negative prohibitions ("Never chat / Do not deliberate") which trigger cognitive deliberation overhead.
+   - Uses positive sequential instructions: *"Begin immediately with Question 1, Item 1... award due marks in a single step... advance sequentially"*.
+   - Retains `thinkingLevel: "medium"` to safeguard complex multi-step accounting ledger accuracy.
+5. **Universal Header Matching**:
+   - Dynamic label alignment: matches question identifiers and weights directly to Marking Scheme headers, preventing composite grouping errors.
+6. **Payload & Storage Hygiene**:
+   - Strips `thinkingTrace` and `usageMetadata` from Firestore document writes in [bundle-evaluator.js](file:///d:/Trinno/NerdTutors/js/admin-modules/bundle-evaluator.js), keeping database footprints lean and fast.
+
+---
+
+## 16. Master Documentation Index & System Architecture Map
+
+All system specifications and operational runbooks are maintained across the following authoritative documentation files:
+
+| Documentation Guide | Absolute Path | Key Contents & Operational Scope |
+|---|---|---|
+| **Admin Portal & Batch Registry** | [docs/system/01-admin-portal.md](file:///d:/Trinno/NerdTutors/docs/system/01-admin-portal.md) | Paper Bundle Evaluator, 768px canvas compression, asynchronous batch dispatch, student renaming, reverse-chronological batch registry. |
+| **Dashboard & Matrix Analytics** | [docs/system/02-dashboard-analytics.md](file:///d:/Trinno/NerdTutors/docs/system/02-dashboard-analytics.md) | Item-response matrix (Q1..Q34), cohort performance, score distribution graphs, student drilldown drawers. |
+| **Evaluation & OCR Engine** | [docs/system/03-evaluation-ocr-engine.md](file:///d:/Trinno/NerdTutors/docs/system/03-evaluation-ocr-engine.md) | Dual operational modes (Interactive Single-Pass vs Asynchronous Batch), resolution strategies, Zero-Feedback Mandate. |
+| **Serverless API Endpoints** | [docs/system/04-serverless-apis.md](file:///d:/Trinno/NerdTutors/docs/system/04-serverless-apis.md) | Full contract specifications for `api/ocr-evaluate.js`, `api/batch-evaluate.js`, `api/create-cache.js`, `api/extract-pdf.js`. |
+| **Firestore Data Schemas** | [docs/system/05-firestore-data-models.md](file:///d:/Trinno/NerdTutors/docs/system/05-firestore-data-models.md) | Document data schemas for `testSessions`, `testResults`, `questions`, `gateCredentials`, payload hygiene rules. |
+| **Auxiliary APIs & Cloud Engines** | [docs/system/auxiliary-apis.md](file:///d:/Trinno/NerdTutors/docs/system/auxiliary-apis.md) | Vertex AI Batch API implementation details, JSONL generation, service account auth, cost formulas. |
+| **Evaluation Architecture Deep Dive**| [docs/system/evaluation-ocr.md](file:///d:/Trinno/NerdTutors/docs/system/evaluation-ocr.md) | Multimodal visual reasoning mechanics, academic benchmarks, deterministic clamp invariants. |
+
 

@@ -9,8 +9,10 @@
 The **NerdTutors Evaluation & OCR Grading Subsystem** is an autonomous, board-moderator-grade assessment pipeline tailored to official CBSE standards (Class 10th Social Science and Class 12th Commerce: Economics, Accountancy, and Business Studies).
 
 The architecture features a decoupled, multi-tiered pipeline:
-1. **Client Ingestion Layer (`ocr-scan.html`)**: Mobile-optimized camera capture (circumventing mobile OS browser file bugs), smart canvas downscaling, payload validation, and resume-safe local caching.
-2. **AI Multimodal Evaluation Layer (`api/ocr-evaluate.js`)**: Google Gemini 4 Argon (`gemini-4-argon`) Direct Single-Pass multimodal reasoning as primary evaluator, with automatic failover to Gemini 3.8 Flash (`gemini-3.8-flash`) and dual-pass OCR transcription fallback.
+1. **Client Ingestion Layer (`ocr-scan.html` & `bundle-evaluator.js`)**: Mobile-optimized camera capture (circumventing mobile OS browser file bugs), smart canvas downscaling (1024px interactive, 768px single-tile batch), payload validation, and resume-safe local caching.
+2. **AI Multimodal Evaluation Layer (`api/ocr-evaluate.js` & `api/batch-evaluate.js`)**: 
+   - **Interactive Live Mode (`api/ocr-evaluate.js`)**: Google Gemini 4 Argon (`gemini-4-argon`) Direct Single-Pass multimodal reasoning as primary evaluator (8–12s latency, ~₹3.00/paper), with automatic failover to Gemini 3.8 Flash (`gemini-3.8-flash`) and dual-pass OCR transcription fallback.
+   - **High-Volume Asynchronous Batch Mode (`api/batch-evaluate.js`)**: Google Cloud Vertex AI Batch Prediction API running `gemini-4-argon` at an official 50% discount with 768px single-tile alignment, marking scheme deduplication, and zero-feedback mandates (₹2.57/paper).
 3. **Deterministic Academic Defense Layer (`api/cbse-rules.json` & Programmatic Overrides)**: Dynamic binary MCQ hard-locks (0.5 / 1.0), Defend vs. Refute stance capping, strict 15-word feedback budgets, anti-hallucination omitted question detectors, and immutable mathematical score clamping.
 4. **Data Persistence & In-Place Re-Evaluation (`Firestore testResults`)**: Single-record in-place mutation avoiding duplicate test submissions.
 5. **Report Card & Print Layout Engine (`ocr-scan.html`, `results.html`)**: Side-by-side split panel dashboard, 5-column question badge matrix, dynamic status legends, and narrow-margin A4 print stylesheets (`5mm 6mm`).
@@ -50,6 +52,11 @@ The architecture features a decoupled, multi-tiered pipeline:
     ```
   * The canvas is exported as `image/jpeg` with quality `0.75` (`canvas.toDataURL('image/jpeg', 0.75)`).
   * **Impact**: Reduces payload weight by >80% and vision tile token consumption by ~70% while keeping student handwriting, accounting ledger lines, and economics curves crisp and legible.
+
+> [!NOTE]
+> **Dual Resolution Strategy**:
+> - **Interactive Grader (`ocr-scan.html`)**: Employs `MAX_DIM = 1024px` with `MEDIA_RESOLUTION_LOW` for fast interactive single-paper evaluations.
+> - **Bulk Batch Evaluator (`bundle-evaluator.js`)**: Employs `MAX_DIM = 768px` (`quality = 0.80`) with `MEDIA_RESOLUTION_MEDIUM`. 768px matches Google Vertex AI's native vision tile grid (768×768), locking consumption to **exactly 258 tokens per page** and eliminating multi-tile fragmentation.
 
 ### 2.3 Payload Sizing & Weak-Connection Resilience
 * **Queue Limits**: Hard cap of `MAX_IMAGES = 10` sheets per submission.
@@ -187,10 +194,14 @@ Based on benchmarks from *"Reliable AI Marking of Handwritten Exam Sheets: Failu
     }
     ```
 
-### 4.3 15-Word Feedback Budget & Improvements Cap
-* **Full Marks (score === maxMarks)**:
-  * Feedback is ultra-lean (3–5 words: e.g., `"Correct option selected"`).
+### 4.3 Feedback Budget & Zero-Feedback Protocol
+* **Interactive Mode (`api/ocr-evaluate.js`)**:
+  * **Full Marks (score === maxMarks)**: Feedback is ultra-lean (3–5 words: e.g., `"Correct option selected"`).
   * `studentAnswerText: ""`, `improvements: []`, `incorrectPhrases: []`.
+* **Batch Mode (`api/batch-evaluate.js`) - The Zero-Feedback Mandate**:
+  * **Full Marks (score === maxMarks)**: Feedback MUST be strictly empty string (`""`) and improvements MUST be empty array (`[]`).
+  * Enforced via prompt directive and deterministic JavaScript wipe (`if (score >= maxMarks) { feedback = ""; improvements = []; }`).
+  * Saves 500–1,200 expensive candidate output tokens per paper.
 * **Partial or Zero Marks (score < maxMarks)**:
   * Feedback is strictly limited to 1 punchy sentence under 15 words.
   * `improvements`: Programmatically capped to a maximum of 2 actionable tips via `resObj.improvements.slice(0, 2)`.
