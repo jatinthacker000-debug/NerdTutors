@@ -760,7 +760,7 @@ async function submitGoogleBatchJob() {
             cachedBatchJobs.sort((a, b) => {
                 const timeA = new Date(a.createdAt || a.createTime || 0).getTime();
                 const timeB = new Date(b.createdAt || b.createTime || 0).getTime();
-                return timeA - timeB;
+                return timeB - timeA;
             });
 
             console.log("📋 Current Batch Jobs with Firestore Metadata:", cachedBatchJobs);
@@ -1030,14 +1030,14 @@ async function submitGoogleBatchJob() {
                             const isFallback = /^student\s*\d+$/i.test(name);
                             if (isFallback) {
                                 return `
-                                    <span style="background: #f8fafc; color: #64748b; border: 1.5px dashed #cbd5e1; padding: 3px 11px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;" title="Awaiting real name from batch sync">
-                                        <span style="font-size: 0.85rem;">📝</span> ${escapeHtml(name)} <small style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">(Pending Sync)</small>
+                                    <span style="background: #f8fafc; color: #64748b; border: 1.5px dashed #cbd5e1; padding: 3px 11px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;" title="Click to rename student" onclick="window.editBatchStudentName('${escapeHtml(batchId)}', '${escapeHtml(name)}')">
+                                        <span style="font-size: 0.85rem;">📝</span> ${escapeHtml(name)} <span style="font-size: 0.7rem; color: #6366f1;">✏️</span>
                                     </span>
                                 `;
                             }
                             return `
-                                <span style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); color: #0f172a; border: 1.5px solid #cbd5e1; padding: 3px 11px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
-                                    <span style="font-size: 0.9rem;">🧑‍🎓</span> ${escapeHtml(name)}
+                                <span style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); color: #0f172a; border: 1.5px solid #cbd5e1; padding: 3px 11px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); cursor: pointer;" title="Click to rename student" onclick="window.editBatchStudentName('${escapeHtml(batchId)}', '${escapeHtml(name)}')">
+                                    <span style="font-size: 0.9rem;">🧑‍🎓</span> ${escapeHtml(name)} <span style="font-size: 0.72rem; color: #6366f1;">✏️</span>
                                 </span>
                             `;
                         }).join('')}
@@ -1362,3 +1362,57 @@ async function submitGoogleBatchJob() {
             showToast("Download failed: " + err.message, "error");
         }
     }
+
+    window.editBatchStudentName = async function(batchId, currentName) {
+        const newName = prompt(`Rename student "${currentName}" for this batch:`, currentName);
+        if (!newName || !newName.trim() || newName.trim() === currentName) return;
+        const cleanName = newName.trim();
+        const shortId = (batchId || '').split('/').pop();
+
+        try {
+            // 1. Update localStorage student names cache
+            try {
+                const raw = localStorage.getItem('nt_batch_students_' + shortId);
+                if (raw) {
+                    let names = JSON.parse(raw);
+                    if (Array.isArray(names)) {
+                        names = names.map(n => n === currentName ? cleanName : n);
+                        localStorage.setItem('nt_batch_students_' + shortId, JSON.stringify(names));
+                    }
+                }
+            } catch (_) {}
+
+            // 2. Update localStorage batch job metadata
+            try {
+                const cleanDocId = String(batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const metaRaw = localStorage.getItem('nt_batch_job_' + cleanDocId);
+                if (metaRaw) {
+                    const meta = JSON.parse(metaRaw);
+                    if (Array.isArray(meta.studentsMetadata)) {
+                        meta.studentsMetadata = meta.studentsMetadata.map(s => (s.studentName === currentName ? { ...s, studentName: cleanName } : s));
+                        localStorage.setItem('nt_batch_job_' + cleanDocId, JSON.stringify(meta));
+                    }
+                }
+            } catch (_) {}
+
+            // 3. Update any already-synced testResults in Firestore
+            try {
+                const q = query(collection(db, 'testResults'), where('batchId', '==', batchId));
+                const snap = await getDocs(q);
+                for (const docSnap of snap.docs) {
+                    const data = docSnap.data();
+                    if (data.studentName === currentName || snap.docs.length === 1) {
+                        await updateDoc(doc(db, 'testResults', docSnap.id), { studentName: cleanName });
+                        console.log(`✅ Updated studentName in Firestore testResults (Doc: ${docSnap.id}) to ${cleanName}`);
+                    }
+                }
+            } catch (fErr) {
+                console.warn("Firestore sync update notice:", fErr.message);
+            }
+
+            showToast(`Student renamed to "${cleanName}".`, "success");
+            loadBatchJobs(false);
+        } catch (err) {
+            showToast("Error renaming student: " + err.message, "error");
+        }
+    };

@@ -259,7 +259,10 @@ export async function loadResultsForSession(sessionId) {
             html += `
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                     <td style="padding: 1rem; font-weight: 600; color: #2d3748;">
-                        ${escapeHtml(res.studentName)}
+                        <span style="display: inline-flex; align-items: center; gap: 0.45rem;">
+                            <span>${escapeHtml(res.studentName)}</span>
+                            <span style="cursor: pointer; color: #64748b; font-size: 0.85rem; padding: 2px 5px; border-radius: 4px; background: #f1f5f9; border: 1px solid #cbd5e1; transition: all 0.2s;" title="Rename Student" data-id="${escapeHtml(res.id)}" data-name="${escapeHtml(res.studentName)}" onclick="window.editStudentName(this.dataset.id, this.dataset.name)" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✏️</span>
+                        </span>
                         ${testLabel}
                     </td>
                     <td style="padding: 1rem;">
@@ -2704,3 +2707,49 @@ export function setupPdfExtractionHub() {
         }
     });
 }
+
+async function editStudentName(id, currentName) {
+    const modal = document.getElementById('editStudentNameModal');
+    const inputVal = document.getElementById('editStudentNameInputValue');
+    const targetId = document.getElementById('editStudentNameTargetId');
+    if (!modal || !inputVal || !targetId) return;
+
+    targetId.value = id;
+    inputVal.value = currentName || '';
+    modal.style.display = 'flex';
+    setTimeout(() => inputVal.focus(), 50);
+}
+
+document.getElementById('editStudentNameForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editStudentNameTargetId').value;
+    const newName = (document.getElementById('editStudentNameInputValue').value || '').trim();
+    const modal = document.getElementById('editStudentNameModal');
+
+    if (!newName) {
+        showToast("Student name cannot be empty.", "warning");
+        return;
+    }
+
+    try {
+        await updateDoc(doc(db, 'testResults', id), {
+            studentName: newName
+        });
+
+        if (Array.isArray(window.currentResults)) {
+            const found = window.currentResults.find(r => r.id === id);
+            if (found) found.studentName = newName;
+        }
+
+        if (modal) modal.style.display = 'none';
+        showToast(`Student renamed to "${newName}" successfully!`, "success");
+
+        if (window.currentSelectedSessionId) {
+            loadResultsForSession(window.currentSelectedSessionId);
+        }
+    } catch (err) {
+        console.error("Error updating student name:", err);
+        showToast("Failed to update student name: " + err.message, "error");
+    }
+});
+window.editStudentName = editStudentName;
