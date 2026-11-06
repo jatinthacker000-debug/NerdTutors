@@ -683,6 +683,74 @@ async function submitGoogleBatchJob() {
 
     // ==================== BATCH JOBS REGISTRY & SYNC ====================
     let cachedBatchJobs = [];
+    let batchAutoPollTimer = null;
+    let isPollingBatch = false;
+
+    function startBatchAutoPolling() {
+        if (batchAutoPollTimer) return;
+        console.log("⏱️ Batch auto-poller activated (monitoring active Google Vertex jobs every 12s)...");
+
+        batchAutoPollTimer = setInterval(async () => {
+            if (document.hidden || isPollingBatch) return;
+
+            const hasActive = cachedBatchJobs.some(j => {
+                const s = j.status || j.state || '';
+                return s === 'JOB_STATE_PENDING' || s === 'JOB_STATE_RUNNING';
+            });
+
+            if (!hasActive) {
+                stopBatchAutoPolling();
+                return;
+            }
+
+            try {
+                isPollingBatch = true;
+                const prevStatuses = new Map(cachedBatchJobs.map(j => [(j.batchId || j.name || j.id || '').split('/').pop(), j.status || j.state]));
+
+                await loadBatchJobs(false);
+
+                cachedBatchJobs.forEach(j => {
+                    const sId = (j.batchId || j.name || j.id || '').split('/').pop();
+                    const prev = prevStatuses.get(sId);
+                    const curr = j.status || j.state;
+                    if (prev && prev !== curr) {
+                        if (curr === 'JOB_STATE_RUNNING' && prev === 'JOB_STATE_PENDING') {
+                            showToast(`🔄 Batch #${sId} is now RUNNING on Google Cloud!`, "info");
+                        } else if (curr === 'JOB_STATE_SUCCEEDED' && prev !== 'JOB_STATE_SUCCEEDED') {
+                            showToast(`🎉 Batch #${sId} SUCCEEDED! Ready to sync.`, "success");
+                        } else if (curr === 'JOB_STATE_FAILED') {
+                            showToast(`⚠️ Batch #${sId} FAILED on Google Cloud.`, "error");
+                        }
+                    }
+                });
+            } catch (_) {
+            } finally {
+                isPollingBatch = false;
+            }
+        }, 12000);
+    }
+
+    function stopBatchAutoPolling() {
+        if (batchAutoPollTimer) {
+            clearInterval(batchAutoPollTimer);
+            batchAutoPollTimer = null;
+            console.log("⏹️ Batch auto-poller stopped (no pending or running jobs).");
+        }
+    }
+
+    // Auto-resume poller when user tabs back into the browser
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            const hasActive = cachedBatchJobs.some(j => {
+                const s = j.status || j.state || '';
+                return s === 'JOB_STATE_PENDING' || s === 'JOB_STATE_RUNNING';
+            });
+            if (hasActive) {
+                loadBatchJobs(false);
+                startBatchAutoPolling();
+            }
+        }
+    });
 
     export async function loadBatchJobs(forceToast = false) {
         const container = document.getElementById('batchJobsListContainer');
@@ -693,6 +761,16 @@ async function submitGoogleBatchJob() {
             const res = await fetch('/api/batch-evaluate?action=list');
             const data = await res.json();
             let liveJobs = (res.ok && Array.isArray(data.jobs)) ? data.jobs : [];
+
+            // Exclude client-side deleted blacklisted batch IDs
+            let clientDeletedIds = [];
+            try {
+                clientDeletedIds = JSON.parse(localStorage.getItem('nt_deleted_batch_ids') || '[]');
+            } catch (_) {}
+            liveJobs = liveJobs.filter(j => {
+                const sId = (j.batchId || j.name || j.id || '').split('/').pop();
+                return !clientDeletedIds.includes(sId) && !clientDeletedIds.includes(j.batchId) && !clientDeletedIds.includes(j.id);
+            });
 
             // Fetch persistent session metadata from localStorage
             let fsMetadataMap = {};
@@ -1072,6 +1150,17 @@ async function submitGoogleBatchJob() {
         });
 
         container.innerHTML = html;
+
+        // Auto-detect if background poller should be active
+        const hasPendingOrRunning = jobs && jobs.some(j => {
+            const s = j.status || j.state || '';
+            return s === 'JOB_STATE_PENDING' || s === 'JOB_STATE_RUNNING';
+        });
+        if (hasPendingOrRunning) {
+            startBatchAutoPolling();
+        } else {
+            stopBatchAutoPolling();
+        }
     }
 
     async function checkAndSyncBatch(batchId, docId) {
@@ -1301,17 +1390,39 @@ async function submitGoogleBatchJob() {
 
     async function deleteBatchJob(docId) {
         if (!confirm("Are you sure you want to delete this batch job record from the registry?")) return;
+
+        const shortId = (docId || '').split('/').pop();
+        const cleanDocId = String(shortId).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        // 1. Instantly remove from localStorage and blacklist ID from client resurrecting
+        try {
+            localStorage.removeItem('nt_batch_job_' + cleanDocId);
+            localStorage.removeItem('nt_batch_students_' + shortId);
+            const deletedIdsRaw = localStorage.getItem('nt_deleted_batch_ids') || '[]';
+            const deletedIds = JSON.parse(deletedIdsRaw);
+            if (!deletedIds.includes(shortId)) deletedIds.push(shortId);
+            if (docId && !deletedIds.includes(docId)) deletedIds.push(docId);
+            localStorage.setItem('nt_deleted_batch_ids', JSON.stringify(deletedIds));
+        } catch (_) {}
+
+        // 2. Optimistic 0ms UI deletion: filter array and re-render immediately
+        cachedBatchJobs = cachedBatchJobs.filter(j => {
+            const sId = (j.batchId || j.name || j.id || '').split('/').pop();
+            return sId !== shortId && j.batchId !== docId && j.id !== docId;
+        });
+        renderBatchJobs(cachedBatchJobs);
+        showToast("Batch job removed.", "info");
+
+        // 3. Fire server deletion in background
         try {
             const res = await fetch('/api/batch-evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'delete', batchId: docId })
             });
-            if (!res.ok) throw new Error("Failed to delete batch job");
-            showToast("Batch job record deleted.", "info");
-            await loadBatchJobs(false);
+            if (!res.ok) throw new Error("Failed to delete batch job on server");
         } catch (e) {
-            showToast("Error deleting batch job: " + e.message, "error");
+            console.warn("Notice: Background delete on cloud:", e.message);
         }
     }
 

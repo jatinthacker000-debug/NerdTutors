@@ -1904,13 +1904,17 @@ async function deleteSession(id) {
 
         if (!confirm(confirmMsg)) return;
 
-        // Cascade delete all student results
+        // 1. Optimistic DOM removal of session row (0ms immediate disappearance)
+        const row = document.querySelector(`button[data-id="${id}"]`)?.closest('tr');
+        if (row) row.remove();
+
+        // 2. Cascade delete all student results
         if (count > 0) {
             await Promise.all(matchingResults.map(r => deleteDoc(doc(db, 'testResults', r.id))));
             console.log(`Cascade deleted ${count} student evaluation(s) for session ${id}`);
         }
 
-        // Delete test session
+        // Delete test session from Firestore
         await deleteDoc(doc(db, 'testSessions', id));
 
         showToast(
@@ -1920,8 +1924,11 @@ async function deleteSession(id) {
             "success"
         );
 
-        loadTestSessionsForManagement();
+        await loadTestSessionsForManagement();
         await loadTestSessionsForDropdown();
+        if (typeof window.reloadBundleSessions === 'function') {
+            window.reloadBundleSessions();
+        }
 
         // If results table was displaying this session, reset it
         const resultSessionSelect = document.getElementById('resultSessionSelect');
@@ -1941,16 +1948,20 @@ async function deleteSession(id) {
 async function deleteResult(id) {
     if (!confirm("Are you sure you want to delete this student evaluation result?")) return;
 
+    // 1. Optimistic DOM removal of result row
+    const row = document.querySelector(`button[onclick*="${id}"]`)?.closest('tr');
+    if (row) row.remove();
+
     try {
         await deleteDoc(doc(db, 'testResults', id));
         showToast("Student result deleted successfully!", "success");
         // Reload results table for current session
         const resultSessionSelect = document.getElementById('resultSessionSelect');
         if (resultSessionSelect && resultSessionSelect.value) {
-            loadResultsForSession(resultSessionSelect.value);
+            await loadResultsForSession(resultSessionSelect.value);
         }
         // Also refresh orphaned count in dropdown
-        loadTestSessionsForDropdown();
+        await loadTestSessionsForDropdown();
     } catch (error) {
         console.error("Error deleting student result:", error);
         showToast("Failed to delete result: " + error.message, "error");
