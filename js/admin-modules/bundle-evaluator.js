@@ -1250,8 +1250,6 @@ async function submitGoogleBatchJob() {
                                 modelUsed: 'gemini-4-argon',
                                 isBatchEvaluated: true,
                                 batchId: batchId,
-                                thinkingTrace: item.thinkingTrace || null,
-                                usageMetadata: item.usageMetadata || null,
                                 createdAt: serverTimestamp()
                             };
 

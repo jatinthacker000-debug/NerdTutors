@@ -525,23 +525,11 @@ export default async function handler(req, res) {
                 const item = responsesList[i];
                 const meta = studentsMetadata[i] || { studentName: `Student ${i + 1}` };
 
-                const candidateParts = item.response?.candidates?.[0]?.content?.parts || [];
-                let thinkingTrace = "";
                 let rawText = "";
-
-                for (const p of candidateParts) {
-                    if (p.thought) {
-                        thinkingTrace += (thinkingTrace ? "\n" : "") + (p.text || "");
-                    } else if (p.text) {
-                        rawText += p.text;
-                    }
-                }
-
-                if (!rawText && candidateParts.length > 0) {
-                    const nonThoughtPart = candidateParts.find(p => !p.thought);
-                    if (nonThoughtPart) rawText = nonThoughtPart.text;
-                    else rawText = candidateParts[candidateParts.length - 1].text || "";
-                } else if (!rawText && item.response?.text) {
+                if (item.response?.candidates?.[0]?.content?.parts) {
+                    const textPart = item.response.candidates[0].content.parts.find(p => !p.thought && p.text);
+                    rawText = textPart ? textPart.text : (item.response.candidates[0].content.parts[0]?.text || "");
+                } else if (item.response?.text) {
                     rawText = item.response.text;
                 }
 
@@ -602,15 +590,12 @@ export default async function handler(req, res) {
                     parsedResults.push({
                         studentName: resolvedStudentName,
                         result: evalObj,
-                        thinkingTrace: thinkingTrace || null,
-                        usageMetadata: item.response?.usageMetadata || null,
                         rawOutput: cleaned
                     });
                 } catch (pErr) {
                     parsedResults.push({
                         studentName: meta.studentName || `Student ${i + 1}`,
                         error: "JSON parse failed: " + pErr.message,
-                        thinkingTrace: thinkingTrace || null,
                         rawOutput: rawText
                     });
                 }
@@ -736,9 +721,9 @@ ${promptBase}`;
         };
 
         if (isArgon) {
-            genConfig.thinkingConfig = { thinkingLevel: "medium", includeThoughts: true };
+            genConfig.thinkingConfig = { thinkingLevel: "medium" };
         } else {
-            genConfig.thinkingConfig = { thinkingBudget: 512, includeThoughts: true };
+            genConfig.thinkingConfig = { thinkingBudget: 512 };
         }
 
         const reqItem = {
