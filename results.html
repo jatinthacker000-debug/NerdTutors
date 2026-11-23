@@ -2031,6 +2031,39 @@
                 } catch (_) {}
             }
 
+            // Schemes written with "Q<n>" headings (e.g. "Q3 [1 mark] - (A) ..."): cut out only that
+            // question's block. Never pick numbered general rules ("3. ...") and never run past the
+            // next Q heading or SECTION heading (prevents the whole scheme being dumped into one answer).
+            {
+                const qHintDigits = String(questionNumber || '').match(/\d+/);
+                const targetNum = parseInt(qHintDigits ? qHintDigits[0] : String(index + 1), 10);
+                const schemeLines = markingSchemeText.split(/\r?\n/);
+                const qHead = /^[#*\s>\-•\[(]*(?:Q|Question)\s*\.?\s*(\d+)(?!\d)/i;
+                const stopHead = /^[#*\s>\-]*(?:SECTION\s+[A-Z0-9]\b|MARKS\s*SUMMARY|GRAND\s*TOTAL|TOTAL\s*MARKS)/i;
+                const qHeadCount = schemeLines.filter(l => qHead.test(l.trim())).length;
+                if (qHeadCount >= 2) {
+                    for (let i = 0; i < schemeLines.length; i++) {
+                        const headLine = schemeLines[i].trim();
+                        const m = headLine.match(qHead);
+                        if (!m || parseInt(m[1], 10) !== targetNum) continue;
+                        const block = [headLine.slice(m[0].length)];
+                        for (let j = i + 1; j < schemeLines.length; j++) {
+                            const nl = schemeLines[j].trim();
+                            if (qHead.test(nl) || stopHead.test(nl)) break;
+                            block.push(nl);
+                        }
+                        block[0] = block[0]
+                            .replace(/^[\s.:)\]*]+/, '')
+                            .replace(/^\[[^\]]*\]\s*/, '')
+                            .replace(/^[-–—:.)\s*]+/, '')
+                            .trim();
+                        const ans = block.filter(Boolean).join('\n').trim();
+                        if (ans) return ans;
+                    }
+                    return 'Refer to marking scheme guidelines.';
+                }
+            }
+
             const qNum = index + 1;
             const cleanQNum = questionNumber ? (questionNumber.match(/\d+/) ? questionNumber.match(/\d+/)[0] : qNum) : qNum;
             const nextQNum = parseInt(cleanQNum, 10) + 1;
