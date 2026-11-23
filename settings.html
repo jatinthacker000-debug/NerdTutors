@@ -996,6 +996,70 @@
         }
 
         // Helper to extract correct answers from plain text marking schemes
+        // Removes wrapping quote marks the AI sometimes adds ("..." / '...'), so they are not doubled on screen.
+        function nerdStripQuotes(s) {
+            let t = String(s == null ? '' : s).trim();
+            while (t.length >= 2 && /^["“”'‘’]/.test(t) && /["“”'‘’]$/.test(t)) t = t.slice(1, -1).trim();
+            return t;
+        }
+
+        // Escapes the student's answer and highlights every part the AI flagged as wrong (incorrectPhrases[].wrongText).
+        // Matching ignores case, spaces and punctuation so small OCR differences still highlight.
+        function nerdHighlightMistakes(studentAns, phrases) {
+            const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            const text = nerdStripQuotes(studentAns);
+            const wrongs = (Array.isArray(phrases) ? phrases : []).map(p => nerdStripQuotes(p && p.wrongText)).filter(Boolean);
+            if (!text || wrongs.length === 0) return esc(text);
+
+            const isWordChar = c => /[0-9a-zÀ-ɏऀ-ॿ]/i.test(c);
+            const norm = [], map = [];
+            for (let i = 0; i < text.length; i++) {
+                if (isWordChar(text[i])) { norm.push(text[i].toLowerCase()); map.push(i); }
+            }
+            const normText = norm.join('');
+            const lowerText = text.toLowerCase();
+            const ranges = [];
+            wrongs.forEach(w => {
+                const nw = Array.from(w).filter(isWordChar).join('').toLowerCase();
+                const lead = (w.match(/^[^0-9a-z\u00C0-\u024F\u0900-\u097F\s]+/i) || [''])[0];
+                const trail = (w.match(/[^0-9a-z\u00C0-\u024F\u0900-\u097F\s]+$/i) || [''])[0];
+                let from = 0, i;
+                if (nw.length >= 3) {
+                    while ((i = normText.indexOf(nw, from)) !== -1) {
+                        let s = map[i], e = map[i + nw.length - 1] + 1;
+                        // Include brackets/quotes that belong to the mistake, e.g. the "(" in "(C) Selling concept"
+                        if (lead && text.slice(s - lead.length, s) === lead) s -= lead.length;
+                        if (trail && text.slice(e, e + trail.length) === trail) e += trail.length;
+                        ranges.push([s, e]);
+                        from = i + nw.length;
+                    }
+                } else if (w.length >= 2) {
+                    // Short mistakes such as "(C)": only highlight an exact literal match.
+                    const lw = w.toLowerCase();
+                    while ((i = lowerText.indexOf(lw, from)) !== -1) {
+                        ranges.push([i, i + lw.length]);
+                        from = i + lw.length;
+                    }
+                }
+            });
+            if (ranges.length === 0) return esc(text);
+
+            ranges.sort((a, b) => a[0] - b[0]);
+            const merged = [ranges[0].slice()];
+            for (const r of ranges.slice(1)) {
+                const last = merged[merged.length - 1];
+                if (r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+                else merged.push(r.slice());
+            }
+            let out = '', pos = 0;
+            merged.forEach(([s, e]) => {
+                out += esc(text.slice(pos, s));
+                out += `<mark style="background: #fecaca; color: #991b1b; font-weight: 700; font-style: normal; padding: 0 3px; border-radius: 3px; border-bottom: 2px solid #dc2626; -webkit-print-color-adjust: exact; print-color-adjust: exact;">${esc(text.slice(s, e))}</mark>`;
+                pos = e;
+            });
+            return out + esc(text.slice(pos));
+        }
+
         function getCorrectAnswer(markingSchemeText, index) {
             if (!markingSchemeText) return 'Refer to marking scheme guidelines.';
             const lines = markingSchemeText.split('\n');
@@ -1295,14 +1359,14 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                                    ${studentAns ? `<p style="margin: 0; color: #718096; font-size: 0.95rem; line-height: 1.5; background: #fff; padding: 0.75rem; border-radius: 6px; border: 1px dashed #cbd5e0;"><strong>What you wrote:</strong> <em>"${studentAns}"</em></p>` : ''}
+                                    ${studentAns ? `<p style="margin: 0; color: #718096; font-size: 0.95rem; line-height: 1.5; background: #fff; padding: 0.75rem; border-radius: 6px; border: 1px dashed #cbd5e0;"><strong>What you wrote:</strong> <em>"${nerdHighlightMistakes(studentAns, q.incorrectPhrases)}"</em></p>` : ''}
                                     ${q.incorrectPhrases && q.incorrectPhrases.length > 0 ? `
                                         <div style="background: #fff5f5; border: 1px solid #fed7d7; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 0.5rem;">
                                             <strong style="color: #c53030; display: block; margin-bottom: 0.25rem;">❌ Identified Mistakes in Your Text:</strong>
                                             <ul style="margin: 0; padding-left: 1.25rem; color: #9b2c2c;">
                                                 ${q.incorrectPhrases.map(phrase => `
                                                     <li>
-                                                        <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${phrase.wrongText}"</span> 
+                                                        <span style="background: #fecaca; color: #991b1b; font-weight: 700; padding: 0 3px; border-radius: 3px; border-bottom: 2px solid #dc2626;">"${nerdHighlightMistakes(phrase.wrongText, [])}"</span> 
                                                         &mdash; <span style="font-style: italic; color: #4a5568;">${phrase.explanation}</span>
                                                     </li>
                                                 `).join('')}
@@ -1464,14 +1528,14 @@
                                             <strong>${qText}</strong>
                                             <span style="font-weight: bold; background: #fed7d7; color: #9b2c2c; padding: 0.25rem 0.75rem; border-radius: 12px; white-space: nowrap; flex-shrink: 0;">${earned} / ${max}</span>
                                         </div>
-                                        ${studentAns ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem;"><strong>Student Answer:</strong> <em>"${studentAns}"</em></p>` : ''}
+                                        ${studentAns ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem;"><strong>Student Answer:</strong> <em>"${nerdHighlightMistakes(studentAns, q.incorrectPhrases)}"</em></p>` : ''}
                                         ${q.incorrectPhrases && q.incorrectPhrases.length > 0 ? `
                                             <div style="margin: 0.5rem 0; background: #fff5f5; border: 1px solid #fed7d7; padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; break-inside: avoid;">
                                                 <strong style="color: #c53030; display: block; margin-bottom: 0.25rem;">❌ Identified Mistakes in Student Text:</strong>
                                                 <ul style="margin: 0; padding-left: 1.25rem; color: #9b2c2c;">
                                                     ${q.incorrectPhrases.map(phrase => `
                                                         <li>
-                                                            <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${phrase.wrongText}"</span> 
+                                                            <span style="background: #fecaca; color: #991b1b; font-weight: 700; padding: 0 3px; border-radius: 3px; border-bottom: 2px solid #dc2626;">"${nerdHighlightMistakes(phrase.wrongText, [])}"</span> 
                                                             &mdash; <span style="font-style: italic; color: #4a5568;">${phrase.explanation}</span>
                                                         </li>
                                                     `).join('')}

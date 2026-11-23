@@ -567,14 +567,14 @@ window.viewReportCard = function(resultId) {
                                     <span style="cursor: pointer; color: #1e3c72; font-size: 0.85rem;" title="Edit Question Marks" data-id="${escapeHtml(res.id)}" data-index="${Number(originalIndex) || 0}" onclick="window.editQuestionScore(this.dataset.id, Number(this.dataset.index))">✏️</span>
                                 </span>
                             </div>
-                            ${studentAns ? `<div style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #4a5568;"><strong>Student Answer:</strong> ${escapeHtml(studentAns)}</div>` : ''}
+                            ${studentAns ? `<div style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #4a5568;"><strong>Student Answer:</strong> ${nerdHighlightMistakes(studentAns, q.incorrectPhrases)}</div>` : ''}
                             ${q.incorrectPhrases && q.incorrectPhrases.length > 0 ? `
                                 <div style="margin-bottom: 0.5rem; background: #fff5f5; border: 1px solid #fed7d7; padding: 0.75rem; border-radius: 6px; font-size: 0.85rem;">
                                     <strong style="color: #c53030; display: block; margin-bottom: 0.25rem;">❌ Identified Mistakes in Student Text:</strong>
                                     <ul style="margin: 0; padding-left: 1rem; color: #9b2c2c;">
                                         ${q.incorrectPhrases.map(phrase => `
                                             <li>
-                                                <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${escapeHtml(phrase.wrongText)}"</span> 
+                                                <span style="background: #fecaca; color: #991b1b; font-weight: 700; padding: 0 3px; border-radius: 3px; border-bottom: 2px solid #dc2626;">"${nerdHighlightMistakes(phrase.wrongText, [])}"</span> 
                                                 &mdash; <span style="font-style: italic; color: #4a5568;">${escapeHtml(phrase.explanation)}</span>
                                             </li>
                                         `).join('')}
@@ -669,6 +669,70 @@ function formatDisplayText(raw) {
     safe = safe.replace(/(?:^|\n)\s*[-*]\s+/g, '<br>&bull; ');
     safe = safe.replace(/\n\n+/g, '<br><br>').replace(/\n/g, '<br>');
     return safe;
+}
+
+// Removes wrapping quote marks the AI sometimes adds ("..." / '...'), so they are not doubled on screen.
+function nerdStripQuotes(s) {
+    let t = String(s == null ? '' : s).trim();
+    while (t.length >= 2 && /^["“”'‘’]/.test(t) && /["“”'‘’]$/.test(t)) t = t.slice(1, -1).trim();
+    return t;
+}
+
+// Escapes the student's answer and highlights every part the AI flagged as wrong (incorrectPhrases[].wrongText).
+// Matching ignores case, spaces and punctuation so small OCR differences still highlight.
+function nerdHighlightMistakes(studentAns, phrases) {
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const text = nerdStripQuotes(studentAns);
+    const wrongs = (Array.isArray(phrases) ? phrases : []).map(p => nerdStripQuotes(p && p.wrongText)).filter(Boolean);
+    if (!text || wrongs.length === 0) return esc(text);
+
+    const isWordChar = c => /[0-9a-zÀ-ɏऀ-ॿ]/i.test(c);
+    const norm = [], map = [];
+    for (let i = 0; i < text.length; i++) {
+        if (isWordChar(text[i])) { norm.push(text[i].toLowerCase()); map.push(i); }
+    }
+    const normText = norm.join('');
+    const lowerText = text.toLowerCase();
+    const ranges = [];
+    wrongs.forEach(w => {
+        const nw = Array.from(w).filter(isWordChar).join('').toLowerCase();
+        const lead = (w.match(/^[^0-9a-z\u00C0-\u024F\u0900-\u097F\s]+/i) || [''])[0];
+        const trail = (w.match(/[^0-9a-z\u00C0-\u024F\u0900-\u097F\s]+$/i) || [''])[0];
+        let from = 0, i;
+        if (nw.length >= 3) {
+            while ((i = normText.indexOf(nw, from)) !== -1) {
+                let s = map[i], e = map[i + nw.length - 1] + 1;
+                // Include brackets/quotes that belong to the mistake, e.g. the "(" in "(C) Selling concept"
+                if (lead && text.slice(s - lead.length, s) === lead) s -= lead.length;
+                if (trail && text.slice(e, e + trail.length) === trail) e += trail.length;
+                ranges.push([s, e]);
+                from = i + nw.length;
+            }
+        } else if (w.length >= 2) {
+            // Short mistakes such as "(C)": only highlight an exact literal match.
+            const lw = w.toLowerCase();
+            while ((i = lowerText.indexOf(lw, from)) !== -1) {
+                ranges.push([i, i + lw.length]);
+                from = i + lw.length;
+            }
+        }
+    });
+    if (ranges.length === 0) return esc(text);
+
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [ranges[0].slice()];
+    for (const r of ranges.slice(1)) {
+        const last = merged[merged.length - 1];
+        if (r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+        else merged.push(r.slice());
+    }
+    let out = '', pos = 0;
+    merged.forEach(([s, e]) => {
+        out += esc(text.slice(pos, s));
+        out += `<mark style="background: #fecaca; color: #991b1b; font-weight: 700; font-style: normal; padding: 0 3px; border-radius: 3px; border-bottom: 2px solid #dc2626; -webkit-print-color-adjust: exact; print-color-adjust: exact;">${esc(text.slice(s, e))}</mark>`;
+        pos = e;
+    });
+    return out + esc(text.slice(pos));
 }
 
 function getCorrectAnswer(markingSchemeText, index, questionNumber = '', questionsArr = []) {
@@ -1020,14 +1084,14 @@ export function buildReportCardContent(res, markingSchemeText = '') {
                             <strong>${formatDisplayText(qText)}</strong>
                             <span style="font-weight: bold; background: #fed7d7; color: #9b2c2c; padding: 0.25rem 0.75rem; border-radius: 12px; white-space: nowrap; flex-shrink: 0;">${earned} / ${max}</span>
                         </div>
-                        ${studentAns ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem;"><strong>Student Answer:</strong> <em>"${escapeHtml(studentAns)}"</em></p>` : ''}
+                        ${studentAns ? `<p style="margin: 0 0 0.5rem 0; font-size: 0.95rem;"><strong>Student Answer:</strong> <em>"${nerdHighlightMistakes(studentAns, q.incorrectPhrases)}"</em></p>` : ''}
                         ${q.incorrectPhrases && q.incorrectPhrases.length > 0 ? `
                             <div style="margin: 0.5rem 0; background: #fff5f5; border: 1px solid #fed7d7; padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; break-inside: avoid;">
                                 <strong style="color: #c53030; display: block; margin-bottom: 0.25rem;">❌ Identified Mistakes in Student Text:</strong>
                                 <ul style="margin: 0; padding-left: 1.25rem; color: #9b2c2c;">
                                     ${q.incorrectPhrases.map(phrase => `
                                         <li>
-                                            <span style="background: #ffebeb; text-decoration: line-through; font-weight: 600;">"${escapeHtml(phrase.wrongText)}"</span> 
+                                            <span style="background: #fecaca; color: #991b1b; font-weight: 700; padding: 0 3px; border-radius: 3px; border-bottom: 2px solid #dc2626;">"${nerdHighlightMistakes(phrase.wrongText, [])}"</span> 
                                             &mdash; <span style="font-style: italic; color: #4a5568;">${escapeHtml(phrase.explanation)}</span>
                                         </li>
                                     `).join('')}
@@ -1299,8 +1363,151 @@ window.downloadSingleStudentPdf = async function(resultId) {
     return window.printReportCard(resultId);
 };
 
-// Download / Print ALL student reports in one unified, page-separated, board-grade layout
+// Download ALL student reports as separate PDF files (one file per student, saved straight to the
+// browser's download folder). Each report is rendered in its own hidden iframe so it looks exactly like
+// the single-student report and the admin page styles are not affected.
+const HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+let bulkPdfDownloadRunning = false;
+
+function renderReportPdfInIframe(res, markingSchemeText, fileName) {
+    return new Promise((resolve, reject) => {
+        const frame = document.createElement('iframe');
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position: fixed; left: -10000px; top: 0; width: 794px; height: 1123px; border: 0; background: #ffffff;';
+        document.body.appendChild(frame);
+
+        const cleanup = () => { try { frame.remove(); } catch (_) {} };
+        const timer = setTimeout(() => { cleanup(); reject(new Error('Timed out while creating PDF')); }, 60000);
+
+        window.__nerdPdfFrameDone = window.__nerdPdfFrameDone || {};
+        const token = 'pdf_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        window.__nerdPdfFrameDone[token] = (err) => {
+            clearTimeout(timer);
+            delete window.__nerdPdfFrameDone[token];
+            // Give the browser a moment to hand the file to the download manager before removing the frame
+            setTimeout(cleanup, 1500);
+            if (err) reject(new Error(err)); else resolve();
+        };
+
+        const options = {
+            margin: [6, 6, 8, 6],
+            filename: fileName,
+            image: { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['.report-block', '.question-mistake-card', '.header', '.meta-grid', '.dashboard-split'] }
+        };
+
+        const docHtml = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        html, body { margin: 0; padding: 0; background: #ffffff; }
+        body { font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #2d3748; line-height: 1.5; width: 748px; }
+        ${getReportCardPrintCss()}
+    </style>
+</head>
+<body>
+    <div class="report-pdf-page" id="nerdPdfRoot">${buildReportCardContent(res, markingSchemeText)}</div>
+    <script src="${HTML2PDF_CDN}"><\/script>
+    <script>
+        (function () {
+            var done = function (err) { try { parent.__nerdPdfFrameDone[${JSON.stringify(token)}](err || null); } catch (_) {} };
+            var start = function () {
+                if (typeof window.html2pdf !== 'function') { done('PDF library failed to load'); return; }
+                var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+                fontsReady.then(function () {
+                    return window.html2pdf().set(${JSON.stringify(options)}).from(document.getElementById('nerdPdfRoot')).save();
+                }).then(function () { done(); }, function (e) { done((e && e.message) || 'PDF generation failed'); });
+            };
+            if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
+        })();
+    <\/script>
+</body>
+</html>`;
+
+        const fdoc = frame.contentDocument || frame.contentWindow.document;
+        fdoc.open();
+        fdoc.write(docHtml);
+        fdoc.close();
+    });
+}
+
 export async function downloadAllReportsForCurrentSession() {
+    // The button has both an onclick and an event listener; ignore the second call while a run is active.
+    if (bulkPdfDownloadRunning) return;
+
+    const results = window.currentResults;
+    if (!results || results.length === 0) {
+        showToast("No student results loaded to download. Please select a session with evaluations.", "warning");
+        return;
+    }
+
+    bulkPdfDownloadRunning = true;
+    const dlBtn = document.getElementById('btnDownloadAllReports');
+    const originalText = dlBtn ? dlBtn.innerHTML : '';
+    if (dlBtn) dlBtn.disabled = true;
+
+    try {
+        const sessionId = window.currentSelectedSessionId || results[0]?.sessionId;
+        let session = allTestSessions.find(s => s.id === sessionId);
+        if (!session && sessionId) {
+            try {
+                const sSnap = await getDoc(doc(db, 'testSessions', sessionId));
+                if (sSnap.exists()) session = { id: sSnap.id, ...sSnap.data() };
+            } catch (_) {}
+        }
+        const markingSchemeText = session?.markingScheme || '';
+
+        showToast(`📥 Saving ${results.length} PDF files, one per student. Allow multiple downloads if your browser asks.`, 'info');
+
+        const usedNames = new Set();
+        const failed = [];
+        let savedCount = 0;
+
+        for (let i = 0; i < results.length; i++) {
+            const res = results[i];
+            if (dlBtn) dlBtn.innerHTML = `⏳ Saving PDF ${i + 1}/${results.length}...`;
+
+            const cleanName = (res.studentName || `Student_${i + 1}`).trim().replace(/[^a-zA-Z0-9_-]+/g, '_') || `Student_${i + 1}`;
+            const cleanSub = (res.subject || session?.subject || 'Subject').trim().replace(/[^a-zA-Z0-9_-]+/g, '_');
+            let baseName = `Report_${cleanName}_${cleanSub}`;
+            let fileName = `${baseName}.pdf`;
+            for (let n = 2; usedNames.has(fileName.toLowerCase()); n++) fileName = `${baseName}_${n}.pdf`;
+            usedNames.add(fileName.toLowerCase());
+
+            try {
+                await renderReportPdfInIframe(res, markingSchemeText, fileName);
+                savedCount++;
+            } catch (err) {
+                console.error(`PDF download failed for ${res.studentName}:`, err);
+                failed.push(res.studentName || `Student ${i + 1}`);
+            }
+            // Short pause between files so the browser accepts every download
+            await new Promise(r => setTimeout(r, 700));
+        }
+
+        if (failed.length === 0) {
+            showToast(`✅ Saved ${savedCount} student report PDFs to your Downloads folder.`, 'success');
+        } else {
+            showToast(`⚠️ Saved ${savedCount} PDFs. Failed: ${failed.join(', ')}. Use Print for those students.`, 'warning');
+        }
+    } catch (err) {
+        console.error("Bulk PDF download error:", err);
+        showToast("Error downloading reports: " + err.message, "error");
+    } finally {
+        bulkPdfDownloadRunning = false;
+        if (dlBtn) {
+            dlBtn.disabled = false;
+            dlBtn.innerHTML = originalText || `📥 Download All (${results.length} Individual PDFs)`;
+        }
+    }
+}
+
+// Print ALL student reports in one unified, page-separated, board-grade layout (single print dialog)
+export async function printAllReportsForCurrentSession() {
     const results = window.currentResults;
     if (!results || results.length === 0) {
         showToast("No student results loaded to download. Please select a session with evaluations.", "warning");
@@ -1493,7 +1700,7 @@ export async function downloadZipReportsForCurrentSession() {
     }
 
     if (!window.JSZip) {
-        return downloadAllReportsForCurrentSession();
+        return printAllReportsForCurrentSession();
     }
 
     const sessionId = window.currentSelectedSessionId || results[0]?.sessionId;
