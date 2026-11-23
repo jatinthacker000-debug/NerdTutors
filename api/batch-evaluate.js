@@ -580,6 +580,8 @@ export default async function handler(req, res) {
                             if (resObj.score >= Number(resObj.maxMarks)) {
                                 resObj.feedback = "";
                                 resObj.improvements = [];
+                                resObj.studentAnswerText = "";
+                                resObj.incorrectPhrases = [];
                             }
 
                             runningSum += resObj.score;
@@ -669,10 +671,14 @@ CRITICAL CONSTRAINTS:
    - IF score === maxMarks (answer is 100% correct and earned full credit):
      * "feedback" MUST be exactly empty string: ""
      * "improvements" MUST be exactly empty array: []
+     * "studentAnswerText" MUST be "" and "incorrectPhrases" MUST be []
      * NEVER write affirmations, compliments, or explanations of why an answer is right.
    - ONLY IF score < maxMarks (student lost marks):
      * "feedback": State the exact factual error or missing point (strictly under 15 words).
      * "improvements": State 1 actionable remedy (strictly under 15 words).
+     * "studentAnswerText": Quote the student's own words where marks were lost (max 15 words; "" if the question was not attempted).
+     * "incorrectPhrases": At most 1 item showing WHERE the student went wrong: "wrongText" = the exact wrong option/phrase/calculation the student wrote, "explanation" = why it is wrong (max 12 words). Use [] if the student only left out a point without writing anything wrong.
+     * These two fields only describe the mistake; they must NOT change the score awarded.
 4. UNIVERSAL QUESTION LABELS & WEIGHTS:
    - Match the question numbers and maxMarks exactly as written in the Marking Scheme headers (e.g. if the scheme has Q1, Q2, Q3... or sub-parts like Q3(a), Q3(b), use those exact labels).
    - Never invent unlisted question numbers, and never alter question maxMarks weights.
@@ -685,7 +691,7 @@ Return STRICT JSON:
 {
   "studentName": "<exact student name from prompt>",
   "results": [
-    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words or empty string if full marks>", "improvements": ["<max 15 words or empty array if full marks>"] }
+    { "questionNumber": "Q1", "score": <number>, "maxMarks": <number>, "feedback": "<max 15 words or empty string if full marks>", "improvements": ["<max 15 words or empty array if full marks>"], "studentAnswerText": "<student's own words where marks were lost, or empty string if full marks>", "incorrectPhrases": [{ "wrongText": "<exact wrong words the student wrote>", "explanation": "<why it is wrong, max 12 words>" }] }
   ],
   "totalScore": <number>,
   "totalMaxMarks": ${maxMarks},
